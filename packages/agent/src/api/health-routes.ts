@@ -413,6 +413,20 @@ export async function handleHealthRoutes(
       ? Math.floor((Date.now() - state.startedAt) / 1000)
       : 0;
 
+    // Reconcile plugin state from runtime if available — the state.plugins
+    // array may be stale when plugins load asynchronously after startup.
+    if (runtime?.plugins && Array.isArray(runtime.plugins)) {
+      const runtimePluginNames = new Set(
+        runtime.plugins.map((p: { name?: string }) => p.name).filter(Boolean),
+      );
+      for (const entry of state.plugins) {
+        const pluginEntry = entry as { name?: string; enabled: boolean };
+        if (pluginEntry.name && runtimePluginNames.has(pluginEntry.name)) {
+          pluginEntry.enabled = true;
+        }
+      }
+    }
+
     const loadedPlugins = state.plugins.filter((p) => p.enabled);
     const failedPlugins = state.plugins.filter(
       (p) => !p.enabled && !p.configured,

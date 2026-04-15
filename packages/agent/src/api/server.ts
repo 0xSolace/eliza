@@ -6993,6 +6993,27 @@ export async function startApiServer(opts?: {
       logger.info(
         `[eliza-api] Listening on http://${displayHost}:${actualPort}`,
       );
+      // Auto-apply cloud serviceRouting when running in a cloud-provisioned
+      // container so the topology resolver recognises cloud inference even
+      // when onboarding has not explicitly set the billing header.
+      if (isCloudProvisionedContainer()) {
+        try {
+          const cfg = loadElizaConfig() as Record<string, unknown>;
+          if (!cfg.serviceRouting) {
+            cfg.serviceRouting = {
+              llmText: { backend: "elizacloud", transport: "cloud-proxy" },
+              tts: { backend: "elizacloud", transport: "cloud-proxy" },
+            };
+            saveElizaConfig(cfg as ElizaConfig);
+            logger.info("[eliza-api] Auto-applied cloud serviceRouting defaults");
+          }
+        } catch (err) {
+          logger.warn(
+            `[eliza-api] Failed to auto-apply cloud serviceRouting: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+
       if (!opts?.skipDeferredStartupWork) {
         startDeferredStartupWork();
       }

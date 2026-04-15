@@ -991,6 +991,12 @@ async function handleCompatRoute(
     return true;
   }
 
+  // Exempt non-API paths (static assets, SPA routes) from compat auth so the
+  // frontend can load without a token handshake.
+  if (!url.pathname.startsWith("/api/") && !url.pathname.startsWith("/v1/") && !url.pathname.startsWith("/ws")) {
+    return false;
+  }
+
   if (!ensureCompatApiAuthorized(req, res)) return true;
   return handleDatabaseRowsCompatRoute(req, res, state.current);
 }

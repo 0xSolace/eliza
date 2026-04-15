@@ -309,7 +309,8 @@ function UpdatesSection() {
 /* ── Advanced Section ─────────────────────────────────────────────────── */
 
 function AdvancedSection() {
-  const { t } = useApp();
+  const { t, elizaCloudEnabled } = useApp();
+  const isCloudMode = !!elizaCloudEnabled;
   const {
     handleReset,
     exportBusy,
@@ -411,6 +412,9 @@ function AdvancedSection() {
             </div>
           </Button>
         </div>
+        {/* Hide danger zone in cloud-provisioned containers — reset/wipe
+            actions are destructive and not meaningful for managed instances. */}
+        {!isCloudMode && (
         <div className="border border-danger/30 rounded-2xl overflow-hidden bg-bg/40 backdrop-blur-sm">
           <div className="bg-danger/10 px-5 py-3 border-b border-danger/20 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-danger" />
@@ -441,6 +445,7 @@ function AdvancedSection() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <Dialog
@@ -639,17 +644,24 @@ export function SettingsView({
   onClose?: () => void;
   initialSection?: string;
 } = {}) {
-  const { t, loadPlugins } = useApp();
+  const { t, loadPlugins, elizaCloudEnabled } = useApp();
+  const isCloudMode = !!elizaCloudEnabled;
   const [activeSection, setActiveSection] = useState(initialSection ?? "cloud");
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
 
+  // In cloud mode, hide desktop-only sections (permissions) since they
+  // reference local filesystem/hardware that cloud containers don't have.
+  const CLOUD_HIDDEN_SECTIONS = new Set(["permissions"]);
+
   const visibleSections = useMemo(
     () =>
-      SETTINGS_SECTIONS.filter((section) =>
-        matchesSettingsSection(section, searchQuery, t),
+      SETTINGS_SECTIONS.filter(
+        (section) =>
+          matchesSettingsSection(section, searchQuery, t) &&
+          !(isCloudMode && CLOUD_HIDDEN_SECTIONS.has(section.id)),
       ),
-    [searchQuery, t],
+    [searchQuery, t, isCloudMode],
   );
   const visibleSectionIds = useMemo(
     () => new Set(visibleSections.map((section) => section.id)),

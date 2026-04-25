@@ -772,6 +772,16 @@ async function handleCompatRoute(
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");
 
+  // The compat wrapper sits in front of the upstream app listener. Keep the
+  // token gate scoped to API traffic so the PWA shell can load normally:
+  // browsers often request manifests, modulepreload bundles, icons and service
+  // workers without credentials, even after the launch-token cookie is set.
+  // API routes remain protected by the explicit ensureCompatApiAuthorized calls
+  // below; non-API paths fall through to the static/Vite handler unauthenticated.
+  if (!url.pathname.startsWith("/api/")) {
+    return false;
+  }
+
   // Eliza Cloud thin-client proxy (compat agents, jobs, …) — was missing from the
   // compat wrapper, so the dashboard saw 404 on `/api/cloud/compat/agents`.
   if (url.pathname.startsWith("/api/cloud/compat/")) {

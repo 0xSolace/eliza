@@ -172,6 +172,8 @@ export function applyCors(
 // Auth token
 // ---------------------------------------------------------------------------
 
+const LAUNCH_AUTH_COOKIE_NAME = "milady_auth";
+
 function tokenMatches(expected: string, provided: string): boolean {
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(provided, "utf8");
@@ -181,6 +183,36 @@ function tokenMatches(expected: string, provided: string): boolean {
 
 export function getConfiguredApiToken(): string | undefined {
   return resolveApiToken(process.env) ?? undefined;
+}
+
+function extractCookieValue(
+  req: http.IncomingMessage,
+  name: string,
+): string | null {
+  const cookieHeader =
+    typeof req.headers.cookie === "string" ? req.headers.cookie : "";
+  if (!cookieHeader) return null;
+
+  for (const cookie of cookieHeader.split(";")) {
+    const idx = cookie.indexOf("=");
+    if (idx <= 0) continue;
+    const key = cookie.slice(0, idx).trim();
+    if (key !== name) continue;
+    const raw = cookie.slice(idx + 1).trim();
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
+function extractLaunchAuthCookieToken(
+  req: http.IncomingMessage,
+): string | null {
+  return extractCookieValue(req, LAUNCH_AUTH_COOKIE_NAME)?.trim() || null;
 }
 
 export function extractAuthToken(req: http.IncomingMessage): string | null {
@@ -202,12 +234,15 @@ export function extractAuthToken(req: http.IncomingMessage): string | null {
   const header =
     (typeof req.headers["x-eliza-token"] === "string" &&
       req.headers["x-eliza-token"]) ||
-    (typeof req.headers["x-eliza-token"] === "string" &&
-      req.headers["x-eliza-token"]) ||
-    (typeof req.headers["x-api-key"] === "string" && req.headers["x-api-key"]);
+    (typeof req.headers["x-elizaos-token"] === "string" &&
+      req.headers["x-elizaos-token"]) ||
+    (typeof req.headers["x-api-key"] === "string" &&
+      req.headers["x-api-key"]) ||
+    (typeof req.headers["x-api-token"] === "string" &&
+      req.headers["x-api-token"]);
   if (typeof header === "string" && header.trim()) return header.trim();
 
-  return null;
+  return extractLaunchAuthCookieToken(req);
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | null {

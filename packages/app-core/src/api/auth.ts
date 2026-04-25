@@ -50,6 +50,7 @@ export function getCompatApiToken(): string | null {
  *   2. `x-eliza-token`
  *   3. `x-elizaos-token`
  *   4. `x-api-key` / `x-api-token`
+ *   5. `milady_auth` cookie (same value as bearer token; browser WS-safe)
  */
 export function getProvidedApiToken(
   req: Pick<http.IncomingMessage, "headers">,
@@ -68,7 +69,9 @@ export function getProvidedApiToken(
     extractHeaderValue(req.headers["x-api-key"]) ??
     extractHeaderValue(req.headers["x-api-token"]);
 
-  return headerToken?.trim() || null;
+  if (headerToken?.trim()) return headerToken.trim();
+
+  return getProvidedLaunchCookieToken(req);
 }
 
 function isLaunchAuthEnabled(): boolean {
@@ -166,7 +169,9 @@ function validateLaunchPayload(
  *   - nginx-lua legacy: base64url(payload_json).base64url(hmac(payload_json))
  *   - JWT HS256: base64url(header).base64url(payload).base64url(hmac(header.payload))
  */
-export function verifyLaunchAuthToken(token: string): VerifiedLaunchToken | null {
+export function verifyLaunchAuthToken(
+  token: string,
+): VerifiedLaunchToken | null {
   if (!isLaunchAuthEnabled()) return null;
   const secret = getLaunchAuthSecret();
   if (!secret) return null;
@@ -231,33 +236,10 @@ function getProvidedLaunchCookieToken(
   return extractCookieValue(req, LAUNCH_AUTH_COOKIE_NAME)?.trim() || null;
 }
 
-function isLaunchCookieAuthorized(
-  req: Pick<http.IncomingMessage, "headers">,
-  expectedApiToken: string,
-): boolean {
-  const cookieToken = getProvidedLaunchCookieToken(req);
-  if (!cookieToken) return false;
-
-  // Preserve current milady cloud router behavior: if nginx passes the existing
-  // API-key cookie through without injecting a bearer header, accept it.
-  if (tokenMatches(expectedApiToken, cookieToken)) return true;
-
-  return Boolean(verifyLaunchAuthToken(cookieToken));
-}
-
-function setLaunchAuthCookie(
-  res: http.ServerResponse,
-  token: string,
-  expiresAt: number,
-): void {
-  const now = Math.floor(Date.now() / 1000);
-  const maxAge = Math.max(
-    1,
-    Math.min(LAUNCH_AUTH_MAX_AGE_SECONDS, expiresAt - now),
-  );
+function setLaunchAuthCookie(res: http.ServerResponse, apiToken: string): void {
   res.setHeader(
     "Set-Cookie",
-    `${LAUNCH_AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
+    `${LAUNCH_AUTH_COOKIE_NAME}=${apiToken}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${LAUNCH_AUTH_MAX_AGE_SECONDS}`,
   );
   res.setHeader("Cache-Control", "no-store");
 }
@@ -275,7 +257,8 @@ export async function handleLaunchAuthRoute(
     Boolean(url.searchParams.get("launch") || url.searchParams.get("token"));
   if (!isApiLaunchRoute && !isRootLaunchRoute) return false;
 
-  if (!isLaunchAuthEnabled() || !getLaunchAuthSecret()) {
+  const apiToken = getCompatApiToken();
+  if (!isLaunchAuthEnabled() || !getLaunchAuthSecret() || !apiToken) {
     sendJson(res, 401, { error: "invalid_launch_token" });
     return true;
   }
@@ -300,7 +283,7 @@ export async function handleLaunchAuthRoute(
     return true;
   }
 
-  setLaunchAuthCookie(res, token, verified.expiresAt);
+  setLaunchAuthCookie(res, apiToken);
 
   if (method === "GET") {
     res.statusCode = 302;
@@ -387,7 +370,6 @@ export function ensureCompatApiAuthorized(
 
   const providedToken = getProvidedApiToken(req);
   if (providedToken && tokenMatches(expectedToken, providedToken)) return true;
-  if (isLaunchCookieAuthorized(req, expectedToken)) return true;
 
   recordFailedAuth(ip);
   sendJsonError(res, 401, "Unauthorized");

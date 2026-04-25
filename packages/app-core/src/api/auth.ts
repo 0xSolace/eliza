@@ -5,6 +5,7 @@
  * timing-safe comparison so route handlers don't reimplement it.
  */
 
+import crypto from "node:crypto";
 import type http from "node:http";
 import { logger } from "@elizaos/core";
 import { resolveApiToken } from "@elizaos/shared";
@@ -14,8 +15,11 @@ import {
   verifyCsrfToken,
 } from "./auth/sessions";
 import { tokenMatches } from "./auth/tokens";
-import { isTrustedLocalRequest } from "./compat-route-shared";
-import { sendJsonError } from "./response";
+import { isTrustedLocalRequest, readCompatJsonBody } from "./compat-route-shared";
+import { sendJson, sendJsonError } from "./response";
+
+const LAUNCH_AUTH_COOKIE_NAME = "milady_auth";
+const LAUNCH_AUTH_MAX_AGE_SECONDS = 8 * 60 * 60;
 
 export { tokenMatches } from "./auth/tokens";
 
@@ -65,6 +69,248 @@ export function getProvidedApiToken(
     extractHeaderValue(req.headers["x-api-token"]);
 
   return headerToken?.trim() || null;
+}
+
+function isLaunchAuthEnabled(): boolean {
+  const raw = process.env.MILADY_ENABLE_LAUNCH_AUTH?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+function getLaunchAuthSecret(): string | null {
+  return (
+    process.env.MILADY_LAUNCH_SECRET?.trim() ||
+    process.env.ELIZA_LAUNCH_SECRET?.trim() ||
+    null
+  );
+}
+
+function getExpectedLaunchAgentId(): string | null {
+  return (
+    process.env.MILADY_AGENT_ID?.trim() ||
+    process.env.ELIZA_AGENT_ID?.trim() ||
+    process.env.AGENT_ID?.trim() ||
+    null
+  );
+}
+
+function base64UrlDecode(value: string): Buffer | null {
+  if (!value || value.length % 4 === 1) return null;
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    "=",
+  );
+  try {
+    return Buffer.from(padded, "base64");
+  } catch {
+    return null;
+  }
+}
+
+function hmacSha256Raw(message: string | Buffer, secret: string): Buffer {
+  return crypto.createHmac("sha256", secret).update(message).digest();
+}
+
+function timingSafeBufferEqual(a: Buffer, b: Buffer): boolean {
+  const maxLen = Math.max(a.length, b.length);
+  const aPadded = Buffer.alloc(maxLen);
+  const bPadded = Buffer.alloc(maxLen);
+  a.copy(aPadded);
+  b.copy(bPadded);
+  const contentMatch = crypto.timingSafeEqual(aPadded, bPadded);
+  return a.length === b.length && contentMatch;
+}
+
+type LaunchPayload = Record<string, unknown>;
+
+export interface VerifiedLaunchToken {
+  payload: LaunchPayload;
+  expiresAt: number;
+  agentId: string;
+}
+
+function parseLaunchPayload(raw: Buffer): LaunchPayload | null {
+  try {
+    const parsed = JSON.parse(raw.toString("utf8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as LaunchPayload)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateLaunchPayload(
+  payload: LaunchPayload,
+): { agentId: string; expiresAt: number } | null {
+  const rawAgentId = payload.a ?? payload.agentId;
+  const rawExpiresAt = payload.e ?? payload.exp;
+  const agentId = typeof rawAgentId === "string" ? rawAgentId.trim() : "";
+  const expiresAt =
+    typeof rawExpiresAt === "number"
+      ? rawExpiresAt
+      : typeof rawExpiresAt === "string"
+        ? Number(rawExpiresAt)
+        : NaN;
+  if (!agentId || !Number.isFinite(expiresAt)) return null;
+  if (expiresAt <= Math.floor(Date.now() / 1000)) return null;
+
+  const expectedAgentId = getExpectedLaunchAgentId();
+  if (expectedAgentId && agentId !== expectedAgentId) return null;
+
+  return { agentId, expiresAt };
+}
+
+/**
+ * Verify both launch-token formats in the wild:
+ *   - nginx-lua legacy: base64url(payload_json).base64url(hmac(payload_json))
+ *   - JWT HS256: base64url(header).base64url(payload).base64url(hmac(header.payload))
+ */
+export function verifyLaunchAuthToken(token: string): VerifiedLaunchToken | null {
+  if (!isLaunchAuthEnabled()) return null;
+  const secret = getLaunchAuthSecret();
+  if (!secret) return null;
+
+  const trimmed = token.trim();
+  const parts = trimmed.split(".");
+  if (parts.length !== 2 && parts.length !== 3) return null;
+
+  let payloadRaw: Buffer | null = null;
+  let signatureRaw: Buffer | null = null;
+  let expectedSignature: Buffer | null = null;
+
+  if (parts.length === 2) {
+    payloadRaw = base64UrlDecode(parts[0]);
+    signatureRaw = base64UrlDecode(parts[1]);
+    if (!payloadRaw || !signatureRaw) return null;
+    expectedSignature = hmacSha256Raw(payloadRaw, secret);
+  } else {
+    const headerRaw = base64UrlDecode(parts[0]);
+    payloadRaw = base64UrlDecode(parts[1]);
+    signatureRaw = base64UrlDecode(parts[2]);
+    if (!headerRaw || !payloadRaw || !signatureRaw) return null;
+    const header = parseLaunchPayload(headerRaw);
+    if (header?.alg !== "HS256") return null;
+    expectedSignature = hmacSha256Raw(`${parts[0]}.${parts[1]}`, secret);
+  }
+
+  if (!timingSafeBufferEqual(signatureRaw, expectedSignature)) return null;
+
+  const payload = parseLaunchPayload(payloadRaw);
+  if (!payload) return null;
+  const valid = validateLaunchPayload(payload);
+  if (!valid) return null;
+
+  return { payload, agentId: valid.agentId, expiresAt: valid.expiresAt };
+}
+
+function extractCookieValue(
+  req: Pick<http.IncomingMessage, "headers">,
+  name: string,
+): string | null {
+  const cookieHeader = extractHeaderValue(req.headers.cookie);
+  if (!cookieHeader) return null;
+  for (const cookie of cookieHeader.split(";")) {
+    const idx = cookie.indexOf("=");
+    if (idx <= 0) continue;
+    const key = cookie.slice(0, idx).trim();
+    if (key !== name) continue;
+    const raw = cookie.slice(idx + 1).trim();
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+function getProvidedLaunchCookieToken(
+  req: Pick<http.IncomingMessage, "headers">,
+): string | null {
+  return extractCookieValue(req, LAUNCH_AUTH_COOKIE_NAME)?.trim() || null;
+}
+
+function isLaunchCookieAuthorized(
+  req: Pick<http.IncomingMessage, "headers">,
+  expectedApiToken: string,
+): boolean {
+  const cookieToken = getProvidedLaunchCookieToken(req);
+  if (!cookieToken) return false;
+
+  // Preserve current milady cloud router behavior: if nginx passes the existing
+  // API-key cookie through without injecting a bearer header, accept it.
+  if (tokenMatches(expectedApiToken, cookieToken)) return true;
+
+  return Boolean(verifyLaunchAuthToken(cookieToken));
+}
+
+function setLaunchAuthCookie(
+  res: http.ServerResponse,
+  token: string,
+  expiresAt: number,
+): void {
+  const now = Math.floor(Date.now() / 1000);
+  const maxAge = Math.max(
+    1,
+    Math.min(LAUNCH_AUTH_MAX_AGE_SECONDS, expiresAt - now),
+  );
+  res.setHeader(
+    "Set-Cookie",
+    `${LAUNCH_AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
+  );
+  res.setHeader("Cache-Control", "no-store");
+}
+
+export async function handleLaunchAuthRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<boolean> {
+  const method = (req.method ?? "GET").toUpperCase();
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const isApiLaunchRoute = url.pathname === "/api/auth/launch";
+  const isRootLaunchRoute =
+    method === "GET" &&
+    url.pathname === "/" &&
+    Boolean(url.searchParams.get("launch") || url.searchParams.get("token"));
+  if (!isApiLaunchRoute && !isRootLaunchRoute) return false;
+
+  if (!isLaunchAuthEnabled() || !getLaunchAuthSecret()) {
+    sendJson(res, 401, { error: "invalid_launch_token" });
+    return true;
+  }
+
+  if (!["GET", "POST"].includes(method)) {
+    sendJsonError(res, 405, "method not allowed");
+    return true;
+  }
+
+  let token: string | null = null;
+  if (method === "GET") {
+    token = url.searchParams.get("token") ?? url.searchParams.get("launch");
+  } else {
+    const body = await readCompatJsonBody(req, res);
+    if (body === null) return true;
+    token = typeof body.token === "string" ? body.token : null;
+  }
+
+  const verified = token ? verifyLaunchAuthToken(token) : null;
+  if (!token || !verified) {
+    sendJson(res, 401, { error: "invalid_launch_token" });
+    return true;
+  }
+
+  setLaunchAuthCookie(res, token, verified.expiresAt);
+
+  if (method === "GET") {
+    res.statusCode = 302;
+    res.setHeader("Location", "/");
+    res.end();
+    return true;
+  }
+
+  sendJson(res, 200, { ok: true });
+  return true;
 }
 
 // ── Auth attempt rate limiter ─────────────────────────────────────────────────
@@ -141,6 +387,7 @@ export function ensureCompatApiAuthorized(
 
   const providedToken = getProvidedApiToken(req);
   if (providedToken && tokenMatches(expectedToken, providedToken)) return true;
+  if (isLaunchCookieAuthorized(req, expectedToken)) return true;
 
   recordFailedAuth(ip);
   sendJsonError(res, 401, "Unauthorized");

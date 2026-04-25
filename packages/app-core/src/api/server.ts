@@ -40,6 +40,7 @@ import {
   ensureCompatSensitiveRouteAuthorized,
   ensureRouteAuthorized,
   getCompatApiToken,
+  handleLaunchAuthRoute,
 } from "./auth";
 import { handleAutomationsCompatRoutes } from "./automations-compat-routes";
 import {
@@ -1174,6 +1175,10 @@ export function patchHttpCreateServerForCompat(
       });
 
       if (state) {
+        if (await handleLaunchAuthRoute(req, res)) {
+          return;
+        }
+
         const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
         if (
           pathname.startsWith("/api/database") ||

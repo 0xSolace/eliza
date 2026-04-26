@@ -36,6 +36,45 @@ export const loadElizaConfig = () => ({
   ui: {},
 });
 
+export const DEFAULT_WALLET_RPC_SELECTIONS = {
+  evm: "eliza-cloud",
+  bsc: "eliza-cloud",
+  solana: "eliza-cloud",
+};
+
+const WALLET_RPC_PROVIDER_ALIASES = {
+  elizacloud: "eliza-cloud",
+  helius: "helius-birdeye",
+};
+
+const WALLET_RPC_PROVIDER_IDS = {
+  evm: new Set(["eliza-cloud", "alchemy", "infura", "ankr"]),
+  bsc: new Set(["eliza-cloud", "alchemy", "ankr", "nodereal", "quicknode"]),
+  solana: new Set(["eliza-cloud", "helius-birdeye"]),
+};
+
+function normalizeWalletRpcProviderId(chain, value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  const normalized = WALLET_RPC_PROVIDER_ALIASES[trimmed] ?? trimmed;
+  return WALLET_RPC_PROVIDER_IDS[chain]?.has(normalized) ? normalized : null;
+}
+
+export function normalizeWalletRpcSelections(input) {
+  return {
+    evm:
+      normalizeWalletRpcProviderId("evm", input?.evm) ??
+      DEFAULT_WALLET_RPC_SELECTIONS.evm,
+    bsc:
+      normalizeWalletRpcProviderId("bsc", input?.bsc) ??
+      DEFAULT_WALLET_RPC_SELECTIONS.bsc,
+    solana:
+      normalizeWalletRpcProviderId("solana", input?.solana) ??
+      DEFAULT_WALLET_RPC_SELECTIONS.solana,
+  };
+}
+
 export class TelegramClient {}
 export const Api = {};
 export class StringSession {

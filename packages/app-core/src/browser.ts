@@ -46,6 +46,7 @@ export {
 } from "./components/inventory/constants.ts";
 export * from "./components/inventory/index.ts";
 export * from "./components/pages/ChatModalView.tsx";
+export * from "./components/pages/PageScopedChatPane.tsx";
 export { PhoneCompanionApp } from "./components/phone-companion/PhoneCompanionApp.tsx";
 export * from "./components/shared/LanguageDropdown.tsx";
 export * from "./components/shared/ThemeToggle.tsx";
@@ -83,3 +84,18 @@ export * from "./types/index.ts";
 export * from "./utils/index.ts";
 export * from "./widgets/index.ts";
 export * from "./voice/index.ts";
+
+// Browser-only no-op exports for server route modules that may be statically
+// traversed by plugin/app UI bundles but are never executed in the renderer.
+export const mirrorCompatHeaders = () => {};
+export const syncAppEnvToEliza = () => {};
+export const syncElizaEnvAliases = () => {};
+
+export const createNodePlatformSecureStore = () => ({
+  getSecret: async () => null,
+  setSecret: async () => {},
+  deleteSecret: async () => {},
+  listSecretKinds: async () => [],
+});
+export const isWalletOsStoreReadEnabled = () => false;
+export const isWalletOsStoreWriteEnabled = () => false;

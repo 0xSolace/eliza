@@ -3,3 +3,4 @@ export * from "./electrobun-rpc";
 export * from "./electrobun-runtime";
 export * from "./plugin-bridge";
 export * from "./storage-bridge";
+export * from "./native-plugins";

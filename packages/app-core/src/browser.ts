@@ -106,5 +106,6 @@ export * from "./state/CompanionSceneConfigContext.tsx";
 export * from "./state/index.ts";
 export * from "./types/index.ts";
 export * from "./utils/index.ts";
+export * from "./widgets/index.ts";
 export * from "./voice/index.ts";
 export * from "./widgets/index.ts";

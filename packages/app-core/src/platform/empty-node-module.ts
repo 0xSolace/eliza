@@ -31,6 +31,17 @@ export const loadElizaConfig = async () => ({
   meta: {},
   ui: {},
 });
+export const saveElizaConfig = async () => {};
+export const persistConfigEnv = async () => {};
+export const resolveStateDir = () => ".";
+export const resolveWalletExportRejection = () => null;
+export const resolvePluginEvmLoaded = () => false;
+export const resolveWalletAutomationMode = () => "off";
+export const resolveWalletCapabilityStatus = () => ({
+  available: false,
+  enabled: false,
+  automationMode: "off",
+});
 export const VERSION = "0.0.0-browser-stub";
 export const CONNECTOR_PLUGINS = {};
 export const AUTH_PROVIDER_PLUGINS = {};

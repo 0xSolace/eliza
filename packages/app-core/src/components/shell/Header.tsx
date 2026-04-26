@@ -1,7 +1,7 @@
 import { Button } from "@elizaos/ui";
 import { ChevronRight, ListTodo, Settings } from "lucide-react";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { isElectrobunRuntime } from "../../bridge/electrobun-runtime";
 import { useMediaQuery } from "../../hooks";
 import {
@@ -10,6 +10,10 @@ import {
   type TabGroup,
   titleForTab,
 } from "../../navigation";
+import {
+  DESKTOP_REMOTE_CHANGE_EVENT,
+  getDesktopRemoteRuntimeSnapshot,
+} from "../../platform/desktop-remote-runtime";
 import {
   isDetachedWindowShell,
   resolveWindowShellRoute,
@@ -87,6 +91,60 @@ function shouldShowMacDesktopTitleBar(): boolean {
 
   const route = resolveWindowShellRoute();
   return !isDetachedWindowShell(route);
+}
+
+function DesktopRemoteRuntimeBadge() {
+  const [snapshot, setSnapshot] = useState(() =>
+    getDesktopRemoteRuntimeSnapshot(),
+  );
+
+  useEffect(() => {
+    const refresh = () => setSnapshot(getDesktopRemoteRuntimeSnapshot());
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key.startsWith("milady_desktop_remote_")) {
+        refresh();
+      }
+    };
+    window.addEventListener(DESKTOP_REMOTE_CHANGE_EVENT, refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(DESKTOP_REMOTE_CHANGE_EVENT, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  if (!snapshot.remoteEnabled) return null;
+
+  const title =
+    snapshot.status === "connected" && snapshot.host
+      ? `Remote agent connected: ${snapshot.host}`
+      : snapshot.status === "connecting"
+        ? `Remote agent connecting${snapshot.host ? `: ${snapshot.host}` : ""}`
+        : snapshot.lastError
+          ? `Remote agent disconnected: ${snapshot.lastError}`
+          : "Remote agent disconnected";
+
+  const dotClassName =
+    snapshot.status === "connected"
+      ? "bg-ok shadow-[0_0_0_3px_rgba(34,197,94,0.16)]"
+      : snapshot.status === "connecting"
+        ? "bg-warning shadow-[0_0_0_3px_rgba(245,158,11,0.16)]"
+        : "bg-danger shadow-[0_0_0_3px_rgba(239,68,68,0.16)]";
+
+  return (
+    <div
+      className="inline-flex h-[2.375rem] shrink-0 items-center gap-2 rounded-md border border-border/60 bg-bg/70 px-2.5 text-xs font-medium text-muted"
+      title={title}
+      data-testid="desktop-remote-runtime-status"
+      role="status"
+      aria-label={title}
+    >
+      <span className={`h-2.5 w-2.5 rounded-full ${dotClassName}`} />
+      <span className="max-w-[11rem] truncate">
+        {snapshot.host ?? "Remote"}
+      </span>
+    </div>
+  );
 }
 
 export function Header({
@@ -485,6 +543,7 @@ export function Header({
           dataTestId="header-cloud-status"
         />
       ) : null}
+      <DesktopRemoteRuntimeBadge />
       <div className="max-[639px]:hidden">
         <LanguageDropdown
           uiLanguage={uiLanguage}

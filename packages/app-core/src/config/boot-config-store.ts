@@ -21,6 +21,7 @@ import type {
 import type { ComponentType, ReactNode } from "react";
 import type { CodingAgentSession } from "../api/client-types-cloud";
 import type { Tab } from "../navigation";
+import { getStoredDesktopRemoteApiBase } from "../platform/desktop-remote-runtime";
 import type { ActionNotice } from "../state/action-notice";
 import type { BrandingConfig } from "./branding";
 
@@ -317,9 +318,13 @@ function getBootConfigStore(): BootConfigStore {
 
 /** Set the boot config. Called by AppBootProvider on mount. */
 export function setBootConfig(config: AppBootConfig): void {
+  const desktopRemoteApiBase = getStoredDesktopRemoteApiBase();
+  const nextConfig = desktopRemoteApiBase
+    ? { ...config, apiBase: desktopRemoteApiBase, apiToken: undefined }
+    : config;
   const store = getBootConfigStore();
-  store.current = config;
-  getGlobalSlot()[BOOT_CONFIG_WINDOW_KEY] = config;
+  store.current = nextConfig;
+  getGlobalSlot()[BOOT_CONFIG_WINDOW_KEY] = nextConfig;
 }
 
 /** Read the boot config from non-React code. */

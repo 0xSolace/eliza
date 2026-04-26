@@ -6,6 +6,7 @@
  */
 
 import { getBootConfig, setBootConfig } from "../config/boot-config";
+import { getStoredDesktopRemoteApiBase } from "../platform/desktop-remote-runtime";
 import { stripAssistantStageDirections } from "../utils/assistant-text";
 import { getElizaApiBase, getElizaApiToken } from "../utils/eliza-globals";
 import { mergeStreamingText } from "../utils/streaming-text";
@@ -91,11 +92,19 @@ export class ElizaClient {
 
     this._userSetBase = baseUrl != null;
 
-    // Priority: explicit arg > boot config > desktop injection > session storage > same origin.
-    // `client.setBaseUrl()` updates the boot config, so it must beat the
-    // shell-injected local default once the user has chosen a different
-    // server. Injection still beats stale session state from prior sessions.
-    this._baseUrl = baseUrl ?? bootBase ?? injectedBase ?? storedBase ?? "";
+    const desktopRemoteBase = getStoredDesktopRemoteApiBase();
+
+    // Priority: explicit arg > desktop remote runtime > boot config > desktop
+    // injection > session storage > same origin. The remote-runtime toy uses
+    // localStorage so it can survive a renderer reload; it must beat Electrobun
+    // local apiBase injections while enabled, without touching the default path.
+    this._baseUrl =
+      baseUrl ??
+      desktopRemoteBase ??
+      bootBase ??
+      injectedBase ??
+      storedBase ??
+      "";
   }
 
   /**
@@ -111,9 +120,10 @@ export class ElizaClient {
     // to a different port than initially injected in the HTML).
     // Only skip if the user explicitly called setBaseUrl() themselves.
     if (!this._userSetBase) {
+      const desktopRemoteBase = getStoredDesktopRemoteApiBase();
       const bootBase = getBootConfig().apiBase;
       const injectedBase = getElizaApiBase();
-      const preferredBase = bootBase ?? injectedBase;
+      const preferredBase = desktopRemoteBase ?? bootBase ?? injectedBase;
       if (preferredBase && preferredBase !== this._baseUrl) {
         this._baseUrl = preferredBase;
       }
@@ -123,6 +133,10 @@ export class ElizaClient {
 
   protected get apiToken(): string | null {
     if (this._token) return this._token;
+    // The desktop remote-runtime toy authenticates to the remote origin with
+    // cookies from the launch exchange. Do not leak the embedded runtime's
+    // bearer token to the remote host after Electrobun pushes local auth.
+    if (getStoredDesktopRemoteApiBase()) return null;
     const bootToken = getBootConfig().apiToken;
     if (typeof bootToken === "string" && bootToken.trim())
       return bootToken.trim();
@@ -242,6 +256,8 @@ export class ElizaClient {
 
       const requestInit: RequestInit = {
         ...init,
+        credentials:
+          init?.credentials ?? (this.baseUrl ? "include" : undefined),
         signal: abortController.signal,
         headers: {
           "X-ElizaOS-Client-Id": this.clientId,

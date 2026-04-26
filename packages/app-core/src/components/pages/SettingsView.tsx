@@ -31,6 +31,7 @@ import {
   Upload,
   User,
   Wallet,
+  Wifi,
 } from "lucide-react";
 import {
   type ComponentPropsWithoutRef,
@@ -41,11 +42,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { isDesktopRemoteRuntimeFeatureEnabled } from "../../platform/desktop-remote-runtime";
 import { useApp } from "../../state";
 import { AppearanceSettingsSection } from "../settings/AppearanceSettingsSection";
 import { CapabilitiesSection } from "../settings/CapabilitiesSection";
 import { PermissionsSection } from "../settings/PermissionsSection";
 import { ProviderSwitcher } from "../settings/ProviderSwitcher";
+import { RemoteAgentSettingsSection } from "../settings/RemoteAgentSettingsSection";
 import { SecuritySettingsSection } from "../settings/SecuritySettingsSection";
 import { AppPageSidebar } from "../shared/AppPageSidebar";
 import { ConfigPageView } from "./ConfigPageView";
@@ -270,6 +273,24 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "owner",
     ],
     keywordKeys: ["settings.keyword.security"],
+  },
+  {
+    id: "remote-runtime",
+    label: "settings.sections.remoteRuntime.label",
+    defaultLabel: "Remote Agent",
+    icon: Wifi,
+    description: "settings.sections.remoteRuntime.desc",
+    defaultDescription: "Experimental desktop thin-client runtime.",
+    keywords: [
+      "remote",
+      "agent",
+      "desktop",
+      "runtime",
+      "thin client",
+      "launch token",
+      "nyx",
+      "experimental",
+    ],
   },
   {
     id: "updates",
@@ -800,13 +821,17 @@ export function SettingsView({
     };
   }, []);
 
+  const remoteRuntimeFeatureEnabled = isDesktopRemoteRuntimeFeatureEnabled();
   const visibleSections = useMemo(() => {
     return SETTINGS_SECTIONS.filter((section) => {
       if (section.id === "wallet-rpc" && walletEnabled === false) return false;
+      if (section.id === "remote-runtime" && !remoteRuntimeFeatureEnabled) {
+        return false;
+      }
       if (!matchesSettingsSection(section, searchQuery, t)) return false;
       return true;
     });
-  }, [searchQuery, t, walletEnabled]);
+  }, [remoteRuntimeFeatureEnabled, searchQuery, t, walletEnabled]);
   const visibleSectionIds = useMemo(
     () => new Set(visibleSections.map((section) => section.id)),
     [visibleSections],
@@ -1147,6 +1172,21 @@ export function SettingsView({
           ref={registerContentItem("security")}
         >
           <SecuritySettingsSection />
+        </SettingsSection>
+      )}
+
+      {visibleSectionIds.has("remote-runtime") && (
+        <SettingsSection
+          id="remote-runtime"
+          title={t("settings.sections.remoteRuntime.label", {
+            defaultValue: "Remote Agent (Experimental)",
+          })}
+          description={t("settings.sections.remoteRuntime.desc", {
+            defaultValue: "Connect this desktop UI to a remote agent runtime.",
+          })}
+          ref={registerContentItem("remote-runtime")}
+        >
+          <RemoteAgentSettingsSection />
         </SettingsSection>
       )}
 

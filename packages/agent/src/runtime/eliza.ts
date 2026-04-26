@@ -543,6 +543,15 @@ function trimEnvString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseBooleanFlag(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
 type MutableConfigEnv = Record<string, unknown> & {
   vars?: Record<string, unknown>;
 };
@@ -587,6 +596,24 @@ function readEffectiveEnvValue(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   return trimEnvString(env[key]) ?? readConfigEnvValue(config, key);
+}
+
+function resolvePluginManagerCapabilityEnabled(
+  config: ElizaConfig,
+  settings: Record<string, unknown>,
+): boolean {
+  const explicitSetting = parseBooleanFlag(settings.ENABLE_PLUGIN_MANAGER);
+  if (explicitSetting !== undefined) return explicitSetting;
+
+  const explicitEnv = parseBooleanFlag(
+    readEffectiveEnvValue(config, "ENABLE_PLUGIN_MANAGER"),
+  );
+  if (explicitEnv !== undefined) return explicitEnv;
+
+  return (
+    parseBooleanFlag(readEffectiveEnvValue(config, "MILADY_ENABLE_LAUNCH_AUTH")) ===
+    true
+  );
 }
 
 function setConfigEnvValue(
@@ -3376,6 +3403,10 @@ export async function startEliza(
   // warnings from elizaOS core. basic-capabilities is registered first by the
   // runtime, so include it in deduplication so its actions take precedence.
   const settings = character.settings ?? {};
+  const pluginManagerCapabilityEnabled = resolvePluginManagerCapabilityEnabled(
+    config,
+    settings as Record<string, unknown>,
+  );
   const basicCapabilitiesPlugin = createBasicCapabilitiesPlugin({
     disableBasic:
       settings.DISABLE_BASIC_CAPABILITIES === true ||
@@ -3388,6 +3419,7 @@ export async function startEliza(
     skipCharacterProvider: false,
     enableAutonomy:
       settings.ENABLE_AUTONOMY === true || settings.ENABLE_AUTONOMY === "true",
+    enablePluginManager: pluginManagerCapabilityEnabled,
   });
   deduplicatePluginActions([
     basicCapabilitiesPlugin,
@@ -3399,6 +3431,7 @@ export async function startEliza(
     character,
     // advancedCapabilities: true,
     actionPlanning: true,
+    enablePluginManager: pluginManagerCapabilityEnabled,
     // advancedMemory is enabled via character.advancedMemory
     plugins: [elizaPlugin, ...pluginsForRuntime],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
@@ -3479,6 +3512,9 @@ export async function startEliza(
       ...(config.skills?.load?.extraDirs?.length
         ? { EXTRA_SKILLS_DIRS: config.skills.load.extraDirs.join(",") }
         : {}),
+      // Enable plugin-manager for self-host launch-auth containers by default,
+      // or whenever ENABLE_PLUGIN_MANAGER is explicitly enabled via env/config.
+      ...(pluginManagerCapabilityEnabled ? { ENABLE_PLUGIN_MANAGER: "true" } : {}),
       // Disable image description when vision is explicitly toggled off.
       // The cloud plugin always registers IMAGE_DESCRIPTION, so we need a
       // runtime setting to prevent the message service from calling it.

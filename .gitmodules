@@ -20,7 +20,7 @@
 	branch = alpha
 [submodule "plugins/plugin-discord"]
 	path = plugins/plugin-discord
-	url = https://github.com/elizaos-plugins/plugin-discord.git
+	url = https://github.com/0xSolace/plugin-discord.git
 	branch = alpha
 [submodule "plugins/plugin-edge-tts"]
 	path = plugins/plugin-edge-tts

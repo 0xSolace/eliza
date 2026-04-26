@@ -26,15 +26,40 @@ export const createIntegrationTelemetrySpan = () => ({
   success: () => {},
   failure: () => {},
 });
-export const hasAdminAccess = async () => false;
-export const hasOwnerAccess = async () => false;
-export const hasPrivateAccess = async () => false;
-export const extractActionParamsViaLlm = async () => ({});
-export const loadElizaConfig = () => ({
+export const loadElizaConfig = async () => ({
   agents: {},
   meta: {},
   ui: {},
 });
+export const VERSION = "0.0.0-browser-stub";
+export const CONNECTOR_PLUGINS = {};
+export const AUTH_PROVIDER_PLUGINS = {};
+export const STREAMING_PLUGINS = {};
+export const applyPluginAutoEnable = (params) => ({ config: params?.config });
+export const applyPluginSelfDeclaredAutoEnable = (params) => ({
+  config: params?.config,
+});
+export const isConnectorConfigured = () => false;
+export const isStreamingDestinationConfigured = () => false;
+export const hasAdminAccess = async () => false;
+export const hasOwnerAccess = async () => false;
+export const hasPrivateAccess = async () => false;
+export const extractActionParamsViaLlm = async () => ({});
+export const checkRateLimit = () => ({ allowed: true, remaining: 1, resetAt: 0 });
+export const readJsonBody = async () => ({});
+export const sendJson = (res, data, status = 200) => {
+  if (res) res.statusCode = status;
+  if (typeof res?.end === "function") res.end(JSON.stringify(data ?? {}));
+};
+export const sendJsonError = (res, message = "error", status = 400) =>
+  sendJson(res, { error: message }, status);
+export const decodePathComponent = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
 
 export const DEFAULT_WALLET_RPC_SELECTIONS = {
   evm: "eliza-cloud",

@@ -282,7 +282,10 @@ function appShellMetadataPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const pathname = req.url?.split("?")[0];
-        if (pathname === "/site.webmanifest") {
+        if (
+          pathname === "/site.webmanifest" ||
+          pathname === "/manifest.webmanifest"
+        ) {
           res.setHeader(
             "Content-Type",
             "application/manifest+json; charset=utf-8",
@@ -303,6 +306,7 @@ function appShellMetadataPlugin(): Plugin {
       const precacheUrls = new Set<string>([
         "/",
         "/site.webmanifest",
+        "/manifest.webmanifest",
         "/favicon.ico",
         "/favicon-16x16.png",
         "/favicon-32x32.png",
@@ -315,6 +319,9 @@ function appShellMetadataPlugin(): Plugin {
           precacheUrls.add(`/${fileName}`);
         }
       }
+      const serviceWorkerSource = buildServiceWorkerSource(
+        Array.from(precacheUrls).sort(),
+      );
       this.emitFile({
         type: "asset",
         fileName: "site.webmanifest",
@@ -322,9 +329,47 @@ function appShellMetadataPlugin(): Plugin {
       });
       this.emitFile({
         type: "asset",
-        fileName: "sw.js",
-        source: buildServiceWorkerSource(Array.from(precacheUrls).sort()),
+        fileName: "manifest.webmanifest",
+        source: manifest,
       });
+      this.emitFile({
+        type: "asset",
+        fileName: "sw.js",
+        source: serviceWorkerSource,
+      });
+    },
+    writeBundle(options, bundle) {
+      // Belt-and-suspenders for the Nyx cloud image: Vite's public copy and
+      // Rollup asset emission have regressed independently in this repo before.
+      // Write the PWA root assets directly so `/manifest.webmanifest` and
+      // `/sw.js` are present even if an emit hook is skipped by a future build.
+      const outDir =
+        typeof options.dir === "string"
+          ? options.dir
+          : path.resolve(here, "dist");
+      const precacheUrls = new Set<string>([
+        "/",
+        "/site.webmanifest",
+        "/manifest.webmanifest",
+        "/favicon.ico",
+        "/favicon-16x16.png",
+        "/favicon-32x32.png",
+        "/apple-touch-icon.png",
+        "/android-chrome-192x192.png",
+        "/android-chrome-512x512.png",
+      ]);
+      for (const fileName of Object.keys(bundle)) {
+        if (fileName.startsWith("assets/")) {
+          precacheUrls.add(`/${fileName}`);
+        }
+      }
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, "site.webmanifest"), manifest);
+      fs.writeFileSync(path.join(outDir, "manifest.webmanifest"), manifest);
+      fs.writeFileSync(
+        path.join(outDir, "sw.js"),
+        buildServiceWorkerSource(Array.from(precacheUrls).sort()),
+      );
     },
   };
 }

@@ -1,3 +1,4 @@
+import { renderGroundedActionReply } from "@elizaos/agent/actions/grounded-action-reply";
 import type {
   Action,
   ActionResult,
@@ -39,8 +40,9 @@ import {
 } from "../lifeops/time.js";
 import { gmailAction } from "./gmail.js";
 import {
-  renderGroundedActionReply,
-} from "@elizaos/agent";
+  extractConversationMetadataFromRoom,
+  isPageScopedConversationMetadata,
+} from "@elizaos/agent/api/conversation-metadata";
 import {
   type ExtractedLifeMissingField,
   type ExtractedLifeOperation,
@@ -515,9 +517,7 @@ function stateMessageDrafts(state: State | undefined): DeferredLifeDraft[] {
   return drafts;
 }
 
-function stateRecentMessageEntries(
-  state: State | undefined,
-) : Memory[] {
+function stateRecentMessageEntries(state: State | undefined): Memory[] {
   if (!state || typeof state !== "object") {
     return [];
   }
@@ -525,9 +525,7 @@ function stateRecentMessageEntries(
   return getRecentMessagesData(state);
 }
 
-function isDeferredLifeDraftMessageEntry(
-  item: Memory,
-): boolean {
+function isDeferredLifeDraftMessageEntry(item: Memory): boolean {
   const content =
     item.content && typeof item.content === "object"
       ? (item.content as Record<string, unknown>)
@@ -928,7 +926,10 @@ async function resolveOccurrence(
       normalizeTitle(o.title).startsWith(normalized),
     );
     if (startsWithMatches.length === 1) {
-      return { match: startsWithMatches.at(0) ?? null, ambiguousCandidates: [] };
+      return {
+        match: startsWithMatches.at(0) ?? null,
+        ambiguousCandidates: [],
+      };
     }
     if (startsWithMatches.length > 1) {
       return {
@@ -1048,7 +1049,9 @@ async function resolveOccurrenceWithIntentFallback(args: {
 }
 
 function summarizeCadence(cadence: LifeOpsCadence): string {
-  const cadenceWindows = Array.isArray((cadence as { windows?: unknown }).windows)
+  const cadenceWindows = Array.isArray(
+    (cadence as { windows?: unknown }).windows,
+  )
     ? ((cadence as { windows: string[] }).windows ?? []).filter(
         (windowName) =>
           typeof windowName === "string" && windowName.trim().length > 0,
@@ -1492,7 +1495,9 @@ function extractExplicitDailySlots(intent: string): LifeOpsDailySlot[] {
     ...intent.matchAll(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/gi),
   ]
     .map((match) => match[1])
-    .filter((token): token is string => typeof token === "string" && token.length > 0);
+    .filter(
+      (token): token is string => typeof token === "string" && token.length > 0,
+    );
   const seen = new Set<number>();
   const slots: LifeOpsDailySlot[] = [];
   for (const [index, token] of tokens.entries()) {
@@ -2233,7 +2238,10 @@ function formatWeeklyGoalReview(args: {
   ];
   if (args.atRisk.length > 0) {
     parts.push(
-      `Drifting: ${args.atRisk.slice(0, 3).map((review) => review.goal.title).join(", ")}.`,
+      `Drifting: ${args.atRisk
+        .slice(0, 3)
+        .map((review) => review.goal.title)
+        .join(", ")}.`,
     );
   }
   if (args.needsAttention.length > 0) {
@@ -2256,6 +2264,25 @@ function formatWeeklyGoalReview(args: {
 }
 
 // ── Main action ───────────────────────────────────────
+
+// LIFE belongs to the LifeOps surface (home chat / page-lifeops /
+// app-lifeops direct rooms). On foreign page-* scopes the action set is
+// scoped to that surface (page-automations → CREATE_TRIGGER_TASK,
+// page-browser → browser actions, etc.). When LIFE stays eligible on those
+// scopes its long description contaminates the ACTION_PLANNER candidate
+// list, driving the LLM to mimic the life-param-extractor JSON schema and
+// producing envelopes the planner's XML parse cannot read.
+async function isForeignPageScope(
+  runtime: IAgentRuntime,
+  message: Memory,
+): Promise<boolean> {
+  const room = await runtime.getRoom(message.roomId);
+  const metadata = extractConversationMetadataFromRoom(room);
+  if (!isPageScopedConversationMetadata(metadata)) {
+    return false;
+  }
+  return metadata?.scope !== "page-lifeops";
+}
 
 export const lifeAction: Action & {
   suppressPostActionContinuation?: boolean;
@@ -2297,15 +2324,17 @@ export const lifeAction: Action & {
     "Use LIFE for reminder/escalation policies about the owner's own follow-through, such as 'if I still haven't answered about those three events, bump me again with context instead of starting over,' when the request is about reminding the owner rather than modifying the calendar itself. " +
     "Do not fall back to REPLY, UPDATE_ENTITY, or UPDATE_OWNER_PROFILE when the user is asking to create or inspect a todo, habit, goal, reminder, or alarm. " +
     "DO NOT use this action for generic coaching or advice questions like 'any tips on setting better goals?' unless the user is also asking you to create, update, review, or track a concrete goal, task, reminder, or routine. " +
+    "DO NOT use this action for opinion / discussion questions like 'what do you think about <topic>', 'how do you feel about <topic>', 'what's your take on <topic>'. Those are conversation, not LifeOps actions — emit no action and let REPLY handle them. The presence of a topic that COULD relate to routines (remote work, health, productivity, etc.) does not make an opinion question a LIFE request. " +
     "DO NOT use this action for person-specific follow-ups like 'remind me to follow up with David next week about the project' — use OWNER_RELATIONSHIP instead. " +
     "DO NOT use this action for Gmail inbox triage, email search, drafting or sending emails — use OWNER_INBOX with channel=gmail instead. " +
     "DO NOT use this action for daily briefs, unread summaries, drafts awaiting sign-off, or cross-channel inbox review — use OWNER_INBOX instead. " +
     "DO NOT use this action for calendar lookups, scheduling meetings, availability, Calendly, or travel itineraries — use OWNER_CALENDAR instead. " +
-    "DO NOT use this action for multi-device push ladders or device-wide reminder delivery — use PUBLISH_DEVICE_INTENT instead. " +
-    "DO NOT use this action for pre-event asset checklists, questions like 'what slides, bio, title, or portal assets do I still owe before the event', document-signing workflows, collecting updated ID copies, or cancellation-fee warning/escalation policies — use OWNER_INBOX, PUBLISH_DEVICE_INTENT, OWNER_CALENDAR, or LIFEOPS_COMPUTER_USE instead. " +
+    "DO NOT use this action for multi-device push ladders or device-wide reminder delivery — use INTENT_SYNC instead. " +
+    "DO NOT use this action for pre-event asset checklists, questions like 'what slides, bio, title, or portal assets do I still owe before the event', document-signing workflows, collecting updated ID copies, or cancellation-fee warning/escalation policies — use OWNER_INBOX, INTENT_SYNC, OWNER_CALENDAR, or LIFEOPS_COMPUTER_USE instead. " +
     "DO NOT use this action for browser/portal/file workflows on the owner's machine — use LIFEOPS_COMPUTER_USE instead. " +
     "This action provides the final grounded reply; do not pair it with a speculative REPLY action or fall back to advice-only chat when the user wants real LifeOps follow-through.",
-  descriptionCompressed: "LifeOps: manage habits, goals, reminders, alarms, escalation. Create/edit/complete/snooze items. Query active status.",
+  descriptionCompressed:
+    "LifeOps: manage habits, goals, reminders, alarms, escalation. Create/edit/complete/snooze items. Query active status.",
   suppressPostActionContinuation: true,
   validate: async (runtime, message) => {
     // Coding prompts share LifeOps verbs ("make", "create", "add") so
@@ -2314,9 +2343,24 @@ export const lifeAction: Action & {
     if (looksLikeCodingTaskRequest(messageText(message))) {
       return false;
     }
+    if (await isForeignPageScope(runtime, message)) {
+      return false;
+    }
     return hasLifeOpsAccess(runtime, message);
   },
   handler: async (runtime, message, state, options) => {
+    // Defense-in-depth at dispatch time: validate() above excludes LIFE
+    // from the ACTION_PLANNER candidate list on foreign page-* scopes, but
+    // runtime.processActions dispatches by name/simile WITHOUT re-calling
+    // validate. When the LLM emits LIFE or a LIFE simile directly, the
+    // handler still fires. This guard mirrors validate()'s scope check so
+    // LIFE stays a no-op on foreign page-* scopes regardless of how it got
+    // dispatched. Returns empty text so the runtime callback does not
+    // render a user-visible message — any streamed tokens from the outer
+    // LLM reply already landed before this handler runs.
+    if (await isForeignPageScope(runtime, message)) {
+      return { success: false, text: "" };
+    }
     if (!(await hasLifeOpsAccess(runtime, message))) {
       const fallback =
         "Life management is restricted to the owner, explicitly granted users, and the agent.";
@@ -2883,7 +2927,9 @@ export const lifeAction: Action & {
         const when: "today" | "tomorrow" | "this_week" =
           whenRaw === "tomorrow"
             ? "tomorrow"
-            : whenRaw === "this_week" || whenRaw === "this week" || whenRaw === "week"
+            : whenRaw === "this_week" ||
+                whenRaw === "this week" ||
+                whenRaw === "week"
               ? "this_week"
               : "today";
         const range =
@@ -3121,8 +3167,9 @@ export const lifeAction: Action & {
           title: goalDraft.request.title,
           description: goalDraft.request.description,
           successCriteria:
-            (goalDraft.request.successCriteria as Record<string, unknown> | undefined) ??
-            null,
+            (goalDraft.request.successCriteria as
+              | Record<string, unknown>
+              | undefined) ?? null,
         });
         if (
           shouldRequireLifeCreateConfirmation({
@@ -3187,8 +3234,9 @@ export const lifeAction: Action & {
           title: created.goal.title,
           description: created.goal.description,
           successCriteria:
-            (created.goal.successCriteria as Record<string, unknown> | undefined) ??
-            null,
+            (created.goal.successCriteria as
+              | Record<string, unknown>
+              | undefined) ?? null,
         });
         const experienceSummary = formatGoalExperienceLoopSummary(
           createdExperienceLoop,

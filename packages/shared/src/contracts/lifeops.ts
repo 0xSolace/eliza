@@ -2422,6 +2422,13 @@ export interface LifeOpsInbox {
   threadGroups?: LifeOpsInboxThreadGroup[];
 }
 
+export const LIFEOPS_INBOX_CACHE_MODES = [
+  "read-through",
+  "refresh",
+  "cache-only",
+] as const;
+export type LifeOpsInboxCacheMode = (typeof LIFEOPS_INBOX_CACHE_MODES)[number];
+
 export interface GetLifeOpsInboxRequest {
   /** Cap on the total number of messages returned. Defaults to 100. */
   limit?: number;
@@ -2446,6 +2453,14 @@ export interface GetLifeOpsInboxRequest {
    * tiebreaker. When false (default), groups are sorted by recency only.
    */
   sortByPriority?: boolean;
+  /**
+   * read-through: use fresh cache, otherwise fetch and cache;
+   * refresh: force a connector pull and cache the full requested window;
+   * cache-only: never hit connectors, only read persisted inbox messages.
+   */
+  cacheMode?: LifeOpsInboxCacheMode;
+  /** Cap on messages pulled/read for cache operations. Defaults to a bounded full-cache window. */
+  cacheLimit?: number;
 }
 
 export const LIFEOPS_GOOGLE_CONNECTOR_REASONS = [
@@ -2539,6 +2554,20 @@ export interface LifeOpsSignalConnectorStatus {
   degradations?: LifeOpsConnectorDegradation[];
 }
 
+export interface SendLifeOpsSignalMessageRequest {
+  side?: LifeOpsConnectorSide;
+  recipient: string;
+  text: string;
+}
+
+export interface SendLifeOpsSignalMessageResponse {
+  provider: "signal";
+  side: LifeOpsConnectorSide;
+  recipient: string;
+  ok: true;
+  timestamp: number;
+}
+
 /**
  * A single inbound Signal message as returned by {@link readSignalInbound} and
  * the signal-local-client reader.
@@ -2550,8 +2579,22 @@ export interface LifeOpsSignalInboundMessage {
   roomId: string;
   /** Signal channel ID (typically the sender's phone number or group ID). */
   channelId: string;
+  /** Stable per-conversation key used for reply routing. */
+  threadId: string;
+  /** Human-readable conversation name when known. */
+  roomName: string;
   /** Display name of the sender. */
   speakerName: string;
+  /** Sender phone number when signal-cli exposes one. */
+  senderNumber: string | null;
+  /** Sender UUID when signal-cli exposes one. */
+  senderUuid: string | null;
+  /** Sender device ID when signal-cli exposes one. */
+  sourceDevice: number | null;
+  /** Signal group ID for group messages. */
+  groupId: string | null;
+  /** Signal group event/type when signal-cli exposes one. */
+  groupType: string | null;
   /** Plain-text body of the message. */
   text: string;
   /** Unix millisecond timestamp of the message. */
@@ -2560,6 +2603,15 @@ export interface LifeOpsSignalInboundMessage {
   isInbound: boolean;
   /** True when the message was received in a group conversation. */
   isGroup: boolean;
+}
+
+export interface GetLifeOpsSignalMessagesRequest {
+  limit?: number;
+}
+
+export interface GetLifeOpsSignalMessagesResponse {
+  count: number;
+  messages: LifeOpsSignalInboundMessage[];
 }
 
 export interface LifeOpsDiscordDmPreview {
@@ -2677,10 +2729,9 @@ export type LifeOpsTelegramAuthState =
 export interface LifeOpsWhatsAppConnectorStatus {
   provider: "whatsapp";
   /**
-   * `connected` here means credentials or local QR auth state are present; it
-   * does NOT imply a live network probe has been performed. A live send can
-   * still fail if the upstream session or token has been revoked. Callers that
-   * need true liveness must catch errors from the actual send/receive methods.
+   * `connected` means at least one WhatsApp transport is live enough for
+   * inbound or outbound work. A local auth file by itself is not connected until
+   * the Baileys runtime service is actually online.
    */
   connected: boolean;
   /**
@@ -2689,6 +2740,13 @@ export interface LifeOpsWhatsAppConnectorStatus {
    */
   inbound: true;
   phoneNumberId?: string;
+  phoneNumber?: string | null;
+  localAuthAvailable?: boolean;
+  localAuthRegistered?: boolean | null;
+  serviceConnected?: boolean;
+  outboundReady?: boolean;
+  inboundReady?: boolean;
+  transport?: "cloudapi" | "baileys" | "unconfigured";
   lastCheckedAt: string;
   degradations?: LifeOpsConnectorDegradation[];
 }
@@ -2775,6 +2833,46 @@ export interface LifeOpsSignalPairingStatus {
 export interface StartLifeOpsDiscordConnectorRequest {
   side?: LifeOpsConnectorSide;
   source?: LifeOpsOwnerBrowserAccessSource;
+}
+
+export interface SendLifeOpsDiscordMessageRequest {
+  side?: LifeOpsConnectorSide;
+  channelId?: string;
+  text: string;
+}
+
+export interface SendLifeOpsDiscordMessageResponse {
+  provider: "discord";
+  side: LifeOpsConnectorSide;
+  channelId: string;
+  ok: true;
+  deliveryStatus: "sent" | "sending" | "failed" | "unknown";
+}
+
+export interface VerifyLifeOpsDiscordConnectorRequest {
+  side?: LifeOpsConnectorSide;
+  channelId?: string;
+  sendMessage?: string;
+}
+
+export interface VerifyLifeOpsDiscordConnectorResponse {
+  provider: "discord";
+  side: LifeOpsConnectorSide;
+  verifiedAt: string;
+  status: LifeOpsDiscordConnectorStatus;
+  send: {
+    ok: boolean;
+    error: string | null;
+    channelId: string | null;
+    message: string;
+    deliveryStatus: "sent" | "sending" | "failed" | "unknown" | null;
+  };
+}
+
+export interface SendLifeOpsWhatsAppMessageRequest {
+  to: string;
+  text: string;
+  replyToMessageId?: string;
 }
 
 export interface StartLifeOpsTelegramAuthRequest {

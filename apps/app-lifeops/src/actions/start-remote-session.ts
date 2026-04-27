@@ -10,6 +10,7 @@
  * an explicit `ingressUrl: null` with `reason: "data-plane-not-configured"`.
  */
 
+import { hasOwnerAccess } from "@elizaos/agent/security/access";
 import type {
   Action,
   ActionExample,
@@ -18,10 +19,9 @@ import type {
   IAgentRuntime,
   Memory,
 } from "@elizaos/core";
-import { hasOwnerAccess } from "@elizaos/agent";
 import {
-  RemoteSessionError,
   getRemoteSessionService,
+  RemoteSessionError,
 } from "../remote/remote-session-service.js";
 
 const ACTION_NAME = "START_REMOTE_SESSION";
@@ -78,7 +78,9 @@ export const startRemoteSessionAction: Action = {
       },
       {
         name: "{{agentName}}",
-        content: { text: "Remote session active. Data plane ingress: vnc://host:5900" },
+        content: {
+          text: "Remote session active. Data plane ingress: vnc://host:5900",
+        },
       },
     ],
   ] as ActionExample[][],
@@ -106,13 +108,23 @@ export const startRemoteSessionAction: Action = {
       return {
         text: "Remote sessions require explicit confirmation. Re-issue with confirmed: true.",
         success: false,
-        values: { success: false, error: "NOT_CONFIRMED" },
-        data: { actionName: ACTION_NAME },
+        // Canonical confirmation-required signal so the multi-step loop in
+        // services/message.ts breaks instead of re-firing the same plan.
+        values: {
+          success: false,
+          error: "CONFIRMATION_REQUIRED",
+          requiresConfirmation: true,
+        },
+        data: {
+          actionName: ACTION_NAME,
+          requiresConfirmation: true,
+        },
       };
     }
 
     const requesterIdentity =
-      coerceString(params.requesterIdentity) ?? String(message.entityId ?? "unknown");
+      coerceString(params.requesterIdentity) ??
+      String(message.entityId ?? "unknown");
 
     const service = getRemoteSessionService();
 

@@ -1,7 +1,5 @@
 import type http from "node:http";
-import {
-  getWalletAddresses,
-} from "@elizaos/agent";
+import { getWalletAddresses } from "@elizaos/agent";
 import {
   approveStewardTransaction,
   createStewardClient,
@@ -9,9 +7,9 @@ import {
   ensureStewardAgent,
   getRecentWebhookEvents,
   getStewardBalance,
+  getStewardPendingApprovals as getStewardBridgePendingApprovals,
   getStewardBridgeStatus,
   getStewardHistory,
-  getStewardPendingApprovals,
   getStewardTokenBalances,
   getStewardWalletAddresses,
   isStewardConfigured,
@@ -19,7 +17,7 @@ import {
   resolveStewardAgentId,
   type StewardWebhookEventType,
   signViaSteward,
-} from "@elizaos/app-steward";
+} from "@elizaos/app-steward/routes/steward-bridge";
 import { logger } from "@elizaos/core";
 import type { PolicyRule as StewardPolicyRule } from "@stwd/sdk";
 import { ensureRouteAuthorized } from "./auth";
@@ -306,7 +304,7 @@ export async function handleStewardCompatRoutes(
     }
 
     try {
-      const pending = await getStewardPendingApprovals(agentId);
+      const pending = await getStewardBridgePendingApprovals(agentId);
       sendJsonResponse(res, 200, pending);
     } catch (err) {
       const message =

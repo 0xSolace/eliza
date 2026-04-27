@@ -1,11 +1,10 @@
 import type http from "node:http";
 import { TLSSocket } from "node:tls";
 import {
-  decodePathComponent as httpDecodePathComponent,
   readJsonBody as httpReadJsonBody,
   sendJson as httpSendJson,
   sendJsonError as httpSendJsonError,
-} from "@elizaos/agent";
+} from "@elizaos/agent/api/http-helpers";
 import type { AgentRuntime, Plugin, Route } from "@elizaos/core";
 import type { LifeOpsRouteContext } from "./lifeops-routes.js";
 import { handleLifeOpsRoutes } from "./lifeops-routes.js";
@@ -19,6 +18,19 @@ function json(res: http.ServerResponse, data: unknown, status = 200): void {
 
 function error(res: http.ServerResponse, message: string, status = 400): void {
   httpSendJsonError(res, message, status);
+}
+
+function httpDecodePathComponent(
+  raw: string,
+  res: http.ServerResponse,
+  fieldName: string,
+): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    httpSendJsonError(res, `Invalid ${fieldName}: malformed URL encoding`, 400);
+    return null;
+  }
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | null {
@@ -184,12 +196,18 @@ const LIFEOPS_STATIC_ROUTES: Array<{
   { type: "GET", path: "/api/lifeops/connectors/signal/pairing-status" },
   { type: "POST", path: "/api/lifeops/connectors/signal/stop" },
   { type: "POST", path: "/api/lifeops/connectors/signal/disconnect" },
+  { type: "GET", path: "/api/lifeops/connectors/signal/messages" },
+  { type: "POST", path: "/api/lifeops/connectors/signal/send" },
   // Discord
   { type: "GET", path: "/api/lifeops/connectors/discord/status" },
   { type: "POST", path: "/api/lifeops/connectors/discord/connect" },
   { type: "POST", path: "/api/lifeops/connectors/discord/disconnect" },
+  { type: "POST", path: "/api/lifeops/connectors/discord/send" },
+  { type: "POST", path: "/api/lifeops/connectors/discord/verify" },
   // WhatsApp
   { type: "GET", path: "/api/lifeops/connectors/whatsapp/status" },
+  { type: "POST", path: "/api/lifeops/connectors/whatsapp/send" },
+  { type: "GET", path: "/api/lifeops/connectors/whatsapp/messages" },
   { type: "GET", path: "/api/lifeops/channel-policies" },
   { type: "POST", path: "/api/lifeops/channel-policies" },
   { type: "POST", path: "/api/lifeops/channels/phone-consent" },

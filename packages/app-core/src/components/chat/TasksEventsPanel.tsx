@@ -17,13 +17,17 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { ActivityEvent } from "../../hooks/useActivityEvents";
 import { useApp } from "../../state";
-import { resolveWidgetsForSlot, WidgetHost } from "../../widgets";
+// Direct sub-path import for WidgetHost to avoid the widgets/index.ts ↔
+// WidgetHost.tsx chunk-level cycle. The barrel still works fine for
+// resolveWidgetsForSlot — only WidgetHost participates in the cycle.
+import { resolveWidgetsForSlot } from "../../widgets";
 import { useChatSidebarVisibility } from "../../widgets/useChatSidebarVisibility";
 import {
   APPS_SECTION_VISIBILITY_KEY,
   isWidgetVisible,
   type VisibilityCandidate,
 } from "../../widgets/visibility";
+import { WidgetHost } from "../../widgets/WidgetHost";
 import { AppsSection } from "./AppsSection";
 import {
   buildAppsSectionVisibilityCandidate,

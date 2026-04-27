@@ -1,5 +1,5 @@
 /**
- * Cloud SSO module (P2).
+ * Cloud SSO module.
  *
  * Implements the OAuth-style redirect / code-exchange flow against the
  * Eliza Cloud control plane. The local Milady instance is the Relying
@@ -31,6 +31,7 @@
  */
 
 import crypto from "node:crypto";
+import { logger } from "@elizaos/core";
 import type { RuntimeEnvRecord } from "@elizaos/shared";
 import type { AuthStore } from "../../services/auth-store";
 import {
@@ -315,7 +316,9 @@ async function emitFailure(
     },
     { store: options.store, env: options.env },
   ).catch((err: unknown) => {
-    console.error("[auth-sso] audit emit failed:", err);
+    logger.error(
+      `[auth-sso] audit emit failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   });
 }
 
@@ -335,7 +338,9 @@ async function emitSuccess(
     },
     { store: options.store, env: options.env },
   ).catch((err: unknown) => {
-    console.error("[auth-sso] audit emit failed:", err);
+    logger.error(
+      `[auth-sso] audit emit failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   });
 }
 
@@ -542,7 +547,9 @@ export async function exchangeCodeForSession(
       });
     }
   } catch (err) {
-    console.error("[auth-sso] identity link failed:", err);
+    logger.error(
+      `[auth-sso] identity link failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     await emitFailure(options, "store_error");
     return { ok: false, reason: "store_error" };
   }

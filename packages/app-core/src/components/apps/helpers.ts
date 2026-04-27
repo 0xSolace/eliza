@@ -42,9 +42,11 @@ export const APP_CATALOG_SECTION_LABELS: Record<AppCatalogSectionKey, string> =
 
 export const APPS_VIEW_HIDDEN_APP_NAMES = [
   "@elizaos/app",
+  "app-counter",
   "@elizaos/app-browser",
   "@elizaos/app-form",
   "@elizaos/app-knowledge",
+  "@elizaos/app-screenshare",
   "@elizaos/app-task-coordinator",
 ] as const;
 

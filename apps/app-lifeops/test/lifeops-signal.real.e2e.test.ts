@@ -135,12 +135,90 @@ async function startServer(
   };
 }
 
-async function startSignalHttpStub(): Promise<SignalStubHandle> {
+async function startSignalHttpStub(
+  options: { failSend?: boolean } = {},
+): Promise<SignalStubHandle> {
   const sendPayloads: SignalSendPayload[] = [];
   const server = await startServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const method = (req.method ?? "GET").toUpperCase();
     const pathname = decodeURIComponent(url.pathname);
+
+    if (method === "POST" && pathname === "/api/v1/rpc") {
+      const body = await readJsonFromRequest(req);
+      const rpcId =
+        typeof body.id === "string" || typeof body.id === "number"
+          ? body.id
+          : null;
+      const params =
+        body.params && typeof body.params === "object"
+          ? (body.params as Record<string, unknown>)
+          : {};
+
+      const rpcResult = (result: unknown) =>
+        sendJson(res, {
+          jsonrpc: "2.0",
+          id: rpcId,
+          result,
+        });
+
+      switch (body.method) {
+        case "listContacts":
+          rpcResult([
+            {
+              number: SIGNAL_PHONE,
+              uuid: SIGNAL_UUID,
+              name: "Dana",
+              profileName: "Dana",
+              color: "blue",
+              blocked: false,
+            },
+          ]);
+          return;
+        case "listGroups":
+        case "receive":
+          rpcResult([]);
+          return;
+        case "send": {
+          const payload: SignalSendPayload = {
+            message:
+              typeof params.message === "string" ? params.message : undefined,
+            number:
+              typeof params.account === "string" ? params.account : undefined,
+            recipients: Array.isArray(params.recipients)
+              ? params.recipients.filter(
+                  (recipient): recipient is string =>
+                    typeof recipient === "string",
+                )
+              : undefined,
+          };
+          sendPayloads.push(payload);
+          if (options.failSend) {
+            sendJson(res, {
+              jsonrpc: "2.0",
+              id: rpcId,
+              error: {
+                code: 503,
+                message: "Signal delivery failed in test stub",
+              },
+            });
+            return;
+          }
+          rpcResult({ timestamp: Date.now() });
+          return;
+        }
+        default:
+          sendJson(res, {
+            jsonrpc: "2.0",
+            id: rpcId,
+            error: {
+              code: -32601,
+              message: `Unsupported Signal RPC method: ${String(body.method)}`,
+            },
+          });
+          return;
+      }
+    }
 
     if (method === "GET" && pathname === `/v1/contacts/${SIGNAL_ACCOUNT}`) {
       sendJson(res, {
@@ -171,6 +249,10 @@ async function startSignalHttpStub(): Promise<SignalStubHandle> {
     if (method === "POST" && url.pathname === "/v2/send") {
       const body = (await readJsonFromRequest(req)) as SignalSendPayload;
       sendPayloads.push(body);
+      if (options.failSend) {
+        sendJsonError(res, "Signal delivery failed in test stub", 503);
+        return;
+      }
       sendJson(res, { timestamp: Date.now() });
       return;
     }
@@ -584,6 +666,65 @@ describe("Real E2E: LifeOps Signal", () => {
       expect(signalStub.sendPayloads).toHaveLength(1);
       expect(signalStub.sendPayloads[0]).toMatchObject({
         message: "On my way.",
+        number: SIGNAL_ACCOUNT,
+        recipients: [SIGNAL_PHONE],
+      });
+    },
+    45_000,
+  );
+
+  it(
+    "reports failed Signal delivery instead of claiming outbound success",
+    async () => {
+      signalStub = await startSignalHttpStub({ failSend: true });
+      process.env.SIGNAL_HTTP_URL = signalStub.baseUrl;
+
+      runtimeHandle = await createLifeOpsRuntime();
+      runtimeHandle.runtime.setSetting("SIGNAL_HTTP_URL", signalStub.baseUrl, false);
+
+      const authDir = path.join(oauthDir, "lifeops", "signal", "agent", "owner");
+      await writeLinkedSignalDevice(authDir);
+      await seedSignalGrant(runtimeHandle.runtime, authDir);
+
+      const service = new LifeOpsService(runtimeHandle.runtime);
+      await expect(service.getSignalConnectorStatus()).resolves.toMatchObject({
+        connected: true,
+        reason: "connected",
+      });
+
+      const signalService = (await runtimeHandle.runtime.getServiceLoadPromise(
+        "signal",
+      )) as {
+        isServiceConnected?: () => boolean;
+      } | null;
+      expect(signalService?.isServiceConnected?.()).toBe(true);
+
+      const sendResult = await crossChannelSendAction.handler?.(
+        runtimeHandle.runtime,
+        ownerMessage(runtimeHandle.runtime, "confirm signal send failure"),
+        undefined,
+        {
+          parameters: {
+            channel: "signal",
+            target: SIGNAL_PHONE,
+            message: "This should fail.",
+            confirmed: true,
+          },
+        } as never,
+      );
+
+      expect(sendResult).toMatchObject({
+        success: false,
+        values: expect.objectContaining({
+          success: false,
+          channel: "signal",
+          target: SIGNAL_PHONE,
+        }),
+      });
+      expect(String(sendResult?.text)).toContain("failed");
+      expect(signalStub.sendPayloads).toHaveLength(1);
+      expect(signalStub.sendPayloads[0]).toMatchObject({
+        message: "This should fail.",
         number: SIGNAL_ACCOUNT,
         recipients: [SIGNAL_PHONE],
       });

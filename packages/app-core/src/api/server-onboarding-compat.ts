@@ -10,22 +10,18 @@ import {
 } from "@elizaos/agent";
 import { logger, stringToUuid } from "@elizaos/core";
 import {
-  deriveOnboardingCredentialPersistencePlan,
-  migrateLegacyRuntimeConfig,
-  normalizeOnboardingCredentialInputs,
-} from "@elizaos/shared";
-import {
   type DeploymentTargetConfig,
-  type LinkedAccountsConfig,
-  normalizeDeploymentTargetConfig,
-  normalizeLinkedAccountsConfig,
-  normalizeServiceRoutingConfig,
-  type ServiceRoutingConfig,
-} from "@elizaos/shared";
-import {
+  deriveOnboardingCredentialPersistencePlan,
   getDefaultStylePreset,
   getStylePresets,
+  type LinkedAccountFlagsConfig,
+  migrateLegacyRuntimeConfig,
   normalizeCharacterLanguage,
+  normalizeDeploymentTargetConfig,
+  normalizeLinkedAccountFlagsConfig,
+  normalizeOnboardingCredentialInputs,
+  normalizeServiceRoutingConfig,
+  type ServiceRoutingConfig,
 } from "@elizaos/shared";
 import { PREMADE_VOICES } from "../voice/types";
 import { resolveProviderCredential } from "./credential-resolver";
@@ -331,8 +327,8 @@ export function deriveCompatOnboardingReplayBody(
   );
   const deploymentTarget: DeploymentTargetConfig | undefined =
     explicitDeploymentTarget ?? undefined;
-  const linkedAccounts: LinkedAccountsConfig | undefined =
-    normalizeLinkedAccountsConfig(body.linkedAccounts) ?? undefined;
+  const linkedAccounts: LinkedAccountFlagsConfig | undefined =
+    normalizeLinkedAccountFlagsConfig(body.linkedAccounts) ?? undefined;
   const serviceRouting: ServiceRoutingConfig | undefined =
     normalizeServiceRoutingConfig(body.serviceRouting) ?? undefined;
   const isCloudMode = deploymentTarget?.runtime === "cloud";

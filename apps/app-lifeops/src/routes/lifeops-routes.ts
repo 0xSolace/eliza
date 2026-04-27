@@ -1,7 +1,10 @@
 import type http from "node:http";
-import { createIntegrationTelemetrySpan } from "@elizaos/agent";
-import { checkRateLimit, type RateLimitConfig } from "@elizaos/agent/api";
 import type { ReadJsonBodyOptions } from "@elizaos/agent/api/http-helpers";
+import {
+  checkRateLimit,
+  type RateLimitConfig,
+} from "@elizaos/agent/api/rate-limiter";
+import { createIntegrationTelemetrySpan } from "@elizaos/agent/diagnostics/integration-observability";
 import { type AgentRuntime, logger, type UUID } from "@elizaos/core";
 import type {
   AcknowledgeLifeOpsReminderRequest,
@@ -61,6 +64,7 @@ import {
   LIFEOPS_CONNECTOR_MODES,
   LIFEOPS_CONNECTOR_SIDES,
   LIFEOPS_GMAIL_SPAM_REVIEW_STATUSES,
+  LIFEOPS_INBOX_CACHE_MODES,
   LIFEOPS_INBOX_CHANNELS,
   LIFEOPS_OWNER_BROWSER_ACCESS_SOURCES,
   type LifeOpsGmailSpamReviewStatus,
@@ -1289,6 +1293,23 @@ export async function handleLifeOpsRoutes(
           : undefined;
       const missedOnly = url.searchParams.get("missedOnly") === "true";
       const sortByPriority = url.searchParams.get("sortByPriority") === "true";
+      const rawCacheMode = url.searchParams.get("cacheMode");
+      let cacheMode: GetLifeOpsInboxRequest["cacheMode"];
+      if (rawCacheMode !== null && rawCacheMode.trim().length > 0) {
+        const parsedCacheMode = rawCacheMode.trim().toLowerCase();
+        if (!isOneOf(parsedCacheMode, LIFEOPS_INBOX_CACHE_MODES)) {
+          throw new LifeOpsServiceError(
+            400,
+            `cacheMode must be one of: ${LIFEOPS_INBOX_CACHE_MODES.join(", ")}`,
+          );
+        }
+        cacheMode = parsedCacheMode;
+      }
+      const cacheLimit =
+        parsePositiveIntegerQuery(
+          url.searchParams.get("cacheLimit"),
+          "cacheLimit",
+        ) ?? undefined;
       const request: GetLifeOpsInboxRequest = {
         limit,
         channels,
@@ -1298,6 +1319,8 @@ export async function handleLifeOpsRoutes(
         gmailAccountId,
         missedOnly: missedOnly || undefined,
         sortByPriority: sortByPriority || undefined,
+        cacheMode,
+        cacheLimit,
       };
       json(res, await service.getInbox(request));
     });
@@ -1675,8 +1698,9 @@ export async function handleLifeOpsRoutes(
         chatId: url.searchParams.get("chatId")?.trim() || undefined,
         since: url.searchParams.get("since")?.trim() || undefined,
         limit:
-          parsePositiveIntegerQuery(url.searchParams.get("limit"), "limit") ??
-          undefined,
+          parsePositiveIntegerQuery(url.searchParams.get("limit"), "limit", {
+            max: 250,
+          }) ?? undefined,
       };
       const messages = await service.readIMessages(query);
       json(res, { messages, count: messages.length });
@@ -1813,6 +1837,20 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (
+    method === "GET" &&
+    pathname === "/api/lifeops/connectors/signal/messages"
+  ) {
+    return runRoute(ctx, async (service) => {
+      const limit =
+        parsePositiveIntegerQuery(url.searchParams.get("limit"), "limit", {
+          max: 100,
+        }) ?? 25;
+      const messages = await service.readSignalInbound(limit);
+      json(res, { messages, count: messages.length });
+    });
+  }
+
   if (method === "POST" && pathname === "/api/lifeops/connectors/signal/pair") {
     if (rateLimitRequest(ctx, "oauth_init")) return true;
     const body = await readJsonBody<StartLifeOpsSignalPairingRequest>(req, res);
@@ -1878,6 +1916,26 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/signal/send"
+  ) {
+    if (rateLimitRequest(ctx, "outbound_message")) return true;
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.sendSignalMessage({
+          side: parseConnectorSideFromRequest(url, body),
+          recipient: requireBodyString(body, "recipient"),
+          text: requireBodyString(body, "text"),
+        }),
+        201,
+      );
+    });
+  }
+
   // -----------------------------------------------------------------------
   // Discord connector
   // -----------------------------------------------------------------------
@@ -1938,11 +1996,83 @@ export async function handleLifeOpsRoutes(
   }
 
   if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/discord/send"
+  ) {
+    if (rateLimitRequest(ctx, "outbound_message")) return true;
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.sendDiscordMessage({
+          side: parseConnectorSideFromRequest(url, body),
+          channelId: parseOptionalBodyString(body, "channelId"),
+          text: requireBodyString(body, "text"),
+        }),
+        201,
+      );
+    });
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/discord/verify"
+  ) {
+    if (rateLimitRequest(ctx, "outbound_message")) return true;
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.verifyDiscordConnector({
+          side: parseConnectorSideFromRequest(url, body),
+          channelId: parseOptionalBodyString(body, "channelId"),
+          sendMessage: parseOptionalBodyString(body, "sendMessage"),
+        }),
+      );
+    });
+  }
+
+  if (
     method === "GET" &&
     pathname === "/api/lifeops/connectors/whatsapp/status"
   ) {
     return runRoute(ctx, async (service) => {
       json(res, await service.getWhatsAppConnectorStatus());
+    });
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/whatsapp/send"
+  ) {
+    if (rateLimitRequest(ctx, "outbound_message")) return true;
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.sendWhatsAppMessage({
+          to: requireBodyString(body, "to"),
+          text: requireBodyString(body, "text"),
+          replyToMessageId: parseOptionalBodyString(body, "replyToMessageId"),
+        }),
+        201,
+      );
+    });
+  }
+
+  if (
+    method === "GET" &&
+    pathname === "/api/lifeops/connectors/whatsapp/messages"
+  ) {
+    return runRoute(ctx, async (service) => {
+      const limit =
+        parsePositiveIntegerQuery(url.searchParams.get("limit"), "limit", {
+          max: 500,
+        }) ?? 25;
+      json(res, service.pullWhatsAppRecent(limit));
     });
   }
 
@@ -2645,7 +2775,7 @@ export async function handleLifeOpsRoutes(
       const requestUrl = ctx.url;
       const result = await service.unsubscribeEmailSender(requestUrl, {
         senderEmail: body.senderEmail,
-        blockAfter: body.blockAfter ?? true,
+        blockAfter: body.blockAfter ?? false,
         trashExisting: body.trashExisting ?? false,
         confirmed: body.confirmed ?? false,
       });

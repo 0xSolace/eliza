@@ -8,7 +8,7 @@
  * "not installed" result instead of crashing the plugin load.
  */
 
-import { hasOwnerAccess } from "@elizaos/agent";
+import { hasOwnerAccess } from "@elizaos/agent/security/access";
 import type {
   Action,
   ActionExample,
@@ -123,7 +123,7 @@ function selectSurface(params: Record<string, unknown>): ComputerUseSurface {
 
   if (
     readNormalizedStringParam(params, "path") ||
-    ["read", "write", "list", "delete", "move", "copy", "file"].includes(action)
+    ["read", "write", "list", "delete", "move", "copy", "mkdir", "file"].includes(action)
   ) {
     return "file";
   }

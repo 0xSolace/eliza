@@ -7,7 +7,13 @@
 
 import crypto from "node:crypto";
 import type http from "node:http";
+import { logger } from "@elizaos/core";
 import { resolveApiToken } from "@elizaos/shared";
+import {
+  CSRF_HEADER_NAME,
+  findActiveSession,
+  verifyCsrfToken,
+} from "./auth/sessions";
 import { isTrustedLocalRequest, readCompatJsonBody } from "./compat-route-shared";
 import { sendJson, sendJsonError } from "./response";
 
@@ -433,8 +439,6 @@ export async function ensureCompatApiAuthorizedAsync(
   // Cookie path
   const sessionCookie = readCookie(req, SESSION_COOKIE_NAME);
   if (sessionCookie) {
-    const { findActiveSession, verifyCsrfToken, CSRF_HEADER_NAME } =
-      await import("./auth/sessions");
     const session = await findActiveSession(
       options.store,
       sessionCookie,
@@ -458,7 +462,6 @@ export async function ensureCompatApiAuthorizedAsync(
   // Bearer-auth requests are exempt from CSRF (they're not cookie-bound).
   const provided = getProvidedApiToken(req);
   if (provided) {
-    const { findActiveSession } = await import("./auth/sessions");
     const sessionFromBearer = await findActiveSession(
       options.store,
       provided,
@@ -488,7 +491,9 @@ export async function ensureCompatApiAuthorizedAsync(
           ip,
           userAgent,
         }).catch((err) => {
-          console.error("[auth] legacy bearer audit failed:", err);
+          logger.error(
+            `[auth] legacy bearer audit failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         });
         return true;
       }
@@ -497,7 +502,9 @@ export async function ensureCompatApiAuthorizedAsync(
         userAgent,
         reason: decision.reason ?? "post_grace",
       }).catch((err) => {
-        console.error("[auth] legacy bearer rejection audit failed:", err);
+        logger.error(
+          `[auth] legacy bearer rejection audit failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       });
       recordFailedAuth(ip);
       sendJsonError(res, 401, "Unauthorized");

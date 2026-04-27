@@ -2,13 +2,14 @@
  * pglite-backed repositories for the auth subsystem.
  *
  * The store operates on a Drizzle database handle obtained from the agent
- * runtime's database adapter (`@elizaos/plugin-sql`). Tables are owned by
- * `@elizaos/plugin-sql`'s schema barrel — we import them directly.
+ * runtime's database adapter (`@elizaos/plugin-sql`). Tables are owned by the
+ * plugin-sql schema attached to the root plugin export.
  *
  * Every method is fail-fast: errors propagate to the caller. The auth code
  * path must NEVER swallow a DB error and pretend a request was authenticated.
  */
 
+import type { DrizzleDatabase } from "@elizaos/plugin-sql";
 import {
   authAuditEventTable,
   authBootstrapJtiSeenTable,
@@ -16,8 +17,7 @@ import {
   authOwnerBindingTable,
   authOwnerLoginTokenTable,
   authSessionTable,
-  type DrizzleDatabase,
-} from "@elizaos/plugin-sql";
+} from "@elizaos/plugin-sql/schema";
 import { and, desc, eq, isNull, lte, ne } from "drizzle-orm";
 
 export interface AuthIdentityRow {

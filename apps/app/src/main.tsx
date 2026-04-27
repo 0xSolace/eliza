@@ -25,6 +25,7 @@ import {
   App,
   type AppBootConfig,
   AppProvider,
+  AppWindowRenderer,
   applyForceFreshOnboardingReset,
   applyLaunchConnection,
   applyLaunchConnectionFromUrl,
@@ -40,11 +41,13 @@ import {
   DetachedShellRoot,
   dispatchAppEvent,
   getBootConfig,
+  getWindowNavigationPath,
   initializeCapacitorBridge,
   initializeStorageBridge,
   installDesktopPermissionsClientPatch,
   installForceFreshOnboardingClientPatch,
   installLocalProviderCloudPreferencePatch,
+  isAppWindowRoute,
   isDetachedWindowShell,
   isElectrobunRuntime,
   loadUiTheme,
@@ -54,8 +57,8 @@ import {
   PhoneCompanionApp,
   resolveWindowShellRoute,
   SHARE_TARGET_EVENT,
-  setBootConfig,
   type ShareTargetPayload,
+  setBootConfig,
   shouldInstallMainWindowOnboardingPatches,
   subscribeDesktopBridgeEvent,
   syncDetachedShellLocation,
@@ -79,14 +82,14 @@ import "@elizaos/app-scape/ui";
 import "@elizaos/app-hyperscape/ui";
 import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
+import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops";
 import {
   AppBlockerSettingsCard,
-  dispatchQueuedLifeOpsGithubCallbackFromUrl,
-  LifeOpsActivitySignalsEffect,
   LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
+  LifeOpsActivitySignalsEffect,
   LifeOpsPageView,
   WebsiteBlockerSettingsCard,
-} from "@elizaos/app-lifeops";
+} from "@elizaos/app-lifeops/ui";
 import {
   ApprovalQueue,
   StewardLogo,
@@ -98,7 +101,7 @@ import {
   CodingAgentTasksPanel,
   PtyConsoleDrawer,
 } from "@elizaos/app-task-coordinator";
-import { FineTuningView } from "@elizaos/app-training";
+import { FineTuningView } from "@elizaos/app-training/ui";
 import "@elizaos/app-shopify/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent";
@@ -576,11 +579,21 @@ function isPhoneCompanionMode(): boolean {
   return params.get("mode") === "companion";
 }
 
+function resolveAppWindowSlug(): string | null {
+  if (!isAppWindowRoute()) return null;
+  const path = getWindowNavigationPath();
+  if (!path.startsWith("/apps/")) return null;
+  const slug = path.slice("/apps/".length).replace(/[?#].*$/, "");
+  return slug.length > 0 ? slug : null;
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
   const phoneCompanion = isPhoneCompanionMode();
+  const detachedShell = isDetachedWindowShell(windowShellRoute);
+  const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
   createRoot(rootEl).render(
     <ErrorBoundary>
@@ -588,9 +601,13 @@ function mountReactApp(): void {
         <AppProvider branding={APP_BRANDING}>
           {phoneCompanion ? (
             <PhoneCompanionApp />
-          ) : isDetachedWindowShell(windowShellRoute) ? (
+          ) : detachedShell ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
+            </div>
+          ) : appWindowSlug ? (
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <AppWindowRenderer slug={appWindowSlug} />
             </div>
           ) : (
             <>

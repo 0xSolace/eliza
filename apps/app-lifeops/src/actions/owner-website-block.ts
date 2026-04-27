@@ -6,6 +6,7 @@
  * `subaction` parameter. Routes to the existing handlers in website-blocker.ts.
  */
 
+import { extractActionParamsViaLlm } from "@elizaos/agent/actions/extract-params";
 import type {
   Action,
   ActionExample,
@@ -20,7 +21,6 @@ import {
   parseJSONObjectFromText,
   parseKeyValueXml,
 } from "@elizaos/core";
-import { extractActionParamsViaLlm } from "@elizaos/agent";
 import {
   getSelfControlAccess,
   SELFCONTROL_ACCESS_ERROR,
@@ -45,8 +45,8 @@ interface OwnerWebsiteBlockParameters {
   intent?: string;
 }
 
-const HOSTNAME_ONLY_RE =
-  /^(?:(?:https?:\/\/)?(?:www\.)?[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){1,8}(?:\/[^\s]{0,1024})?)(?:\s{0,16}(?:,|and)\s{0,16}(?:(?:https?:\/\/)?(?:www\.)?[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){1,8}(?:\/[^\s]{0,1024})?)){0,16}$/i;
+const SINGLE_HOSTNAME_RE =
+  /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){1,8}(?:\/[^\s]{0,1024})?$/i;
 
 const DIRECT_CONFIRMATION_RE =
   /^(?:yes|yep|yeah|sure|ok|okay|please do|do it|do it now|actually do it now|go ahead|confirm|confirmed)\b/i;
@@ -57,8 +57,17 @@ function normalizeText(value: string): string {
 
 function messageLooksLikeHostnameOnly(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length === 0 || trimmed.length > 4096) return false;
-  return HOSTNAME_ONLY_RE.test(trimmed);
+  if (trimmed.length === 0 || trimmed.length > 1024) return false;
+  const candidates = trimmed
+    .split(/\s{0,16}(?:,|\band\b)\s{0,16}/i)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (candidates.length === 0 || candidates.length > 16) return false;
+  for (const candidate of candidates) {
+    if (candidate.length > 256) return false;
+    if (!SINGLE_HOSTNAME_RE.test(candidate)) return false;
+  }
+  return true;
 }
 
 function parseDirectJsonObject(
@@ -472,17 +481,36 @@ export const ownerWebsiteBlockAction: Action & {
 
     const rawParams = ((options as HandlerOptions | undefined)?.parameters ??
       {}) as OwnerWebsiteBlockParameters;
-    const params = (await extractActionParamsViaLlm<OwnerWebsiteBlockParameters>({
-      runtime,
-      message,
-      state,
-      actionName: ACTION_NAME,
-      actionDescription: ownerWebsiteBlockAction.description ?? "",
-      paramSchema: ownerWebsiteBlockAction.parameters ?? [],
-      existingParams: rawParams,
-      requiredFields: ["subaction"],
-    })) as OwnerWebsiteBlockParameters;
-    let subaction = coerceSubaction(params.subaction);
+    let params = rawParams;
+    let subaction = coerceSubaction(rawParams.subaction);
+    if (!subaction) {
+      const heuristicSubaction = inferRecentSubaction(
+        getMessageText(message),
+        await collectRecentConversationTexts({
+          runtime,
+          message,
+          state,
+          limit: 8,
+        }),
+      );
+      if (heuristicSubaction) {
+        params = { ...rawParams, subaction: heuristicSubaction };
+        subaction = heuristicSubaction;
+      }
+    }
+    if (!subaction) {
+      params = (await extractActionParamsViaLlm<OwnerWebsiteBlockParameters & Record<string, unknown>>({
+        runtime,
+        message,
+        state,
+        actionName: ACTION_NAME,
+        actionDescription: ownerWebsiteBlockAction.description ?? "",
+        paramSchema: ownerWebsiteBlockAction.parameters ?? [],
+        existingParams: rawParams as Record<string, unknown>,
+        requiredFields: ["subaction"],
+      })) as OwnerWebsiteBlockParameters;
+      subaction = coerceSubaction(params.subaction);
+    }
     if (!subaction) {
       const plan = await resolveOwnerWebsiteBlockPlanWithLlm({
         runtime,

@@ -5,13 +5,12 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import {
   AGENT_EVENT_ALLOWED_STREAMS,
-  clearPersistedOnboardingConfig,
-  cloneWithoutBlockedObjectKeys,
   CONFIG_WRITE_ALLOWED_TOP_KEYS,
   type ConversationMeta,
+  clearPersistedOnboardingConfig,
+  cloneWithoutBlockedObjectKeys,
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
-  type ElizaConfig,
   extractAuthToken,
   fetchWithTimeoutGuard,
   handleCloudBillingRoute,
@@ -19,7 +18,6 @@ import {
   initStewardWalletCache,
   isAllowedHost,
   isAuthorized,
-  loadElizaConfig,
   normalizeWsClientId,
   persistConversationRoomTitle,
   resolveDefaultAgentWorkspaceDir,
@@ -27,11 +25,15 @@ import {
   resolvePluginConfigMutationRejections,
   resolveUserPath,
   routeAutonomyTextToUser,
-  saveElizaConfig,
   streamResponseBodyWithByteLimit,
   startApiServer as upstreamStartApiServer,
   validateMcpServerConfig,
 } from "@elizaos/agent";
+import {
+  type ElizaConfig,
+  loadElizaConfig,
+  saveElizaConfig,
+} from "@elizaos/agent/config";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import { type AgentRuntime, logger } from "@elizaos/core";
@@ -50,7 +52,7 @@ import {
 } from "./compat-route-shared";
 import { sendJson as sendJsonResponse } from "./response";
 
-export { resolveWalletExportRejection } from "@elizaos/app-steward";
+export { resolveWalletExportRejection } from "@elizaos/app-steward/routes/server-wallet-trade";
 export {
   type CompatRuntimeState,
   DATABASE_UNAVAILABLE_MESSAGE,
@@ -130,6 +132,7 @@ import { handleCloudStatusRoutes } from "./cloud-status-routes";
 import { handleComputerUseCompatRoutes } from "./computer-use-compat-routes";
 import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
 import { handleDevCompatRoutes } from "./dev-compat-routes";
+import { handleGitHubRoutes } from "./github-routes";
 import { handleLocalInferenceCompatRoutes } from "./local-inference-compat-routes";
 import { handleN8nRoutes } from "./n8n-routes";
 import { handleOnboardingCompatRoute } from "./onboarding-compat-routes";
@@ -153,8 +156,8 @@ const lazyEnsureTTS = () =>
     (m) => m.ensureTextToSpeechHandler,
   );
 
-import { hydrateWalletKeysFromNodePlatformSecureStore } from "@elizaos/app-steward";
-import { deleteWalletSecretsFromOsStore } from "@elizaos/app-steward";
+import { hydrateWalletKeysFromNodePlatformSecureStore } from "@elizaos/app-steward/security/hydrate-wallet-keys-from-platform-store";
+import { deleteWalletSecretsFromOsStore } from "@elizaos/app-steward/security/wallet-os-store-actions";
 import { getStartupEmbeddingAugmentation } from "../runtime/startup-overlay.js";
 import { clearCloudSecrets, getCloudSecret } from "./cloud-secrets";
 
@@ -841,6 +844,22 @@ async function handleCompatRoute(
     });
   }
 
+  // GitHub PAT routes — power the "GitHub" connection card in Settings →
+  // Coding Agents. Auth sits in front so the saved token never leaves
+  // the loopback boundary unauthenticated.
+  if (url.pathname === "/api/github/token") {
+    if (!(await ensureRouteAuthorized(req, res, state))) return true;
+    return handleGitHubRoutes({
+      req,
+      res,
+      method,
+      pathname: url.pathname,
+      json: (status, body) => {
+        sendJsonResponse(res, status, body);
+      },
+    });
+  }
+
   if (await handleComputerUseCompatRoutes(req, res, state)) return true;
 
   if (method === "POST" && url.pathname === "/api/tts/cloud") {
@@ -1143,7 +1162,11 @@ export function patchHttpCreateServerForCompat(
       // only when Origin is absent so we never reflect an arbitrary Origin.
       const originHeader = req.headers.origin ?? "";
       // Build allowed origins from configured ports (API, UI, gateway, home)
-      const corsAllowedPorts = getCorsAllowedPorts();
+      const corsAllowedPorts = new Set(getCorsAllowedPorts());
+      const localPort = req.socket.localPort;
+      if (typeof localPort === "number") {
+        corsAllowedPorts.add(String(localPort));
+      }
       const allowOrigin = (() => {
         if (originHeader !== "") {
           return isAllowedLocalOrigin(originHeader, corsAllowedPorts)
@@ -1159,6 +1182,12 @@ export function patchHttpCreateServerForCompat(
           return null;
         }
       })();
+
+      if (originHeader !== "" && !allowOrigin) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "cors_origin_denied" }));
+        return;
+      }
 
       if (allowOrigin) {
         res.setHeader("Access-Control-Allow-Origin", allowOrigin);

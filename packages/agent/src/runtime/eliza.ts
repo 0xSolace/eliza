@@ -687,8 +687,8 @@ function isLikelyOpenAiTextModel(value: string | undefined): boolean {
  * Normalize known-bad provider compatibility shims before plugin resolution.
  *
  * A common failure mode is routing the OpenAI plugin through Groq's
- * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5.4`,
- * `gpt-5.4-mini`) in place. Structured XML/object generation then fails during
+ * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5.5`,
+ * `gpt-5.5-mini`) in place. Structured XML/object generation then fails during
  * message handling because Groq does not serve those model IDs.
  *
  * When we can confidently detect that state, rewrite the effective runtime
@@ -1020,12 +1020,13 @@ function ensureTrajectoryLoggerEnabled(
 async function installPromptOptimizationLayer(
   runtime: AgentRuntime,
   context: string,
+  config?: ElizaConfig,
 ): Promise<void> {
   try {
     const { installPromptOptimizations } = await import(
       "./prompt-optimization.js"
     );
-    installPromptOptimizations(runtime);
+    installPromptOptimizations(runtime, config);
   } catch (err) {
     logger.warn(
       `[eliza] Failed to install prompt optimizations (${context}): ${err instanceof Error ? err.message : err}`,
@@ -1036,10 +1037,11 @@ async function installPromptOptimizationLayer(
 async function prepareRuntimeForTrajectoryCapture(
   runtime: AgentRuntime,
   context: string,
+  config?: ElizaConfig,
 ): Promise<void> {
   await waitForTrajectoriesService(runtime, context);
   ensureTrajectoryLoggerEnabled(runtime, context);
-  await installPromptOptimizationLayer(runtime, context);
+  await installPromptOptimizationLayer(runtime, context, config);
 }
 
 // ---------------------------------------------------------------------------
@@ -1468,12 +1470,12 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
       }
     | undefined;
   if (effectivelyEnabled) {
-    const nano = llmText?.nanoModel || models?.nano || "openai/gpt-5.4-nano";
+    const nano = llmText?.nanoModel || models?.nano || "openai/gpt-5.5-nano";
     const small =
       llmText?.smallModel || models?.small || "minimax/minimax-m2.7";
     const medium = llmText?.mediumModel || models?.medium || small;
     const large =
-      llmText?.largeModel || models?.large || "anthropic/claude-sonnet-4.6";
+      llmText?.largeModel || models?.large || "anthropic/claude-opus-4-7";
     const mega = llmText?.megaModel || models?.mega || large;
     const responseHandlerModel =
       llmText?.responseHandlerModel || llmText?.shouldRespondModel;
@@ -3721,7 +3723,11 @@ export async function startEliza(
     // 8. Initialize the runtime (registers remaining plugins, starts services)
     assertPersistentDatabaseRequired(runtime);
     await runtime.initialize();
-    await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
+    await prepareRuntimeForTrajectoryCapture(
+      runtime,
+      "runtime.initialize()",
+      config,
+    );
 
     // 8a. Apply role gating to wallet plugins (EVM, Solana) — admin-only actions.
     try {
@@ -4153,6 +4159,7 @@ export async function startEliza(
           await prepareRuntimeForTrajectoryCapture(
             newRuntime,
             "hot-reload runtime.initialize()",
+            config,
           );
 
           try {

@@ -121,6 +121,25 @@ const PLANNER_CONTROL_ACTIONS = new Set(
 	["REPLY", "RESPOND", "IGNORE", "STOP"].map(normalizeActionIdentifier),
 );
 
+function canonicalPlannerControlActionName(actionName: string): string | null {
+	const normalized = normalizeActionIdentifier(actionName);
+	switch (normalized) {
+		case "REPLY":
+		case "RESPOND":
+			return "REPLY";
+		case "IGNORE":
+			return "IGNORE";
+		case "STOP":
+			return "STOP";
+		default:
+			return null;
+	}
+}
+
+function isReplyActionIdentifier(actionName: string): boolean {
+	return canonicalPlannerControlActionName(actionName) === "REPLY";
+}
+
 function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -372,8 +391,9 @@ function normalizePlannerActions(
 			return [];
 		}
 
-		if (PLANNER_CONTROL_ACTIONS.has(normalized)) {
-			return [actionName];
+		const controlActionName = canonicalPlannerControlActionName(actionName);
+		if (controlActionName) {
+			return [controlActionName];
 		}
 
 		const resolvedAction = resolveRuntimeAction(actionLookup, actionName);
@@ -440,8 +460,9 @@ export function resolvePlannerActionName(
 		return [];
 	}
 
-	if (PLANNER_CONTROL_ACTIONS.has(normalized)) {
-		return [actionName];
+	const controlActionName = canonicalPlannerControlActionName(actionName);
+	if (controlActionName) {
+		return [controlActionName];
 	}
 
 	const lookup =
@@ -615,9 +636,7 @@ function extractProviderNamesFromXml(rawProviders: string): string[] {
 
 function extractStructuredProviderList(rawProviders: string): string[] {
 	const safe =
-		rawProviders.length > 10_000
-			? rawProviders.slice(0, 10_000)
-			: rawProviders;
+		rawProviders.length > 10_000 ? rawProviders.slice(0, 10_000) : rawProviders;
 	const tokens = safe
 		.split(/[\n,;]/)
 		.map((providerName) =>
@@ -1121,7 +1140,7 @@ export function isSimpleReplyResponse(
 		responseContent?.actions &&
 		responseContent.actions.length === 1 &&
 		typeof responseContent.actions[0] === "string" &&
-		responseContent.actions[0].toUpperCase() === "REPLY"
+		isReplyActionIdentifier(responseContent.actions[0])
 	);
 }
 
@@ -1293,8 +1312,29 @@ const ACTION_REPAIR_PASSIVE_ACTIONS = new Set(
 // (e.g. "build me an app" does not contain "spawn" or "agent"), so the
 // metadata-based corrector must not override them with a keyword-matched
 // alternative like a cross-channel send action.
+//
+// CREATE_TRIGGER_TASK + its schedule similes are included because the phrase
+// structure the planner matches on ("every N minutes", "at 7am daily",
+// "schedule a cron task") does not keyword-overlap with the action's
+// description the way LIFE's multi-paragraph reminder/alarm prose does.
+// Without these entries, the correction layer (findOwnedActionCorrectionFromMetadata)
+// routinely overrides a correct CREATE_CRON/CREATE_TRIGGER_TASK pick on
+// page-automations with LIFE based on fuzzy description overlap — breaking
+// the scope-gated routing on the page-automations surface.
 const EXPLICIT_INTENT_ACTIONS = new Set(
-	["SPAWN_AGENT"].map(normalizeActionIdentifier),
+	[
+		"SPAWN_AGENT",
+		"CREATE_TRIGGER_TASK",
+		"CREATE_TRIGGER",
+		"SCHEDULE_TRIGGER",
+		"SCHEDULE_TASK",
+		"CREATE_HEARTBEAT",
+		"SCHEDULE_HEARTBEAT",
+		"CREATE_AUTOMATION",
+		"SCHEDULE_AUTOMATION",
+		"CREATE_CRON",
+		"CREATE_RECURRING",
+	].map(normalizeActionIdentifier),
 );
 
 function shouldAttemptCanonicalActionRepair(
@@ -1904,6 +1944,48 @@ function hasNonPassiveAction(
 	);
 }
 
+/**
+ * Returns true when the planner deliberately chose to converse — i.e. the
+ * response actions list contains REPLY (or its alias RESPOND).
+ *
+ * REPLY is a deliberate signal that the LLM judged the message as
+ * conversation, not a delegated task. The metadata-overlap rescue path
+ * must respect this and not promote REPLY to a privileged action like
+ * OWNER_INBOX or MANAGE_ISSUES based on incidental keyword overlap with
+ * those actions' example text. Without this gate, a chitchat message
+ * containing common scheduling/workflow words ("workflow", "policy",
+ * "follow up", "friday", "2026") gets force-routed into a role-gated
+ * action and the user sees "Permission denied: only the owner or admin
+ * may use inbox actions" in response to plain conversation.
+ */
+function hasExplicitReplyIntent(
+	responseContent: Pick<Content, "actions"> | null | undefined,
+): boolean {
+	const replyId = normalizeActionIdentifier("REPLY");
+	const respondId = normalizeActionIdentifier("RESPOND");
+	return (
+		responseContent?.actions?.some((actionName) => {
+			if (typeof actionName !== "string") return false;
+			const id = normalizeActionIdentifier(actionName);
+			return id === replyId || id === respondId;
+		}) ?? false
+	);
+}
+
+/**
+ * Gate for the metadata-rescue path that promotes a passive (REPLY/NONE)
+ * response to a privileged action based on keyword overlap. Run only when
+ * the planner produced no real action AND no explicit REPLY — i.e. when
+ * we genuinely have nothing to say.
+ */
+export function shouldRunMetadataActionRescue(
+	responseContent: Pick<Content, "actions"> | null | undefined,
+): boolean {
+	if (hasNonPassiveAction(responseContent)) return false;
+	if (hasExplicitReplyIntent(responseContent)) return false;
+	return true;
+}
+
 function shouldAttemptActionRescue(
 	runtime: Pick<IAgentRuntime, "actions">,
 	message: Memory,
@@ -2286,44 +2368,64 @@ const TERMINAL_ACTION_IDENTIFIERS = new Set(
 	].map(normalizeActionIdentifier),
 );
 
+export type ActionContinuationDecision = {
+	shouldContinue: boolean;
+	suppressed: boolean;
+	continuingActions: string[];
+	suppressingActions: string[];
+};
+
+export function getActionContinuationDecision(
+	runtime: Pick<IAgentRuntime, "actions">,
+	responseContent: Content | null | undefined,
+): ActionContinuationDecision {
+	const actionLookup = buildRuntimeActionLookup(runtime);
+	const continuingActions: string[] = [];
+	const suppressingActions: string[] = [];
+
+	for (const action of responseContent?.actions ?? []) {
+		if (typeof action !== "string") continue;
+
+		const resolvedAction = resolveRuntimeAction(actionLookup, action);
+		if (resolvedAction?.suppressPostActionContinuation) {
+			suppressingActions.push(resolvedAction.name);
+			continue;
+		}
+
+		const canonicalAction =
+			resolvedAction?.name ??
+			canonicalPlannerControlActionName(action) ??
+			action;
+		if (
+			!TERMINAL_ACTION_IDENTIFIERS.has(
+				normalizeActionIdentifier(canonicalAction),
+			)
+		) {
+			continuingActions.push(canonicalAction);
+		}
+	}
+
+	const suppressed = suppressingActions.length > 0;
+	return {
+		shouldContinue: !suppressed && continuingActions.length > 0,
+		suppressed,
+		continuingActions,
+		suppressingActions,
+	};
+}
+
 function shouldContinueAfterActions(
 	runtime: IAgentRuntime,
 	responseContent: Content | null | undefined,
 ): boolean {
-	// Async background/task actions handle their own follow-up and should not
-	// trigger an immediate continuation loop from the main message service.
-	const actionLookup = buildRuntimeActionLookup(runtime);
-	return !!responseContent?.actions?.some((action) => {
-		if (typeof action !== "string") return false;
-
-		const resolvedAction = resolveRuntimeAction(actionLookup, action);
-		if (resolvedAction?.suppressPostActionContinuation) {
-			return false;
-		}
-
-		const canonicalAction = resolvedAction?.name ?? action;
-		return !TERMINAL_ACTION_IDENTIFIERS.has(
-			normalizeActionIdentifier(canonicalAction),
-		);
-	});
+	return getActionContinuationDecision(runtime, responseContent).shouldContinue;
 }
 
 function suppressesPostActionContinuation(
 	runtime: IAgentRuntime,
 	responseContent: Content | null | undefined,
 ): boolean {
-	if (!responseContent?.actions?.length) {
-		return false;
-	}
-
-	const actionLookup = buildRuntimeActionLookup(runtime);
-	return responseContent.actions.some((action) => {
-		if (typeof action !== "string") return false;
-		return (
-			resolveRuntimeAction(actionLookup, action)
-				?.suppressPostActionContinuation === true
-		);
-	});
+	return getActionContinuationDecision(runtime, responseContent).suppressed;
 }
 
 /**
@@ -2357,7 +2459,11 @@ export function shouldEmitPlannerPreamble(
 		return false;
 	}
 
-	const normalizedFirstAction = normalizeActionIdentifier(firstAction);
+	const canonicalFirstAction =
+		resolvedAction?.name ??
+		canonicalPlannerControlActionName(firstAction) ??
+		firstAction;
+	const normalizedFirstAction = normalizeActionIdentifier(canonicalFirstAction);
 
 	return (
 		normalizedFirstAction !== normalizeActionIdentifier("REPLY") &&
@@ -2372,7 +2478,7 @@ export function shouldEmitPlannerPreamble(
 // alongside explicit delegation produces duplicate user-visible noise:
 // "Created task X" message followed by the actual delegated result.
 const PASSIVE_TURN_ACTIONS = new Set(
-	["REPLY", "MANAGE_TASKS"].map(normalizeActionIdentifier),
+	["REPLY", "RESPOND", "MANAGE_TASKS"].map(normalizeActionIdentifier),
 );
 
 export function stripReplyWhenActionOwnsTurn(
@@ -2420,172 +2526,12 @@ export function stripReplyWhenActionOwnsTurn(
 	return filtered.length > 0 ? filtered : ["REPLY"];
 }
 
-function callbackTextPreview(content: Content | null | undefined): string {
-	if (!content || typeof content !== "object") {
-		return "";
-	}
-
-	const text = typeof content.text === "string" ? content.text.trim() : "";
-	if (!text) {
-		return "";
-	}
-
-	return text.replace(/\s+/g, " ").slice(0, 200);
-}
-
-function callbackHasVisibleOutput(
-	content: Content | null | undefined,
-): boolean {
-	if (!content || typeof content !== "object") {
-		return false;
-	}
-	if (typeof content.text === "string" && content.text.trim().length > 0) {
-		return true;
-	}
-	return Array.isArray(content.attachments) && content.attachments.length > 0;
-}
-
-function summarizeAttachmentKeyPart(url: string): string {
-	const trimmed = url.trim();
-	if (trimmed.length <= 256) {
-		return trimmed;
-	}
-
-	return `${trimmed.slice(0, 128)}...(${trimmed.length})`;
-}
-
-function callbackDeliveryKey(content: Content | null | undefined): string {
-	if (!content || typeof content !== "object") {
-		return "";
-	}
-
-	const text =
-		typeof content.text === "string"
-			? content.text.replace(/\s+/g, " ").trim()
-			: "";
-	const attachmentKeys = Array.isArray(content.attachments)
-		? content.attachments
-				.map((attachment) => {
-					if (!attachment || typeof attachment !== "object") {
-						return "";
-					}
-
-					const url =
-						typeof attachment.url === "string"
-							? summarizeAttachmentKeyPart(attachment.url)
-							: "";
-					const title =
-						typeof attachment.title === "string" ? attachment.title.trim() : "";
-					const contentType =
-						typeof attachment.contentType === "string"
-							? attachment.contentType
-							: "";
-
-					if (!url && !title && !contentType) {
-						return "";
-					}
-
-					return `${contentType}:${title}:${url}`;
-				})
-				.filter((key) => key.length > 0)
-				.sort()
-		: [];
-
-	if (!text && attachmentKeys.length === 0) {
-		return "";
-	}
-
-	return JSON.stringify({
-		text,
-		attachments: attachmentKeys,
-	});
-}
-
 export function wrapSingleTurnVisibleCallback(
-	runtime: Pick<IAgentRuntime, "agentId" | "logger">,
-	message: Pick<Memory, "id" | "roomId">,
+	_runtime: Pick<IAgentRuntime, "agentId" | "logger">,
+	_message: Pick<Memory, "id" | "roomId">,
 	callback?: HandlerCallback,
 ): HandlerCallback | undefined {
-	if (!callback) {
-		return undefined;
-	}
-
-	let visibleCallbackCount = 0;
-	let firstVisibleCallbackPreview = "";
-	const deliveredCallbackKeys = new Set<string>();
-
-	return async (content, actionName) => {
-		const deliveryKey = callbackDeliveryKey(content);
-		const preview = callbackTextPreview(content);
-		const hasVisibleOutput = callbackHasVisibleOutput(content);
-
-		if (deliveryKey && deliveredCallbackKeys.has(deliveryKey)) {
-			runtime.logger.warn(
-				{
-					src: "service:message",
-					agentId: runtime.agentId,
-					messageId: message.id,
-					roomId: message.roomId,
-					action:
-						typeof (content as Record<string, unknown>)?.action === "string"
-							? String((content as Record<string, unknown>).action)
-							: actionName,
-					source:
-						typeof content.source === "string" ? content.source : undefined,
-					preview:
-						preview ||
-						(Array.isArray(content.attachments) &&
-						content.attachments.length > 0
-							? `[attachments:${content.attachments.length}]`
-							: ""),
-				},
-				"Suppressing duplicate visible callback reply emitted for a single turn",
-			);
-			return [];
-		}
-		if (hasVisibleOutput && visibleCallbackCount >= 1) {
-			runtime.logger.warn(
-				{
-					src: "service:message",
-					agentId: runtime.agentId,
-					messageId: message.id,
-					roomId: message.roomId,
-					callbackCount: visibleCallbackCount + 1,
-					action:
-						typeof (content as Record<string, unknown>)?.action === "string"
-							? String((content as Record<string, unknown>).action)
-							: actionName,
-					source:
-						typeof content.source === "string" ? content.source : undefined,
-					firstPreview: firstVisibleCallbackPreview,
-					currentPreview:
-						preview ||
-						(Array.isArray(content.attachments) &&
-						content.attachments.length > 0
-							? `[attachments:${content.attachments.length}]`
-							: ""),
-				},
-				"Suppressing additional visible callback reply emitted for a single turn",
-			);
-			return [];
-		}
-
-		if (deliveryKey) {
-			deliveredCallbackKeys.add(deliveryKey);
-		}
-		if (hasVisibleOutput) {
-			visibleCallbackCount += 1;
-			firstVisibleCallbackPreview =
-				preview ||
-				(Array.isArray(content.attachments) && content.attachments.length > 0
-					? `[attachments:${content.attachments.length}]`
-					: "");
-		}
-
-		return actionName === undefined
-			? callback(content)
-			: callback(content, actionName);
-	};
+	return callback;
 }
 
 function getLatestVisibleReplyText(
@@ -2598,7 +2544,7 @@ function getLatestVisibleReplyText(
 			typeof result?.data?.actionName === "string"
 				? result.data.actionName
 				: "";
-		if (normalizeActionIdentifier(actionName) !== "REPLY") {
+		if (!isReplyActionIdentifier(actionName)) {
 			continue;
 		}
 
@@ -2653,7 +2599,7 @@ function shouldWaitForUserAfterIncompleteReflection(
 			typeof result?.data?.actionName === "string"
 				? result.data.actionName
 				: "";
-		return normalizeActionIdentifier(actionName) === "REPLY";
+		return isReplyActionIdentifier(actionName);
 	});
 }
 
@@ -3880,24 +3826,47 @@ export class DefaultMessageService implements IMessageService {
 			state = result.state;
 			mode = result.mode;
 
-			// Race check before we send anything
+			// Race check before we send anything.
+			//
+			// When a newer message arrives in the same room while we were
+			// generating a response, the default behavior is to drop the older
+			// response so the bot only replies to the freshest input.
+			//
+			// Exception: keep the response when the planner picked an explicit
+			// REPLY/RESPOND action. That's a deliberate conversational signal
+			// (often a direct @-mention) and dropping it leaves the user looking
+			// at silence on a tagged message, which the character contract
+			// treats as a bug. The newer message will get its own turn through
+			// the normal pipeline; sending the older REPLY first does not
+			// duplicate either response.
 			const currentResponseId = agentResponses.get(message.roomId);
 			if (currentResponseId !== responseId && !opts.keepExistingResponses) {
-				runtime.logger.info(
-					{
-						src: "service:message",
-						agentId: runtime.agentId,
-						roomId: message.roomId,
-					},
-					"Response discarded - newer message being processed",
-				);
-				return {
-					didRespond: false,
-					responseContent: null,
-					responseMessages: [],
-					state,
-					mode: "none",
-				};
+				if (hasExplicitReplyIntent(responseContent)) {
+					runtime.logger.info(
+						{
+							src: "service:message",
+							agentId: runtime.agentId,
+							roomId: message.roomId,
+						},
+						"Race detected but keeping response (explicit REPLY for an addressed message)",
+					);
+				} else {
+					runtime.logger.info(
+						{
+							src: "service:message",
+							agentId: runtime.agentId,
+							roomId: message.roomId,
+						},
+						"Response discarded - newer message being processed",
+					);
+					return {
+						didRespond: false,
+						responseContent: null,
+						responseMessages: [],
+						state,
+						mode: "none",
+					};
+				}
 			}
 
 			if (responseContent && message.id) {
@@ -6080,7 +6049,7 @@ Output ONLY the continuation, starting immediately after the last character abov
 			}
 		}
 
-		if (!hasNonPassiveAction(responseContent)) {
+		if (shouldRunMetadataActionRescue(responseContent)) {
 			const metadataSuggestion = suggestOwnedActionFromMetadata(
 				runtime,
 				message,
@@ -6262,7 +6231,7 @@ Output ONLY the continuation, starting immediately after the last character abov
 				responseContent.actions,
 			);
 			// Suppress any direct planner answer; the REPLY action should generate final output.
-			if (responseContent.actions.some((a) => a.toUpperCase() === "REPLY")) {
+			if (responseContent.actions.some((a) => isReplyActionIdentifier(a))) {
 				responseContent.text = "";
 			}
 		}
@@ -6942,6 +6911,63 @@ Output ONLY the continuation, starting immediately after the last character abov
 							? result.text
 							: undefined,
 				});
+
+				// Break the multi-step loop when the action returned a terminal
+				// "needs human confirmation" signal. Without this, actions that
+				// return { requiresConfirmation: true } cause the planner to
+				// re-fire the same plan every iteration. Confirmation must come
+				// from the next user message — there is nothing the agent can
+				// do to supply it on its own.
+				const resultValuesForConfirm =
+					result &&
+					"values" in result &&
+					typeof result.values === "object" &&
+					result.values !== null
+						? (result.values as Record<string, unknown>)
+						: null;
+				const resultDataForConfirm =
+					result &&
+					"data" in result &&
+					typeof result.data === "object" &&
+					result.data !== null
+						? (result.data as Record<string, unknown>)
+						: null;
+				// Recognize any confirmation-required signal an action might use:
+				// the canonical `requiresConfirmation: true` flag (in either values
+				// or data) plus the legacy error codes that some handlers still
+				// return (NOT_CONFIRMED, REQUIRES_CONFIRMATION, AWAITING_CONFIRMATION).
+				const confirmErrorCodes = new Set([
+					"CONFIRMATION_REQUIRED",
+					"NOT_CONFIRMED",
+					"REQUIRES_CONFIRMATION",
+					"AWAITING_CONFIRMATION",
+					"NEEDS_CONFIRMATION",
+				]);
+				const valuesError =
+					typeof resultValuesForConfirm?.error === "string"
+						? resultValuesForConfirm.error
+						: "";
+				const dataError =
+					typeof resultDataForConfirm?.error === "string"
+						? resultDataForConfirm.error
+						: "";
+				const requiresConfirmation =
+					resultValuesForConfirm?.requiresConfirmation === true ||
+					resultDataForConfirm?.requiresConfirmation === true ||
+					confirmErrorCodes.has(valuesError) ||
+					confirmErrorCodes.has(dataError);
+				if (requiresConfirmation) {
+					runtime.logger.info(
+						{
+							src: "service:message",
+							agentId: runtime.agentId,
+							iteration: iterationCount,
+							action,
+						},
+						"Action returned requiresConfirmation — terminating multi-step loop until next user message",
+					);
+					break;
+				}
 			}
 		}
 

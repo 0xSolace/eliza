@@ -19,7 +19,17 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
-import { signalCheck } from "./rpc";
+import {
+  createSignalEventStream,
+  parseSignalEventData,
+  signalCheck,
+  signalListContacts,
+  signalListGroups,
+  signalRpcRequest,
+  signalSend,
+  signalSendReaction,
+  signalSendTyping,
+} from "./rpc";
 
 type MessageService = Pick<IMessageService, "handleMessage">;
 
@@ -104,45 +114,12 @@ function buildSignalCliEnv(): NodeJS.ProcessEnv {
  */
 class SignalApiClient {
   constructor(
-    private baseUrl: string,
-    private accountNumber: string
+    public readonly baseUrl: string,
+    public readonly accountNumber: string
   ) {}
 
-  private async request<T>(
-    method: string,
-    endpoint: string,
-    body?: Record<string, unknown>,
-    allowEmptyResponse = false
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const options: RequestInit = {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-    if (body) {
-      options.body = JSON.stringify(body);
-    }
-
-    const response = await fetch(url, options);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Signal API error: ${response.status} - ${errorText}`);
-    }
-
-    const text = await response.text();
-    if (!text) {
-      if (allowEmptyResponse) return {} as T;
-      throw new Error(`Signal API returned empty response for ${method} ${endpoint}`);
-    }
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      throw new Error(`Signal API returned invalid JSON: ${text.slice(0, 200)}`);
-    }
+  private rpcOptions(timeoutMs?: number): { baseUrl: string; timeoutMs?: number } {
+    return timeoutMs ? { baseUrl: this.baseUrl, timeoutMs } : { baseUrl: this.baseUrl };
   }
 
   async sendMessage(
@@ -150,22 +127,16 @@ class SignalApiClient {
     message: string,
     options?: SignalMessageSendOptions
   ): Promise<{ timestamp: number }> {
-    const body: Record<string, unknown> = {
-      message,
-      number: this.accountNumber,
-      recipients: [recipient],
-    };
-
-    if (options?.attachments) {
-      body.base64_attachments = options.attachments;
-    }
-
-    if (options?.quote) {
-      body.quote_timestamp = options.quote.timestamp;
-      body.quote_author = options.quote.author;
-    }
-
-    return this.request<{ timestamp: number }>("POST", "/v2/send", body);
+    return signalSend(
+      {
+        account: this.accountNumber,
+        recipients: [recipient],
+        message,
+        ...(options?.attachments ? { attachments: options.attachments } : {}),
+        ...(options?.quote ? { quote: options.quote } : {}),
+      },
+      this.rpcOptions()
+    );
   }
 
   async sendGroupMessage(
@@ -173,17 +144,15 @@ class SignalApiClient {
     message: string,
     options?: SignalMessageSendOptions
   ): Promise<{ timestamp: number }> {
-    const body: Record<string, unknown> = {
-      message,
-      number: this.accountNumber,
-      recipients: [`group.${groupId}`],
-    };
-
-    if (options?.attachments) {
-      body.base64_attachments = options.attachments;
-    }
-
-    return this.request<{ timestamp: number }>("POST", "/v2/send", body);
+    return signalSend(
+      {
+        account: this.accountNumber,
+        groupId,
+        message,
+        ...(options?.attachments ? { attachments: options.attachments } : {}),
+      },
+      this.rpcOptions()
+    );
   }
 
   async sendReaction(
@@ -193,31 +162,25 @@ class SignalApiClient {
     targetAuthor: string,
     remove = false
   ): Promise<void> {
-    await this.request(
-      "POST",
-      `/v1/reactions/${this.accountNumber}`,
+    await signalSendReaction(
       {
+        account: this.accountNumber,
         recipient,
-        reaction: emoji,
-        target_author: targetAuthor,
-        timestamp: targetTimestamp,
+        emoji,
+        targetAuthor,
+        targetTimestamp,
         remove,
       },
-      true
+      this.rpcOptions()
     );
   }
 
   async getContacts(): Promise<SignalContact[]> {
-    const result = await this.request<{ contacts: SignalContact[] }>(
-      "GET",
-      `/v1/contacts/${this.accountNumber}`
-    );
-    return result.contacts || [];
+    return signalListContacts(this.accountNumber, this.rpcOptions()) as Promise<SignalContact[]>;
   }
 
   async getGroups(): Promise<SignalGroup[]> {
-    const result = await this.request<SignalGroup[]>("GET", `/v1/groups/${this.accountNumber}`);
-    return result || [];
+    return signalListGroups(this.accountNumber, this.rpcOptions()) as Promise<SignalGroup[]>;
   }
 
   async getGroup(groupId: string): Promise<SignalGroup | null> {
@@ -226,54 +189,59 @@ class SignalApiClient {
   }
 
   async receive(): Promise<SignalMessage[]> {
-    const result = await this.request<SignalMessage[]>("GET", `/v1/receive/${this.accountNumber}`);
-    return result || [];
+    return signalRpcRequest<SignalMessage[]>(
+      "receive",
+      { account: this.accountNumber },
+      this.rpcOptions(1_500)
+    ).catch((error) => {
+      if (error instanceof Error && error.name === "AbortError") {
+        return [];
+      }
+      throw error;
+    });
   }
 
   async sendTyping(recipient: string, stop = false): Promise<void> {
-    await this.request(
-      "PUT",
-      `/v1/typing-indicator/${this.accountNumber}`,
+    await signalSendTyping(
       {
+        account: this.accountNumber,
         recipient,
         stop,
       },
-      true
+      this.rpcOptions()
     );
   }
 
   async setProfile(name: string, about?: string): Promise<void> {
-    await this.request(
-      "PUT",
-      `/v1/profiles/${this.accountNumber}`,
+    await signalRpcRequest(
+      "setProfile",
       {
+        account: this.accountNumber,
         name,
         about: about || "",
       },
-      true
+      this.rpcOptions()
     );
   }
 
   async getIdentities(): Promise<
     Array<{ number: string; safety_number: string; trust_level: string }>
   > {
-    const result = await this.request<
-      Array<{ number: string; safety_number: string; trust_level: string }>
-    >("GET", `/v1/identities/${this.accountNumber}`);
-    return result || [];
+    return signalRpcRequest("listIdentities", { account: this.accountNumber }, this.rpcOptions());
   }
 
   async trustIdentity(
     number: string,
     trustLevel: "TRUSTED_VERIFIED" | "TRUSTED_UNVERIFIED" | "UNTRUSTED"
   ): Promise<void> {
-    await this.request(
-      "PUT",
-      `/v1/identities/${this.accountNumber}/trust/${number}`,
+    await signalRpcRequest(
+      "trustIdentity",
       {
-        trust_level: trustLevel,
+        account: this.accountNumber,
+        number,
+        trustLevel,
       },
-      true
+      this.rpcOptions()
     );
   }
 }
@@ -298,6 +266,7 @@ export class SignalService extends Service implements ISignalService {
   private contactCache: Map<string, SignalContact> = new Map();
   private groupCache: Map<string, SignalGroup> = new Map();
   private pollInterval: NodeJS.Timeout | null = null;
+  private eventStream: ReturnType<typeof createSignalEventStream> | null = null;
   private isPolling = false;
   private daemonProcess: ChildProcess | null = null;
 
@@ -312,17 +281,20 @@ export class SignalService extends Service implements ISignalService {
         shouldIgnoreGroupMessages: false,
         allowedGroups: undefined,
         blockedNumbers: undefined,
+        autoReply: false,
       };
     }
   }
 
   private loadSettings(): SignalSettings {
     const ignoreGroups = this.runtime.getSetting("SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES");
+    const autoReply = this.runtime.getSetting("SIGNAL_AUTO_REPLY");
 
     return {
       shouldIgnoreGroupMessages: ignoreGroups === "true" || ignoreGroups === true,
       allowedGroups: undefined,
       blockedNumbers: undefined,
+      autoReply: autoReply === "true" || autoReply === true,
     };
   }
 
@@ -446,8 +418,8 @@ export class SignalService extends Service implements ISignalService {
 
       const isGroup = room?.type === ChannelType.GROUP;
       const result = isGroup
-        ? await service.sendGroupMessage(channelId, text)
-        : await service.sendMessage(channelId, text);
+        ? await service.sendGroupMessage(channelId, text, { record: false })
+        : await service.sendMessage(channelId, text, { record: false });
 
       if (!target.roomId) {
         return;
@@ -616,7 +588,28 @@ export class SignalService extends Service implements ISignalService {
   }
 
   private startPolling(): void {
-    if (this.pollInterval) return;
+    if (this.pollInterval || this.eventStream) return;
+
+    if (this.client) {
+      this.eventStream = createSignalEventStream({
+        baseUrl: this.client.baseUrl,
+        account: this.client.accountNumber,
+        onEvent: (event) => {
+          const data = parseSignalEventData<unknown>(event.data);
+          if (data !== null) {
+            this.handleSignalEventPayload(data);
+          }
+        },
+        onError: (error) => {
+          this.runtime.logger.error(
+            { src: "plugin:signal", error: String(error) },
+            "Signal event stream error"
+          );
+        },
+      });
+      this.eventStream.start();
+      return;
+    }
 
     this.pollInterval = setInterval(async () => {
       await this.pollMessages();
@@ -627,6 +620,10 @@ export class SignalService extends Service implements ISignalService {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (this.eventStream) {
+      this.eventStream.stop();
+      this.eventStream = null;
     }
   }
 
@@ -699,6 +696,33 @@ export class SignalService extends Service implements ISignalService {
     }
   }
 
+  private handleSignalEventPayload(raw: unknown): void {
+    const payloads = Array.isArray(raw) ? raw : [raw];
+    for (const payload of payloads) {
+      if (!payload || typeof payload !== "object") {
+        continue;
+      }
+      void (async () => {
+        try {
+          const msg = SignalService.unwrapEnvelope(payload as Record<string, unknown>);
+          if (!msg) {
+            this.runtime.logger.warn(
+              { src: "plugin:signal" },
+              "Skipping malformed Signal event (missing sender or timestamp)"
+            );
+            return;
+          }
+          await this.handleIncomingMessage(msg);
+        } catch (error) {
+          this.runtime.logger.error(
+            { src: "plugin:signal", error: String(error) },
+            "Error handling Signal event"
+          );
+        }
+      })();
+    }
+  }
+
   private async handleIncomingMessage(msg: SignalMessage): Promise<void> {
     // Handle reactions separately
     if (msg.reaction) {
@@ -731,6 +755,7 @@ export class SignalService extends Service implements ISignalService {
       roomId,
       worldId,
       worldName: "Signal",
+      userId: msg.sender as unknown as UUID,
       userName: displayName,
       name: displayName,
       source: "signal",
@@ -762,8 +787,14 @@ export class SignalService extends Service implements ISignalService {
       room = await this.ensureRoomExists(msg.sender, msg.groupId);
     }
 
-    // Process the message through the agent
-    await this.processMessage(memory, room, msg.sender, msg.groupId);
+    // Inbound messages are always ingested (memory + MESSAGE_RECEIVED event)
+    // so the user can read history and dispatch sends through LifeOps. The
+    // agent only auto-generates a reply when SIGNAL_AUTO_REPLY is explicitly
+    // enabled — default-off prevents the runtime from speaking on the user's
+    // behalf to real Signal contacts.
+    if (this.settings.autoReply) {
+      await this.processMessage(memory, room, msg.sender, msg.groupId);
+    }
   }
 
   private async handleReaction(msg: SignalMessage): Promise<void> {
@@ -851,6 +882,34 @@ export class SignalService extends Service implements ISignalService {
         name: displayName,
         ...(media.length > 0 ? { attachments: media } : {}),
       },
+      metadata: {
+        type: "message",
+        source: "signal",
+        provider: "signal",
+        timestamp: msg.timestamp,
+        entityName: displayName,
+        entityUserName: msg.sender,
+        fromBot: false,
+        fromId: msg.sender,
+        sourceId: entityId,
+        chatType: msg.groupId ? ChannelType.GROUP : ChannelType.DM,
+        messageIdFull: String(msg.timestamp),
+        sender: {
+          id: msg.sender,
+          name: displayName,
+          username: msg.sender,
+        },
+        signal: {
+          id: msg.sender,
+          userId: msg.sender,
+          username: msg.sender,
+          userName: msg.sender,
+          name: displayName,
+          senderId: msg.sender,
+          groupId: msg.groupId,
+          timestamp: msg.timestamp,
+        },
+      } as unknown as Memory["metadata"],
       createdAt: msg.timestamp,
     };
 
@@ -928,6 +987,15 @@ export class SignalService extends Service implements ISignalService {
       lastTimestamp = result.timestamp;
     }
 
+    if (options?.record !== false) {
+      await this.recordOutgoingMessage({
+        channelId: normalizedRecipient,
+        text,
+        timestamp: lastTimestamp,
+        isGroup: false,
+      });
+    }
+
     return { timestamp: lastTimestamp };
   }
 
@@ -951,7 +1019,57 @@ export class SignalService extends Service implements ISignalService {
       lastTimestamp = result.timestamp;
     }
 
+    if (options?.record !== false) {
+      await this.recordOutgoingMessage({
+        channelId: groupId,
+        text,
+        timestamp: lastTimestamp,
+        isGroup: true,
+      });
+    }
+
     return { timestamp: lastTimestamp };
+  }
+
+  private async recordOutgoingMessage(args: {
+    channelId: string;
+    text: string;
+    timestamp: number;
+    isGroup: boolean;
+  }): Promise<void> {
+    const roomId = await this.getRoomId(
+      args.isGroup ? this.accountNumber || "signal-agent" : args.channelId,
+      args.isGroup ? args.channelId : undefined
+    );
+    const worldId = createUniqueUuid(this.runtime, "signal-world");
+    const displayName = this.character?.name || "Agent";
+
+    await this.runtime.ensureConnection({
+      entityId: this.runtime.agentId,
+      roomId,
+      worldId,
+      worldName: "Signal",
+      userId: this.runtime.agentId,
+      userName: displayName,
+      name: displayName,
+      source: "signal",
+      type: args.isGroup ? ChannelType.GROUP : ChannelType.DM,
+      channelId: args.channelId,
+    });
+
+    const memory = createMessageMemory({
+      id: createUniqueUuid(this.runtime, `signal:${args.timestamp}`),
+      entityId: this.runtime.agentId,
+      roomId,
+      content: {
+        text: args.text,
+        source: "signal",
+      },
+    });
+    await this.runtime.createMemory(
+      { ...memory, createdAt: args.timestamp },
+      "messages"
+    );
   }
 
   async sendReaction(

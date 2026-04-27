@@ -441,7 +441,7 @@ export const messageHandlerTemplate = `task: Generate dialog and actions for {{a
 context:
 {{providers}}
 
-rules[21]:
+rules[22]:
 - think briefly, then respond
 - always include a <thought> field, even for direct replies
 - actions execute in listed order
@@ -450,6 +450,7 @@ rules[21]:
 - set simple=true only when the planner's text should be sent directly as the final reply without running REPLY again
 - if actions are REPLY-only and you want the REPLY action to generate the final user-facing message, set simple=false
 - use IGNORE or STOP only by themselves
+- in group conversations, choose IGNORE if the latest message is addressed to someone else and not to {{agentName}}
 - include providers only when needed
 - use only action and provider names that appear in the listed runtime surface; never invent new action names, provider names, benchmark ids, or paraphrased tool labels
 - when the user asks about uploaded files, documents, prior uploads, or knowledge-base contents, call the relevant providers before replying instead of asking the user to resend the material
@@ -460,6 +461,7 @@ rules[21]:
 - for live status questions or remaining-work queries, do not answer from recent conversation alone; call the relevant action/provider to refresh state, and do not pair it with a speculative REPLY that guesses the result
 - when an action will fetch the state and produce the final grounded answer, do not add REPLY just to say "checking", "let me look", or similar filler; use the action alone and leave text empty
 - when the user asks you to create, store, remember, schedule, remind, upload, follow up, route, escalate, or set a standing policy, choose the matching action instead of handling it in prose only
+- when the request names an external integration (Gmail, Discord, Slack, Telegram, GitHub, Google Sheets, Google Calendar, Google Drive, Notion, etc.) AND describes data movement between services or scheduled invocation of an external API, prefer CREATE_N8N_WORKFLOW; reserve CREATE_TRIGGER_TASK for self-driven scheduled prompts to the agent itself with no external API calls
 - for standing or future-condition requests like "if/when X, do Y", still choose the action that records, queues, or routes that behavior on the first turn
 - if a matching action can own the task and ask the missing follow-up itself, still select that action and put the clarification in text; do not reply in prose alone
 - when the user defines a durable preference, recurring block, escalation policy, upload policy, approval-gated workflow, or multi-device reminder rule, select the owning action even if some implementation details are still missing
@@ -1027,12 +1029,13 @@ export const shouldRespondTemplate = `task: Decide whether {{agentName}} should 
 context:
 {{providers}}
 
-rules[6]:
+rules[7]:
 - direct mention of {{agentName}} -> RESPOND
 - different assistant name or talking to someone else -> IGNORE unless {{agentName}} is also directly addressed
 - prior participation by {{agentName}} in the thread is not enough by itself; the newest message must still clearly expect {{agentName}} -> otherwise IGNORE
 - request to stop or be quiet directed at {{agentName}} -> STOP
 - if multiple people are mentioned and {{agentName}} is one of the addressees -> RESPOND
+- in group conversations, if the latest message is addressed to someone else and not to {{agentName}}, IGNORE
 - if unsure whether the speaker is talking to {{agentName}}, prefer IGNORE over hallucinating relevance
 
 available_contexts:
@@ -1073,12 +1076,13 @@ context:
 available_contexts:
 {{availableContexts}}
 
-rules[6]:
+rules[7]:
 - direct mention of {{agentName}} -> RESPOND
 - different assistant name or talking to someone else -> IGNORE unless {{agentName}} is also directly addressed
 - prior participation by {{agentName}} in the thread is not enough by itself; the newest message must still clearly expect {{agentName}} -> otherwise IGNORE
 - request to stop or be quiet directed at {{agentName}} -> STOP
 - if multiple people are mentioned and {{agentName}} is one of the addressees -> RESPOND
+- in group conversations, if the latest message is addressed to someone else and not to {{agentName}}, IGNORE
 - if unsure whether the speaker is talking to {{agentName}}, prefer IGNORE over hallucinating relevance
 
 context_routing:

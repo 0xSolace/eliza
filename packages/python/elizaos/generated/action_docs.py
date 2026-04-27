@@ -6,9 +6,7 @@ DO NOT EDIT - Generated from packages/prompts/specs/**.
 from __future__ import annotations
 
 import json
-
 from typing import Literal, TypedDict
-
 
 JsonSchemaType = Literal["string", "number", "boolean", "object", "array"]
 ActionDocParameterExampleValue = str | int | float | bool | None
@@ -19,8 +17,8 @@ class ActionDocParameterSchema(TypedDict, total=False):
     description: str
     default: ActionDocParameterExampleValue
     enum: list[str]
-    properties: dict[str, "ActionDocParameterSchema"]
-    items: "ActionDocParameterSchema"
+    properties: dict[str, ActionDocParameterSchema]
+    items: ActionDocParameterSchema
     minimum: float
     maximum: float
     pattern: str
@@ -181,7 +179,7 @@ _CORE_ACTION_DOCS_JSON = """{
     },
     {
       "name": "IGNORE",
-      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
+      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. In group conversations, use IGNORE when the latest message is addressed to someone else and not to the agent. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
       "similes": [
         "STOP_TALKING",
         "STOP_CHATTING",
@@ -293,7 +291,7 @@ _CORE_ACTION_DOCS_JSON = """{
           }
         ]
       ],
-      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, or both sides said goodbye. Don't use if user engaged directly or needs error info."
+      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, addressed to someone else in a group, or both sides said goodbye. Don't use if user engaged directly or needs error info."
     },
     {
       "name": "NONE",
@@ -1550,7 +1548,7 @@ _ALL_ACTION_DOCS_JSON = """{
     },
     {
       "name": "IGNORE",
-      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
+      "description": "Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. In group conversations, use IGNORE when the latest message is addressed to someone else and not to the agent. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.",
       "similes": [
         "STOP_TALKING",
         "STOP_CHATTING",
@@ -1662,7 +1660,7 @@ _ALL_ACTION_DOCS_JSON = """{
           }
         ]
       ],
-      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, or both sides said goodbye. Don't use if user engaged directly or needs error info."
+      "descriptionCompressed": "Ignore user. Use when aggressive, creepy, conversation ended, addressed to someone else in a group, or both sides said goodbye. Don't use if user engaged directly or needs error info."
     },
     {
       "name": "NONE",
@@ -2832,17 +2830,6 @@ _ALL_ACTION_DOCS_JSON = """{
       "descriptionCompressed": "Generate image from conversation context. Use to visualize or illustrate."
     },
     {
-      "name": "ACKNOWLEDGE_SKILL_FINDINGS",
-      "description": "Acknowledge a skill's security findings so the skill can be enabled. Optionally enables the skill in the same step. Blocked skills cannot be acknowledged.",
-      "parameters": [],
-      "similes": [
-        "ACKNOWLEDGE_SKILL",
-        "DISMISS_SKILL_FINDINGS",
-        "ACK_SKILL_SCAN",
-        "APPROVE_SKILL_FINDINGS"
-      ]
-    },
-    {
       "name": "ADD_TO_PLAYLIST",
       "description": "Add music to a playlist. If the track is not already in the library, the configured music fetch service must resolve it first. Creates the playlist if it does not exist.",
       "parameters": [],
@@ -2851,6 +2838,17 @@ _ALL_ACTION_DOCS_JSON = """{
         "PUT_IN_PLAYLIST",
         "SAVE_TO_PLAYLIST",
         "ADD_TRACK_TO_PLAYLIST"
+      ]
+    },
+    {
+      "name": "APP_CREATE",
+      "description": "Multi-turn create-an-app flow: searches existing apps, asks the user new/edit/cancel, then dispatches a coding agent and verifies the output.",
+      "parameters": [],
+      "similes": [
+        "CREATE_APP",
+        "BUILD_APP",
+        "MAKE_APP",
+        "SCAFFOLD_APP"
       ]
     },
     {
@@ -2895,16 +2893,6 @@ _ALL_ACTION_DOCS_JSON = """{
       "similes": [
         "/commands",
         "/cmds"
-      ]
-    },
-    {
-      "name": "CREATE_SKILL",
-      "description": "Create a new workspace skill from a name and optional description or source body. Writes SKILL.md to the workspace skills directory and re-discovers skills.",
-      "parameters": [],
-      "similes": [
-        "NEW_SKILL",
-        "SCAFFOLD_SKILL",
-        "MAKE_SKILL"
       ]
     },
     {
@@ -2973,16 +2961,6 @@ _ALL_ACTION_DOCS_JSON = """{
         "MODIFY_MESSAGE",
         "CHANGE_MESSAGE",
         "EDIT_DISCORD_MESSAGE"
-      ]
-    },
-    {
-      "name": "EDIT_SKILL",
-      "description": "Replace a skill's SKILL.md body. Bundled or plugin skills are copied into the workspace first so the edit produces a writable copy.",
-      "parameters": [],
-      "similes": [
-        "UPDATE_SKILL",
-        "MODIFY_SKILL",
-        "WRITE_SKILL_SOURCE"
       ]
     },
     {
@@ -3108,6 +3086,17 @@ _ALL_ACTION_DOCS_JSON = """{
         "SHOW_TASK_AGENTS",
         "LIST_SUB_AGENTS",
         "SHOW_TASK_STATUS"
+      ]
+    },
+    {
+      "name": "LIST_EJECTED_PLUGINS",
+      "description": "List all ejected plugins currently being managed locally",
+      "parameters": [],
+      "similes": [
+        "list ejected",
+        "show ejected plugins",
+        "which plugins are ejected",
+        "list local plugins"
       ]
     },
     {
@@ -3440,17 +3429,6 @@ _ALL_ACTION_DOCS_JSON = """{
         "UNPAUSE",
         "UNPAUSE_MUSIC",
         "CONTINUE_MUSIC"
-      ]
-    },
-    {
-      "name": "REVIEW_SKILL_FINDINGS",
-      "description": "Return the security scan report for a skill, including manifest and file findings, severity totals, and acknowledgment state.",
-      "parameters": [],
-      "similes": [
-        "VIEW_SKILL_SCAN",
-        "GET_SKILL_FINDINGS",
-        "INSPECT_SKILL_SECURITY",
-        "REVIEW_SKILL_SCAN"
       ]
     },
     {

@@ -11,7 +11,7 @@ import type {
   LifeOpsOverview,
   LifeOpsScheduleInsight,
   LifeOpsXConnectorStatus,
-} from "@elizaos/shared";
+} from "@elizaos/shared/contracts/lifeops";
 import {
   ArrowRight,
   AtSign,
@@ -687,8 +687,8 @@ export function LifeOpsOverviewSection({
 }: LifeOpsOverviewSectionProps) {
   const { t } = useApp();
   const { select } = useLifeOpsSelection();
-  const greeting = useGreeting();
   const today = useMemo(() => new Date(), []);
+  const greeting = useGreeting();
   const capabilities = useLifeOpsCapabilitiesStatus();
   const googleConnector = useGoogleLifeOpsConnector({
     includeAccounts: false,
@@ -1094,8 +1094,12 @@ export function LifeOpsOverviewSection({
       </header>
 
       {error ? (
-        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-          {error}
+        <div
+          className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300"
+          title={error}
+        >
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Activity unavailable
         </div>
       ) : null}
 

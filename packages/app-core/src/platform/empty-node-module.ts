@@ -26,7 +26,11 @@ export const createIntegrationTelemetrySpan = () => ({
   success: () => {},
   failure: () => {},
 });
-export const loadElizaConfig = async () => ({});
+export const loadElizaConfig = () => ({
+  agents: {},
+  meta: {},
+  ui: {},
+});
 export const saveElizaConfig = async () => {};
 export const persistConfigEnv = async () => {};
 export const resolveStateDir = () => ".";

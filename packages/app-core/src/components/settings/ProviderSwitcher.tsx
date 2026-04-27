@@ -33,7 +33,10 @@ import {
   useState,
 } from "react";
 import { client, type OnboardingOptions, type PluginParamDef } from "../../api";
-import { ConfigRenderer, defaultRegistry } from "../../config";
+import {
+  ConfigRenderer,
+  defaultRegistry,
+} from "../../components/config-ui/config-renderer";
 import { appNameInterpolationVars, useBranding } from "../../config/branding";
 import {
   getOnboardingProviderOption,
@@ -43,6 +46,7 @@ import {
 } from "../../providers";
 import { useApp } from "../../state";
 import type { ConfigUiHint } from "../../types";
+import { AccountList } from "../accounts/AccountList";
 import { LocalInferencePanel } from "../local-inference/LocalInferencePanel";
 import { CloudDashboard } from "../pages/ElizaCloudDashboard";
 import { ApiKeyConfig } from "./ApiKeyConfig";
@@ -287,6 +291,8 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<
     Array<{
       provider: string;
+      accountId: string;
+      label: string;
       configured: boolean;
       valid: boolean;
       expiresAt: number | null;
@@ -378,11 +384,11 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         const elizaCloudEnabledCfg =
           llmText?.transport === "cloud-proxy" && providerId === "elizacloud";
         const defaults = {
-          nano: "openai/gpt-5.4-nano",
+          nano: "openai/gpt-5.5-nano",
           small: "minimax/minimax-m2.7",
           medium: "anthropic/claude-sonnet-4.6",
           large: "moonshotai/kimi-k2.5",
-          mega: "anthropic/claude-sonnet-4.6",
+          mega: "anthropic/claude-opus-4-7",
         };
 
         const vars = asRecord(asRecord(cfg.env)?.vars);
@@ -1139,6 +1145,18 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                 handleSelectSubscription={handleSelectSubscription}
                 loadSubscriptionStatus={loadSubscriptionStatus}
               />
+              {(() => {
+                const selection = SUBSCRIPTION_PROVIDER_SELECTIONS.find(
+                  (p) => p.id === visibleProviderPanelId,
+                );
+                // The outer `isSubscriptionProviderSelectionId` guard
+                // makes this lookup non-null in practice; the explicit
+                // null check is defensive against future panel ids
+                // that pass the guard but aren't in the selections
+                // table (e.g. a renamed enum left half-migrated).
+                if (!selection) return null;
+                return <AccountList providerId={selection.storedProvider} />;
+              })()}
             </div>
           </div>
         ) : null}

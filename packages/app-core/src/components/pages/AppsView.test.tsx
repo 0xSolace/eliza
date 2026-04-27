@@ -89,6 +89,30 @@ vi.mock("../../state", async () => {
   };
 });
 
+vi.mock("../../state/useApp", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+
+  return {
+    useApp: () => {
+      const noop = React.useCallback(() => {}, []);
+      const translate = React.useCallback(
+        (_key: string, values?: { defaultValue?: string }) =>
+          values?.defaultValue ?? _key,
+        [],
+      );
+
+      return {
+        appRuns: [],
+        plugins: [],
+        setActionNotice: noop,
+        setState: noop,
+        setTab: noop,
+        t: translate,
+      };
+    },
+  };
+});
+
 vi.mock("../apps/AppsSidebar", () => ({
   AppsSidebar: () => <aside data-testid="apps-sidebar" />,
 }));
@@ -149,8 +173,32 @@ function createCatalogApp(name: string, displayName: string) {
   };
 }
 
+function installMemoryLocalStorage(): void {
+  const store = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key) => store.get(key) ?? null,
+    key: (index) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key) => {
+      store.delete(key);
+    },
+    setItem: (key, value) => {
+      store.set(key, String(value));
+    },
+  };
+
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+}
+
 describe("AppsView", () => {
   beforeEach(() => {
+    installMemoryLocalStorage();
     window.history.replaceState(null, "", "/apps");
     window.localStorage.clear();
     clientMock.attachAppRun.mockResolvedValue({ run: null });
@@ -175,8 +223,12 @@ describe("AppsView", () => {
     vi.clearAllMocks();
   });
 
-  it("does not open a desktop app window by default", async () => {
+  it("routes game apps to the details page before launching", async () => {
     render(<AppsView />);
+
+    expect(
+      screen.queryByRole("checkbox", { name: "Open apps in windows" }),
+    ).toBeNull();
 
     const launchButton = await screen.findByRole("button", {
       name: "Open Defense of the Agents",
@@ -185,23 +237,23 @@ describe("AppsView", () => {
     fireEvent.click(launchButton);
 
     await waitFor(() => {
-      expect(clientMock.launchApp).toHaveBeenCalledWith(
-        "@elizaos/app-defense-of-the-agents",
+      expect(window.location.pathname).toBe(
+        "/apps/defense-of-the-agents/details",
       );
     });
 
+    expect(clientMock.launchApp).not.toHaveBeenCalled();
     expect(invokeDesktopBridgeRequestMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("app-launch-panel")).toBeTruthy();
   });
 
-  it("opens route apps in desktop windows only when the window preference is enabled", async () => {
+  it("opens lightweight route apps in desktop windows by default", async () => {
+    clientMock.listCatalogApps.mockResolvedValue([]);
+
     render(<AppsView />);
 
-    fireEvent.click(
-      await screen.findByRole("checkbox", { name: "Open apps in windows" }),
-    );
-
     const launchButton = await screen.findByRole("button", {
-      name: "Open Defense of the Agents",
+      name: "Open Plugin Viewer",
     });
 
     fireEvent.click(launchButton);
@@ -220,11 +272,11 @@ describe("AppsView", () => {
       expect.objectContaining({
         rpcMethod: "desktopOpenAppWindow",
         params: expect.objectContaining({
-          path: "/apps/defense-of-the-agents",
+          path: "/apps/plugins",
         }),
       }),
     );
     expect(clientMock.launchApp).not.toHaveBeenCalled();
-    expect(window.location.pathname).toBe("/apps/defense-of-the-agents");
+    expect(window.location.pathname).toBe("/apps/plugin-viewer");
   });
 });

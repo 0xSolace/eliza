@@ -13,39 +13,16 @@ export { detectPasswordManagerBackend } from "./lifeops/password-manager-bridge.
 export { detectRemoteDesktopBackend } from "./lifeops/remote-desktop.ts";
 export { LifeOpsService, LifeOpsServiceError } from "./lifeops/service.ts";
 export * from "./platform/index.ts";
-export type {
-  LifeOpsRouteContext,
-  WebsiteBlockerRouteContext,
-} from "./plugin.ts";
-export {
-  appLifeOpsPlugin,
-  BrowserBridgePluginService,
-  browserBridgeProvider,
-  ensureLifeOpsSchedulerTask,
-  executeLifeOpsSchedulerTask,
-  handleLifeOpsRoutes,
-  handleWebsiteBlockerRoutes,
-  inboxTriageProvider,
-  LIFEOPS_TASK_INTERVAL_MS,
-  LIFEOPS_TASK_JITTER_MS,
-  LIFEOPS_TASK_NAME,
-  LIFEOPS_TASK_TAGS,
-  lifeAction,
-  lifeOpsProvider,
-  manageBrowserBridgeAction,
-  registerLifeOpsTaskWorker,
-  resolveLifeOpsTaskIntervalMs,
-  updateOwnerProfileAction,
-} from "./plugin.ts";
 export {
   type CloudFeaturesRouteState,
   handleCloudFeaturesRoute,
 } from "./routes/cloud-features-routes.ts";
-export { lifeopsPlugin } from "./routes/plugin.ts";
 export {
   handleTravelProviderRelayRoute,
   type TravelProviderRelayRouteState,
 } from "./routes/travel-provider-relay-routes.ts";
+export * from "./plugin.ts";
+export { lifeopsPlugin } from "./routes/plugin.ts";
 export {
   getAppBlockerPermissionState,
   getAppBlockerStatus,

@@ -1,7 +1,12 @@
+// Server-safe public entry point for @elizaos/app-lifeops.
+//
+// The browser UI surface lives in ./ui and ./client. Keep this root free of
+// React components, hooks, widgets, and app-core UI barrels so Node plugin
+// loading can import @elizaos/app-lifeops without evaluating browser modules.
+
 export { calendarAction } from "./actions/calendar.ts";
 export { gmailAction } from "./actions/gmail.ts";
 export { inboxAction } from "./actions/inbox.ts";
-export { getAppBlockerStatus } from "./app-blocker/engine.ts";
 export * from "./contracts/index.ts";
 export { detectHealthBackend } from "./lifeops/health-bridge.ts";
 export { detectPasswordManagerBackend } from "./lifeops/password-manager-bridge.ts";
@@ -12,7 +17,6 @@ export type {
   LifeOpsRouteContext,
   WebsiteBlockerRouteContext,
 } from "./plugin.ts";
-// Re-export the full plugin from plugin.ts
 export {
   appLifeOpsPlugin,
   BrowserBridgePluginService,
@@ -42,44 +46,20 @@ export {
   handleTravelProviderRelayRoute,
   type TravelProviderRelayRouteState,
 } from "./routes/travel-provider-relay-routes.ts";
+export {
+  getAppBlockerPermissionState,
+  getAppBlockerStatus,
+  getCachedAppBlockerStatus,
+  getInstalledApps,
+  requestAppBlockerPermission,
+  selectAppsForBlocking,
+  startAppBlock,
+  stopAppBlock,
+} from "./app-blocker/engine.ts";
 export type {
   AppBlockerSettingsCardProps,
   AppBlockerSettingsMode,
   WebsiteBlockerSettingsCardProps,
   WebsiteBlockerSettingsMode,
 } from "./types/index.ts";
-export type {
-  NativeWebsiteBlockerBackend,
-  SelfControlBlockRequest,
-  SelfControlElevationMethod,
-  SelfControlPermissionState,
-  SelfControlPluginConfig,
-  SelfControlStatus,
-} from "./website-blocker/public.ts";
-export {
-  blockWebsitesAction,
-  clearWebsiteBlockerExpiryTasks,
-  executeWebsiteBlockerExpiryTask,
-  getNativeWebsiteBlockerBackend,
-  getSelfControlAccess,
-  getSelfControlPermissionState,
-  getSelfControlStatus,
-  getWebsiteBlockStatusAction,
-  openSelfControlPermissionLocation,
-  parseSelfControlBlockRequest,
-  registerNativeWebsiteBlockerBackend,
-  registerWebsiteBlockerTaskWorker,
-  requestSelfControlPermission,
-  requestWebsiteBlockingPermissionAction,
-  SELFCONTROL_ACCESS_ERROR,
-  SelfControlBlockerService,
-  setSelfControlPluginConfig,
-  startSelfControlBlock,
-  stopSelfControlBlock,
-  syncWebsiteBlockerExpiryTask,
-  unblockWebsitesAction,
-  WEBSITE_BLOCKER_UNBLOCK_TASK_NAME,
-  WEBSITE_BLOCKER_UNBLOCK_TASK_TAGS,
-  WebsiteBlockerService,
-  websiteBlockerProvider,
-} from "./website-blocker/public.ts";
+export * from "./website-blocker/public.ts";

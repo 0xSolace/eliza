@@ -1,3 +1,6 @@
+// Browser-only LifeOps entry point. React components, hooks, widgets, and
+// client augmentations belong here instead of the package root.
+
 export * from "./components/AppBlockerSettingsCard.tsx";
 export {
   BrowserBridgeSetupPanel,
@@ -9,7 +12,7 @@ export * from "./components/LifeOpsPageView.tsx";
 export * from "./components/LifeOpsSettingsSection.tsx";
 export * from "./components/LifeOpsWorkspaceView.tsx";
 export * from "./components/WebsiteBlockerSettingsCard.tsx";
-export { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "./platform/lifeops-github.ts";
+export * from "./platform/index.ts";
 export type {
   AppBlockerSettingsCardProps,
   AppBlockerSettingsMode,

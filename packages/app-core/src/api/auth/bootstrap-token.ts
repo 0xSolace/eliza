@@ -13,8 +13,6 @@
  */
 
 import type { RuntimeEnvRecord } from "@elizaos/shared";
-import { createLocalJWKSet } from "jose/jwks/local";
-import { jwtVerify } from "jose/jwt/verify";
 import type { AuthStore } from "../../services/auth-store";
 import {
   type JwksDocument,
@@ -24,6 +22,27 @@ import {
 
 export const BOOTSTRAP_TOKEN_ALG = "RS256";
 export const BOOTSTRAP_TOKEN_SCOPE = "bootstrap";
+
+type JoseAuthHelpers = {
+  createLocalJWKSet: typeof import("jose/jwks/local").createLocalJWKSet;
+  jwtVerify: typeof import("jose/jwt/verify").jwtVerify;
+};
+
+let joseAuthHelpersPromise: Promise<JoseAuthHelpers> | null = null;
+
+const JOSE_JWKS_LOCAL_SPECIFIER = "jose/jwks/local";
+const JOSE_JWT_VERIFY_SPECIFIER = "jose/jwt/verify";
+
+function loadJoseAuthHelpers(): Promise<JoseAuthHelpers> {
+  joseAuthHelpersPromise ??= Promise.all([
+    import(JOSE_JWKS_LOCAL_SPECIFIER) as Promise<typeof import("jose/jwks/local")>,
+    import(JOSE_JWT_VERIFY_SPECIFIER) as Promise<typeof import("jose/jwt/verify")>,
+  ]).then(([local, verify]) => ({
+    createLocalJWKSet: local.createLocalJWKSet,
+    jwtVerify: verify.jwtVerify,
+  }));
+  return joseAuthHelpersPromise;
+}
 
 export interface BootstrapTokenClaims {
   iss: string;
@@ -171,6 +190,7 @@ export async function verifyBootstrapToken(
   // jose's local JWKS resolver enforces the algorithm we restrict to via
   // `algorithms`. We pin RS256 explicitly — anything else (notably HS256
   // signed with a leaked secret) MUST be rejected.
+  const { createLocalJWKSet, jwtVerify } = await loadJoseAuthHelpers();
   const localJwks = createLocalJWKSet({ keys: jwks.keys });
 
   let payload: RawClaims;

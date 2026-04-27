@@ -1,15 +1,9 @@
-export * from "./components/AppBlockerSettingsCard.tsx";
-// UI page views
-export {
-  BrowserBridgeSetupPanel,
-  BrowserBridgeSetupPanel as LifeOpsBrowserSetupPanel,
-} from "./components/BrowserBridgeSetupPanel.tsx";
-export { LifeOpsActivitySignalsEffect } from "./components/LifeOpsActivitySignalsEffect.tsx";
-export * from "./components/LifeOpsPageSections.tsx";
-export * from "./components/LifeOpsPageView.tsx";
-export * from "./components/LifeOpsSettingsSection.tsx";
-export * from "./components/LifeOpsWorkspaceView.tsx";
-export * from "./components/WebsiteBlockerSettingsCard.tsx";
+// Server-safe public entry point for @elizaos/app-lifeops.
+//
+// The browser UI surface lives in ./ui and ./client. Keep this root free of
+// React components, hooks, widgets, and app-core UI barrels so Node plugin
+// loading can import @elizaos/app-lifeops without evaluating browser modules.
+
 export * from "./contracts/index.ts";
 export * from "./platform/index.ts";
 export {
@@ -24,7 +18,6 @@ export type {
   LifeOpsRouteContext,
   WebsiteBlockerRouteContext,
 } from "./plugin.ts";
-// Re-export the full plugin from plugin.ts
 export {
   appLifeOpsPlugin,
   calendarAction,
@@ -49,10 +42,21 @@ export {
   updateOwnerProfileAction,
 } from "./plugin.ts";
 export { lifeopsPlugin } from "./routes/plugin.ts";
+export * from "./website-blocker/public.ts";
+export {
+  getAppBlockerPermissionState,
+  getAppBlockerStatus,
+  getCachedAppBlockerStatus,
+  getInstalledApps,
+  requestAppBlockerPermission,
+  selectAppsForBlocking,
+  startAppBlock,
+  stopAppBlock,
+} from "./app-blocker/engine.ts";
+export { LifeOpsService, LifeOpsServiceError } from "./lifeops/service.ts";
 export type {
   AppBlockerSettingsCardProps,
   AppBlockerSettingsMode,
   WebsiteBlockerSettingsCardProps,
   WebsiteBlockerSettingsMode,
 } from "./types/index.ts";
-export * from "./website-blocker/public.ts";

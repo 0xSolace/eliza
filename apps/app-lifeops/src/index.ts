@@ -14,33 +14,7 @@ export {
   handleTravelProviderRelayRoute,
   type TravelProviderRelayRouteState,
 } from "./routes/travel-provider-relay-routes.ts";
-export type {
-  LifeOpsRouteContext,
-  WebsiteBlockerRouteContext,
-} from "./plugin.ts";
-export {
-  appLifeOpsPlugin,
-  calendarAction,
-  ensureLifeOpsSchedulerTask,
-  executeLifeOpsSchedulerTask,
-  gmailAction,
-  handleLifeOpsRoutes,
-  handleWebsiteBlockerRoutes,
-  inboxAction,
-  inboxTriageProvider,
-  LIFEOPS_TASK_INTERVAL_MS,
-  LIFEOPS_TASK_JITTER_MS,
-  LIFEOPS_TASK_NAME,
-  LIFEOPS_TASK_TAGS,
-  BrowserBridgePluginService,
-  lifeAction,
-  browserBridgeProvider,
-  lifeOpsProvider,
-  manageBrowserBridgeAction,
-  registerLifeOpsTaskWorker,
-  resolveLifeOpsTaskIntervalMs,
-  updateOwnerProfileAction,
-} from "./plugin.ts";
+export * from "./plugin.ts";
 export { lifeopsPlugin } from "./routes/plugin.ts";
 export * from "./website-blocker/public.ts";
 export {

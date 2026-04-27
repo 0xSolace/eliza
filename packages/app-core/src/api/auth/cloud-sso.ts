@@ -32,7 +32,8 @@
 
 import crypto from "node:crypto";
 import type { RuntimeEnvRecord } from "@elizaos/shared";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet } from "jose/jwks/local";
+import { jwtVerify } from "jose/jwt/verify";
 import type { AuthStore } from "../../services/auth-store";
 import {
   type JwksDocument,

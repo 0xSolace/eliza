@@ -33,8 +33,6 @@
 import crypto from "node:crypto";
 import { logger } from "@elizaos/core";
 import type { RuntimeEnvRecord } from "@elizaos/shared";
-import { createLocalJWKSet } from "jose/jwks/local";
-import { jwtVerify } from "jose/jwt/verify";
 import type { AuthStore } from "../../services/auth-store";
 import {
   type JwksDocument,
@@ -46,6 +44,27 @@ import { appendAuditEvent } from "./audit";
 export const SSO_REDIRECT_PATH = "/api/auth/login/sso/callback";
 export const SSO_STATE_TTL_MS = 10 * 60 * 1000;
 export const SSO_TOKEN_ALG = "RS256";
+
+type JoseAuthHelpers = {
+  createLocalJWKSet: typeof import("jose/jwks/local").createLocalJWKSet;
+  jwtVerify: typeof import("jose/jwt/verify").jwtVerify;
+};
+
+let joseAuthHelpersPromise: Promise<JoseAuthHelpers> | null = null;
+
+const JOSE_JWKS_LOCAL_SPECIFIER = "jose/jwks/local";
+const JOSE_JWT_VERIFY_SPECIFIER = "jose/jwt/verify";
+
+function loadJoseAuthHelpers(): Promise<JoseAuthHelpers> {
+  joseAuthHelpersPromise ??= Promise.all([
+    import(JOSE_JWKS_LOCAL_SPECIFIER) as Promise<typeof import("jose/jwks/local")>,
+    import(JOSE_JWT_VERIFY_SPECIFIER) as Promise<typeof import("jose/jwt/verify")>,
+  ]).then(([local, verify]) => ({
+    createLocalJWKSet: local.createLocalJWKSet,
+    jwtVerify: verify.jwtVerify,
+  }));
+  return joseAuthHelpersPromise;
+}
 const SSO_OAUTH_AUTHORIZE_PATH = "/oauth/authorize";
 const SSO_OAUTH_TOKEN_PATH = "/oauth/token";
 const SSO_DEFAULT_SCOPE = "openid profile";
@@ -449,6 +468,7 @@ export async function exchangeCodeForSession(
     await emitFailure(options, "jwks_fetch_failed");
     return { ok: false, reason: "jwks_fetch_failed" };
   }
+  const { createLocalJWKSet, jwtVerify } = await loadJoseAuthHelpers();
   const localJwks = createLocalJWKSet({ keys: jwks.keys });
 
   let claims: SsoIdTokenClaims;

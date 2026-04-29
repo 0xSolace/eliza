@@ -118,3 +118,7 @@
 	path = plugins/plugin-agent-orchestrator
 	url = https://github.com/elizaos-plugins/plugin-agent-orchestrator.git
 	branch = alpha
+[submodule "plugins/plugin-plugin-manager"]
+	path = plugins/plugin-plugin-manager
+	url = https://github.com/elizaos-plugins/plugin-plugin-manager.git
+	branch = alpha

@@ -5,7 +5,7 @@ import { ChatModalView, useApp, useRenderGuard } from "@elizaos/app-core";
 // warning and remove the unnecessary Suspense boundary overhead.
 import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
 import { usePtySessions } from "@elizaos/app-core/state/PtySessionsContext";
-import { PtyConsoleSidePanel } from "@elizaos/app-task-coordinator";
+import { PtyConsoleSidePanel } from "@elizaos/app-task-coordinator/ui";
 import {
   memo,
   Suspense,

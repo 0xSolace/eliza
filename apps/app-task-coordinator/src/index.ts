@@ -1,16 +1,3 @@
-export * from "./AgentTabsSection";
+// Server-safe root barrel. React UI lives at @elizaos/app-task-coordinator/ui.
 export * from "./api/coordinator-types";
 export * from "./api/coordinator-wiring";
-export * from "./CodingAgentControlChip";
-export * from "./CodingAgentSettingsSection";
-export * from "./CodingAgentTasksPanel";
-export * from "./coding-agent-settings-shared";
-export * from "./GlobalPrefsSection";
-export * from "./LlmProviderSection";
-export * from "./ModelConfigSection";
-export * from "./PtyConsoleBase";
-export * from "./PtyConsoleDrawer";
-export * from "./PtyConsoleSidePanel";
-export * from "./PtyTerminalPane";
-export * from "./pty-status-dots";
-export * from "./session-hydration";

@@ -35,6 +35,11 @@ export type {
   CompanionInferenceNotice,
   CompanionSceneStatus,
 } from "./config/boot-config";
+export * from "./components/apps/extensions/surface";
+export * from "./components/apps/extensions/registry";
+export * from "./components/apps/surfaces/registry";
+export * from "./components/apps/surfaces/GameOperatorShell";
+export * from "./components/pages/PageScopedChatPane";
 export * from "./config/index";
 export * from "./events/index";
 export * from "./hooks/useActivityEvents";

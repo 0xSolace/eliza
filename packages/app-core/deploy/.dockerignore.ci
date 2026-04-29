@@ -1,6 +1,6 @@
-# CI / production dockerignore for `eliza/packages/app-core/deploy/Dockerfile.ci`.
-# Copy to the repo root as `.dockerignore` before `docker build` (context is `.`).
-# Pre-built `dist/` and `apps/app/dist/` are expected in the build context.
+# Workspace-native cloud image context.
+# Dockerfile.ci copies the full milady + eliza workspace and runs `bun install`
+# inside the image, so never send host node_modules or selective vendored slices.
 
 .git
 .git/**
@@ -11,65 +11,24 @@
 .devin
 .vscode
 .idea
-.eliza.ci-disabled
 .env
 .env.local
 .env.*.local
-node_modules/.cache
-packages/**/node_modules
-apps/**/node_modules
-eliza/**/node_modules
-eliza/packages/app-core/deploy/**/node_modules
-eliza/.turbo
-eliza/packages/rust
-eliza/packages/python
-eliza/packages/benchmarks
-eliza/packages/examples
-eliza/apps
-!eliza/apps/
-!eliza/apps/app-companion/
-!eliza/apps/app-companion/package.json
-!eliza/apps/app-companion/assets.json
-!eliza/apps/app-companion/assets/**
-!eliza/apps/app-companion/src/**
-!eliza/apps/app-elizamaker/
-!eliza/apps/app-elizamaker/package.json
-!eliza/apps/app-elizamaker/src/**
-!eliza/apps/app-knowledge/
-!eliza/apps/app-knowledge/package.json
-!eliza/apps/app-knowledge/src/**
-!eliza/apps/app-lifeops/
-!eliza/apps/app-lifeops/package.json
-!eliza/apps/app-lifeops/assets/**
-!eliza/apps/app-lifeops/src/**
-!eliza/apps/app-steward/
-!eliza/apps/app-steward/package.json
-!eliza/apps/app-steward/src/**
-!eliza/apps/app-task-coordinator/
-!eliza/apps/app-task-coordinator/package.json
-!eliza/apps/app-task-coordinator/src/**
-!eliza/apps/app-training/
-!eliza/apps/app-training/package.json
-!eliza/apps/app-training/src/**
-!eliza/apps/app-shopify/
-!eliza/apps/app-shopify/package.json
-!eliza/apps/app-shopify/assets/**
-!eliza/apps/app-shopify/src/**
-!eliza/apps/app-vincent/
-!eliza/apps/app-vincent/package.json
-!eliza/apps/app-vincent/assets/**
-!eliza/apps/app-vincent/src/**
-eliza/cloud
-!eliza/cloud/
-!eliza/cloud/packages/
-!eliza/cloud/packages/sdk/
-!eliza/cloud/packages/sdk/package.json
-!eliza/cloud/packages/sdk/dist/**
-eliza/plugins/*/rust
-eliza/plugins/*/python
-eliza/plugins/*/.git
-eliza/plugins/*/.eliza
-eliza/plugins/*/.elizadb-test
+
+node_modules
+**/node_modules
+**/.turbo
+**/.cache
+**/.eliza
+**/.elizadb
+**/.elizadb-test
+
+coverage
+dev.log
+.docker-home
+.tmp
+artifacts
+
 apps/app/android
 apps/app/ios
 apps/app/electrobun
@@ -77,26 +36,8 @@ apps/app/.vite
 apps/app/screenshots
 apps/app/test-results
 apps/app/test
-apps/app/.eliza
-apps/homepage
-apps/home
-apps/landing
-apps/chrome-extension
-apps/ui
 docs/
-coverage/
-dev.log
-install.sh
-install.ps1
 packaging/
-artifacts/
-.docker-home
-.tmp
-deploy/
 
-# Other deploy Docker recipes — CI agent build only needs Dockerfile.ci
-eliza/packages/app-core/deploy/Dockerfile.cloud
-eliza/packages/app-core/deploy/Dockerfile.cloud-agent
-eliza/packages/app-core/deploy/Dockerfile.sandbox
-eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore
-!eliza/packages/app-core/deploy/Dockerfile.ci
+# Keep deploy/Dockerfile.ci reachable, but runtime config docs are not needed in context.
+deploy/nyx

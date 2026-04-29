@@ -1,4 +1,4 @@
-export * from "./ApprovalQueue";
+// Server-safe root barrel. React UI lives at @elizaos/app-steward/ui.
 export * from "./api/tx-service";
 export * from "./api/wallet-dex-prices";
 export * from "./browser-workspace-wallet";
@@ -41,8 +41,6 @@ export {
   signViaSteward,
   tryRegisterStewardWebhook,
 } from "./routes/steward-bridge";
-export * from "./StewardLogo.tsx";
-export * from "./StewardView";
 export * from "./security/hydrate-wallet-keys-from-platform-store";
 export * from "./security/wallet-os-store-actions";
 export * from "./services/privy-wallets";
@@ -54,5 +52,4 @@ export {
 export * from "./services/steward-evm-bridge";
 export * from "./services/steward-sidecar";
 export * from "./services/steward-wallet";
-export * from "./TransactionHistory";
 export * from "./types";

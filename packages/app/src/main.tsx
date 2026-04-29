@@ -16,7 +16,7 @@ import {
   resolveCompanionInferenceNotice,
   THREE,
   useCompanionSceneStatus,
-} from "@elizaos/app-companion";
+} from "@elizaos/app-companion/ui";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   AGENT_READY_EVENT,
@@ -83,9 +83,9 @@ import "@elizaos/app-scape/ui";
 import "@elizaos/app-hyperscape/ui";
 import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
-import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops";
 import {
   AppBlockerSettingsCard,
+  dispatchQueuedLifeOpsGithubCallbackFromUrl,
   LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
   LifeOpsActivitySignalsEffect,
   LifeOpsPageView,
@@ -95,17 +95,17 @@ import {
   ApprovalQueue,
   StewardLogo,
   TransactionHistory,
-} from "@elizaos/app-steward";
+} from "@elizaos/app-steward/ui";
 import {
   CodingAgentControlChip,
   CodingAgentSettingsSection,
   CodingAgentTasksPanel,
   PtyConsoleDrawer,
-} from "@elizaos/app-task-coordinator";
+} from "@elizaos/app-task-coordinator/ui";
 import { FineTuningView } from "@elizaos/app-training/ui";
 import "@elizaos/app-shopify/register";
 import "@elizaos/app-vincent/client";
-import { useVincentState } from "@elizaos/app-vincent";
+import { useVincentState } from "@elizaos/app-vincent/useVincentState";
 import "@elizaos/app-vincent/register";
 import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 import {

@@ -1,7 +1,7 @@
 import {
   createVectorBrowserRenderer,
   THREE,
-} from "@elizaos/app-companion";
+} from "@elizaos/app-companion/ui";
 import {
   Button,
   Input,

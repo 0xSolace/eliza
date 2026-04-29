@@ -11,7 +11,8 @@
     "./register-slots": "./src/register-slots.ts",
     "./api/*": "./src/api/*.ts",
     "./evals/*": "./src/evals/*.ts",
-    "./*": "./src/*"
+    "./*": "./src/*",
+    "./ui": "./src/ui.ts"
   },
   "dependencies": {
     "@elizaos/app-core": "workspace:*",

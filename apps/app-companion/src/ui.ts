@@ -1,3 +1,4 @@
+export * from "./components/avatar/vector-browser-utils.ts";
 export * from "./components/avatar/MathEnvironment.ts";
 export * from "./components/avatar/mixamoVRMRigMap.ts";
 export * from "./components/avatar/retargetMixamoFbxToVrm.ts";

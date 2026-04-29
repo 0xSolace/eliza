@@ -89,6 +89,7 @@ export * from "./api/wallet-capability.js";
 export * from "./api/workbench-helpers.js";
 export * from "./auth/index.js";
 export * from "./awareness/index.js";
+export { resolveCloudApiBaseUrl } from "./cloud/base-url.js";
 export * from "./cloud/index.js";
 export type { RolesConfig } from "./config/index.js";
 export * from "./config/index.js";

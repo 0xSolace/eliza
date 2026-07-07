@@ -1715,6 +1715,22 @@ export class ProvisioningJobService {
           });
         };
       }
+      case JOB_TYPES.AGENT_UPGRADE: {
+        const { agentId } = readAgentUpgradeJobData(job);
+        return async (tx) => {
+          await tx
+            .update(agentSandboxes)
+            .set({
+              error_message: `Upgrade permanently failed after ${job.max_attempts} attempts: ${errorMsg}`,
+              updated_at: new Date(),
+            })
+            .where(and(eq(agentSandboxes.id, agentId), eq(agentSandboxes.status, "running")));
+          logger.warn(
+            "[provisioning-jobs] Recorded permanent upgrade failure without marking sandbox terminal",
+            { jobId: job.id, agentId },
+          );
+        };
+      }
       // Apps / Product 2: a permanently failed deploy must flip the app off
       // `building`, or the deploy-status route (which echoes
       // `apps.deployment_status`) reports BUILDING forever — the CLI/dashboard

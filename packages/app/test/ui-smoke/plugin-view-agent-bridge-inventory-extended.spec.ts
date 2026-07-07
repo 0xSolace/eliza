@@ -16,11 +16,9 @@
 //   Covered here: calendar, contacts, phone, messages, health, finances,
 //     inbox, goals, todos, polymarket, hyperliquid, training, screenshare,
 //     shopify, vector-browser (15).
-//   Skipped: facewear — its GUI config moved to Settings → Wearables; the
-//     standalone `facewear` view now declares only `modalities: ["xr","tui"]`
-//     (plugins/plugin-facewear/src/index.ts) and `visibleInManager: false`, so
-//     there is no GUI route that mounts an agent-bridge surface to inventory.
-//     Its XR/TUI surfaces are exercised by the plugin's own view tests.
+//   Skipped: facewear — its device config lives under Settings → Wearables, so
+//     there is no standalone GUI route that mounts an agent-bridge surface to
+//     inventory. Its controls are covered by the comms/device interaction specs.
 //
 // The fixture backends for every view below already live in
 // `installDefaultAppRoutes` (helpers.ts) — this spec adds NO new stubs; it only
@@ -457,17 +455,13 @@ for (const target of PLUGIN_VIEW_TARGETS) {
 test("facewear has no GUI agent-bridge surface to inventory (documented skip)", async ({
   page,
 }) => {
-  // Not a coverage gap: plugins/plugin-facewear/src/index.ts declares the
-  // standalone facewear view with `modalities: ["xr","tui"]` and
-  // `visibleInManager: false` — its GUI config was moved to Settings →
-  // Wearables (register.ts). There is no GUI route that mounts an agent-bridge
-  // surface for `facewear`, so it is intentionally excluded from the inventory
-  // above. This test documents that decision so the exclusion is explicit and
-  // reviewable rather than silent. The XR/TUI surfaces are covered by the
-  // plugin's own SmartglassesView tests.
+  // Not a coverage gap: facewear device controls live in Settings → Wearables.
+  // There is no standalone GUI route that mounts an agent-bridge surface for
+  // `facewear`, so it is intentionally excluded from the inventory above. This
+  // test documents that decision so the exclusion is explicit and reviewable.
   test.skip(
     true,
-    "facewear GUI moved to Settings → Wearables; standalone view is XR/TUI-only (see plugins/plugin-facewear/src/index.ts).",
+    "facewear device controls live in Settings → Wearables, not a standalone inventory route.",
   );
   await openAppPath(page, "/apps/facewear");
 });

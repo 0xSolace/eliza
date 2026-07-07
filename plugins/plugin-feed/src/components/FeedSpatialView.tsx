@@ -1,10 +1,11 @@
 /**
- * FeedSpatialView - the Feed prediction-market operator dashboard authored with
- * the spatial vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
+ * Feed prediction-market operator dashboard authored with the spatial
+ * vocabulary so the GUI wrapper can render a compact fallback when the embedded
+ * Feed web app is unavailable.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports only the cross-modality primitives plus type-only views of
- * the Feed API shapes (no browser/runtime import).
+ * out) and imports only spatial primitives plus type-only views of the Feed API
+ * shapes, so the data wrapper owns all live reads and writes.
  */
 
 import type {
@@ -57,7 +58,7 @@ export interface FeedConversationSnapshot {
   isActive: boolean;
 }
 
-/** Single source of truth for the Feed operator surface across all modalities. */
+/** Snapshot consumed by the presentational Feed operator surface. */
 export interface FeedSnapshot {
   /**
    * Whether a live Feed session/run is attached. When false the surface renders

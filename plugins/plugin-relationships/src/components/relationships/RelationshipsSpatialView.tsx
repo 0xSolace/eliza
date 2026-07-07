@@ -3,14 +3,12 @@
  * authored once with the spatial vocabulary, so it renders correctly wherever it
  * is displayed:
  *
- *   - GUI / XR — mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      — the spatial primitives still render to terminal lines via
- *                `@elizaos/ui/spatial/tui`, but the plugin no longer ships a
- *                terminal registration (GUI-only view inventory).
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
  * out) and imports only the cross-modality primitives, so it is safe to render
- * in the Node agent process where the terminal lives (no browser/client import).
+ * without pulling browser-only runtime imports into the presentational layer.
  *
  * The two graph payloads (entities + their outbound edges) are joined and
  * projected to {@link EntityNode}s in the data wrapper ({@link ./RelationshipsView.tsx});

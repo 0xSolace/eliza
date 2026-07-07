@@ -1,9 +1,8 @@
 /**
  * The `@elizaos/plugin-messages` Plugin object: declares a passive `sms`
- * connector source and registers the Android SMS "messages" surface as a single
- * GUI view drawn from the one
- * MessagesView bundle export (`dist/views/bundle.js`). Registers no actions,
- * providers, evaluators, or services.
+ * connector source and registers the Android SMS "messages" GUI surface from
+ * the one MessagesView bundle export (`dist/views/bundle.js`). Registers no
+ * actions, providers, evaluators, or services.
  */
 
 import type { Plugin } from "@elizaos/core";
@@ -21,10 +20,8 @@ export const appMessagesPlugin: Plugin = {
     },
   ],
   views: [
-    // ONE GUI declaration, drawn from the single MessagesView
-    // spatial source. `modalities` is a plain literal here (plugin.ts is not in
-    // the view bundle), so no brand-new `@elizaos/core` runtime export reaches
-    // the bundle build.
+    // One shipped GUI declaration drawn from MessagesView. The modality enum is
+    // retained in the contract for future alternate view entries.
     {
       id: "messages",
       label: "Messages",

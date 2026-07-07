@@ -526,40 +526,39 @@ describe("training CLI collection options", () => {
             {
               id: "feed_generation",
               status: "missing",
-              recommendedCapability: "terminal-training-feed-generate",
+              recommendedCapability: "training-feed-generate",
             },
             {
               id: "huggingface_training_data",
               status: "partial",
-              recommendedCapability: "terminal-training-ingest-hf-dataset",
+              recommendedCapability: "training-ingest-hf-dataset",
             },
             {
               id: "cerebras_reference",
               status: "missing",
-              recommendedCapability:
-                "terminal-training-run-benchmark-vs-cerebras",
+              recommendedCapability: "training-run-benchmark-vs-cerebras",
             },
             {
               id: "all_eliza1_tier_improvements",
               status: "partial",
-              recommendedCapability: "terminal-training-run-collection",
+              recommendedCapability: "training-run-collection",
               recommendedParams: { actionBenchmarkPairs: "all" },
             },
             {
               id: "eval_comparison",
               status: "partial",
-              recommendedCapability: "terminal-training-run-collection",
+              recommendedCapability: "training-run-collection",
               recommendedParams: { includeEvalComparison: true },
             },
             {
               id: "model_tracking",
               status: "missing",
-              recommendedCapability: "terminal-training-register-model",
+              recommendedCapability: "training-register-model",
             },
             {
               id: "readable_source_samples",
               status: "partial",
-              recommendedCapability: "terminal-training-build-analysis-index",
+              recommendedCapability: "training-build-analysis-index",
             },
           ],
         },
@@ -598,7 +597,7 @@ describe("training CLI collection options", () => {
     );
     expect(lines).toContain("[run-collection] failed-steps none");
     expect(lines).toContain(
-      '[run-collection] readiness-gaps feed_generation:missing->terminal-training-feed-generate cerebras_reference:missing->terminal-training-run-benchmark-vs-cerebras all_eliza1_tier_improvements:partial->terminal-training-run-collection params={"actionBenchmarkPairs":"all"} eval_comparison:partial->terminal-training-run-collection params={"includeEvalComparison":true} model_tracking:missing->terminal-training-register-model',
+      '[run-collection] readiness-gaps feed_generation:missing->training-feed-generate cerebras_reference:missing->training-run-benchmark-vs-cerebras all_eliza1_tier_improvements:partial->training-run-collection params={"actionBenchmarkPairs":"all"} eval_comparison:partial->training-run-collection params={"includeEvalComparison":true} model_tracking:missing->training-register-model',
     );
   });
 
@@ -774,17 +773,17 @@ describe("training CLI collection options", () => {
             {
               id: "model_tracking",
               status: "missing",
-              recommendedCapability: "terminal-training-register-model",
+              recommendedCapability: "training-register-model",
             },
             {
               id: "test_trajectories",
               status: "missing",
-              recommendedCapability: "terminal-training-run-collection",
+              recommendedCapability: "training-run-collection",
             },
             {
               id: "natural_trajectories",
               status: "missing",
-              recommendedCapability: "terminal-training-run-collection",
+              recommendedCapability: "training-run-collection",
             },
           ],
         },
@@ -797,7 +796,7 @@ describe("training CLI collection options", () => {
       "[run-collection] source-readiness natural=missing tests=missing readable=ready",
     );
     expect(lines).toContain(
-      "[run-collection] readiness-gaps natural_trajectories:missing->terminal-training-run-collection test_trajectories:missing->terminal-training-run-collection model_tracking:missing->terminal-training-register-model",
+      "[run-collection] readiness-gaps natural_trajectories:missing->training-run-collection test_trajectories:missing->training-run-collection model_tracking:missing->training-register-model",
     );
   });
 
@@ -827,7 +826,7 @@ describe("training CLI collection options", () => {
               label: "All Eliza-1 tier benchmark coverage",
               status: "missing",
               note: "Run benchmark matrix coverage for every Eliza-1 tier.",
-              recommendedCapability: "terminal-training-run-collection",
+              recommendedCapability: "training-run-collection",
               recommendedParams: { actionBenchmarkPairs: "all" },
             },
           ],
@@ -1028,7 +1027,7 @@ describe("training CLI collection options", () => {
     expect(lines).toEqual([
       "[list-collections] root=/tmp/training/collections",
       "[list-collections] count=1",
-      '[list-collections] run=2026-01-02T03:04:05.000Z readiness=partial ready=8 partial=2 missing=1 artifacts=24 sources=hf:1,feed:1,natural:1,scenarios:1,native:1,tests:1,jsonl:2 benchmarks=pairs:5,comparisons:5,cases:8,tiers:2b,2b,4b,9b,27b baseline=established:2b,2b,next:4b,remaining:4b,9b,27b evals=artifacts:12,comparisons:1,action:10,matrices:1,first:eliza-1-2b-base->eliza-1-2b-trained,improvement:25% models=runs:1,models:2,inventory:1,first:2b/trained/eliza-1-2b-trained,improvement:25% samples=huggingFace:1,feed:1,natural:1,scenarios:1,tests:0,trainingJsonl:0,examples:huggingFace:hf-traj-1:response,feed:feed-traj-1,natural:natural-traj-1:action_planner,scenarios:scenario-1:turn-1 artifact-links=source:1,evidence:3 gaps=all_eliza1_tiers_benchmark:missing->terminal-training-run-collection params={"actionBenchmarkPairs":"all"} output=/tmp/training/collections/run-1 readme=/tmp/training/collections/run-1/README.md viewer=/tmp/training/collections/run-1/analysis/index.html',
+      '[list-collections] run=2026-01-02T03:04:05.000Z readiness=partial ready=8 partial=2 missing=1 artifacts=24 sources=hf:1,feed:1,natural:1,scenarios:1,native:1,tests:1,jsonl:2 benchmarks=pairs:5,comparisons:5,cases:8,tiers:2b,2b,4b,9b,27b baseline=established:2b,2b,next:4b,remaining:4b,9b,27b evals=artifacts:12,comparisons:1,action:10,matrices:1,first:eliza-1-2b-base->eliza-1-2b-trained,improvement:25% models=runs:1,models:2,inventory:1,first:2b/trained/eliza-1-2b-trained,improvement:25% samples=huggingFace:1,feed:1,natural:1,scenarios:1,tests:0,trainingJsonl:0,examples:huggingFace:hf-traj-1:response,feed:feed-traj-1,natural:natural-traj-1:action_planner,scenarios:scenario-1:turn-1 artifact-links=source:1,evidence:3 gaps=all_eliza1_tiers_benchmark:missing->training-run-collection params={"actionBenchmarkPairs":"all"} output=/tmp/training/collections/run-1 readme=/tmp/training/collections/run-1/README.md viewer=/tmp/training/collections/run-1/analysis/index.html',
     ]);
   });
 });

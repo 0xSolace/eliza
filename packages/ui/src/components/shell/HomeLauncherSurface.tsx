@@ -35,10 +35,11 @@ export function HomeLauncherSurface({
 }: HomeLauncherSurfaceProps): React.JSX.Element {
   const { page } = useShellSurface();
 
-  // The mounting route decides which half shows first. Re-runs only when the
-  // route actually changes `initialPage`, so an in-session swipe is never
-  // clobbered (the deps don't change on re-render).
-  React.useEffect(() => {
+  // The mounting route decides which half shows first. Layout timing matters:
+  // `/chat` can mount after a launcher route left the shared store on the
+  // Launcher half, and the visual audit can sample the first stable frame before
+  // a passive effect corrects it. Commit the route's starting page before paint.
+  React.useLayoutEffect(() => {
     setShellSurfacePage(initialPage);
   }, [initialPage]);
 

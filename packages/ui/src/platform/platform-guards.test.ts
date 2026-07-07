@@ -11,17 +11,17 @@ const w = window as unknown as Record<string, unknown>;
 
 describe("getActiveViewModality", () => {
   afterEach(() => {
-    delete w.__elizaXRContext;
+    delete w.__elizaShellModality;
   });
 
-  it("returns gui by default on a non-XR surface", () => {
-    delete w.__elizaXRContext;
+  it("returns gui for the shipped dashboard shell", () => {
+    delete w.__elizaShellModality;
     expect(getActiveViewModality()).toBe("gui");
   });
 
-  it("returns xr when the WebXR view host context is present", () => {
-    w.__elizaXRContext = { viewId: "wallet" };
-    expect(getActiveViewModality()).toBe("xr");
+  it("does not infer alternate modalities from retained shell metadata", () => {
+    w.__elizaShellModality = "xr";
+    expect(getActiveViewModality()).toBe("gui");
   });
 });
 

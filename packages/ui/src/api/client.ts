@@ -138,7 +138,6 @@ export {
   parseMeetingTranscriptEvent,
 } from "./client-meetings";
 export * from "./client-types";
-export type { XRDeviceConnection, XRPairState } from "./client-xr";
 export type { AgentRequestTransport } from "./transport";
 export type {
   AllPermissionsState,
@@ -254,7 +253,6 @@ import "./client-skills";
 import "./client-transcripts";
 import "./client-vault";
 import "./client-wallet";
-import "./client-xr";
 
 // ---------------------------------------------------------------------------
 // Singleton

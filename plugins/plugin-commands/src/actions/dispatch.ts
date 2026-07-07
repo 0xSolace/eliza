@@ -20,8 +20,8 @@ import { isDeterministicCommand, runCommand } from "./handlers";
 export interface CommandDispatchOptions {
 	/**
 	 * Trust level for the sender, used to gate `requiresAuth`/`requiresElevated`
-	 * commands. The caller knows the surface: the local dashboard/TUI sender is
-	 * the owner (authorized + elevated); a connector resolves it from pairing /
+	 * commands. The caller knows the surface: the local dashboard sender is the
+	 * owner (authorized + elevated); a connector resolves it from pairing /
 	 * allowlist. Defaults to unauthorized so a missing resolver fails closed.
 	 */
 	isAuthorized?: boolean;

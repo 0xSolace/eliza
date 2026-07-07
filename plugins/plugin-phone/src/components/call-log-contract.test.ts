@@ -1,12 +1,12 @@
 // External-API contract test for the Phone view data path.
 //
-// The view-facing data layer (loadPhoneState + interact("terminal-phone-state"))
+// The view-facing data layer (loadPhoneState + interact("phone-state"))
 // consumes the @elizaos/capacitor-phone CallLogEntry shape. This test feeds a
 // FULL, real-shaped CallLogEntry — every field declared in
 // plugins/plugin-native-phone/src/definitions.ts (CallLogEntry has 15 fields;
 // PhoneStatus has 4) — through the real parsers and locks down exactly which
 // fields survive into the projected DTO, so a native API field addition cannot
-// silently leak into the terminal/view contract.
+// silently leak into the view contract.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -68,21 +68,19 @@ describe("phone view data-path contract (real CallLogEntry shape)", () => {
     expect(state.calls).toEqual([REAL_CALL_LOG_ENTRY]);
   });
 
-  it("terminal-phone-state projects only view-facing fields and drops native-only ones", async () => {
+  it("phone-state projects only view-facing fields and drops native-only ones", async () => {
     phoneBridge.getStatus.mockResolvedValue(REAL_STATUS);
     phoneBridge.listRecentCalls.mockResolvedValue({
       calls: [REAL_CALL_LOG_ENTRY],
     });
 
-    const result = (await interact("terminal-phone-state", {
+    const result = (await interact("phone-state", {
       limit: 10,
     })) as {
-      viewType: string;
       status: typeof REAL_STATUS;
       calls: Array<Record<string, unknown>>;
     };
 
-    expect(result.viewType).toBe("tui");
     expect(result.status).toEqual(REAL_STATUS);
     expect(result.calls).toHaveLength(1);
 
@@ -136,7 +134,7 @@ describe("phone view data-path contract (real CallLogEntry shape)", () => {
       calls: [{ ...REAL_CALL_LOG_ENTRY, cachedName: null }],
     });
 
-    const result = (await interact("terminal-phone-state")) as {
+    const result = (await interact("phone-state")) as {
       calls: Array<{ label: string; cachedName: string | null }>;
     };
     expect(result.calls[0].cachedName).toBeNull();

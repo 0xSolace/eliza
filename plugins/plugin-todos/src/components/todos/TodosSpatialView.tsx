@@ -2,12 +2,12 @@
  * TodosSpatialView — the owner three-lane todo board authored once with the
  * spatial vocabulary, so it renders correctly wherever it is displayed:
  *
- *   - GUI — mounted in `<SpatialSurface>` (DOM). Only the GUI modality ships;
- *     "xr" and "tui" remain compatibility values in the manifest schema.
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
  * out) and imports only the cross-modality primitives, so it is safe to render
- * in the Node agent process where the terminal lives (no browser/client import).
+ * without pulling browser-only runtime imports into the presentational layer.
  *
  * Lanes (Today / Upcoming / Someday) are computed in the data wrapper
  * ({@link ./TodosView.tsx}) and handed in already grouped; this component never

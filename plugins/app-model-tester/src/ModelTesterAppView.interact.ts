@@ -1,5 +1,5 @@
 /**
- * View-bundle capability handler for the Model Tester TUI surface.
+ * View-bundle capability handler for the Model Tester view surface.
  * It stays separate from the React component file so Fast Refresh sees component-only exports while the built view bundle still exposes `interact`.
  */
 
@@ -13,7 +13,7 @@ const MODEL_TESTER_COMMAND_TO_TEST: Record<string, string> = {
   "run-vad": "vad",
 };
 
-export const MODEL_TESTER_TUI_CAPABILITIES: readonly string[] = [
+export const MODEL_TESTER_VIEW_CAPABILITIES: readonly string[] = [
   "get-status",
   ...Object.keys(MODEL_TESTER_COMMAND_TO_TEST),
 ];
@@ -68,5 +68,5 @@ export async function interact(
     return readJsonResponse(response);
   }
 
-  throw new Error(`Model Tester TUI does not support "${capability}".`);
+  throw new Error(`Model Tester view does not support "${capability}".`);
 }

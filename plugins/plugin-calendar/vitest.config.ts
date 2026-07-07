@@ -24,7 +24,6 @@ const pluginSchedulingSrc = path.join(
 const uiSrc = path.join(elizaRoot, "packages", "ui", "src");
 const coreSrc = path.join(elizaRoot, "packages", "core", "src");
 const loggerSrc = path.join(elizaRoot, "packages", "logger", "src");
-const tuiSrc = path.join(elizaRoot, "packages", "tui", "src");
 const appCoreNativeLibraryPolicy = path.join(
   elizaRoot,
   "packages",
@@ -130,14 +129,6 @@ export default defineConfig({
       {
         find: /^@elizaos\/logger$/,
         replacement: path.join(loggerSrc, "index.ts"),
-      },
-      {
-        find: /^@elizaos\/tui$/,
-        replacement: path.join(tuiSrc, "index.ts"),
-      },
-      {
-        find: /^@elizaos\/tui\/(.+)$/,
-        replacement: path.join(tuiSrc, "$1"),
       },
     ],
   },

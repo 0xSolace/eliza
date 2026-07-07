@@ -227,7 +227,6 @@
         "!packages/scripts/**",
         "!packages/security/**",
         "!packages/test/**",
-        "!packages/tui/**",
         "!packages/ui/**"
       ],
       "linter": {

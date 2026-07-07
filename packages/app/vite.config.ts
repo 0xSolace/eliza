@@ -2796,8 +2796,6 @@ export const INVALID_TRACER_PROVIDER = {};
         }
 
         const uiSource = path.resolve(elizaRoot, "packages/ui/src");
-        const tuiSource = path.resolve(elizaRoot, "packages/tui/src");
-
         return [
           ...generatedAliases,
           {
@@ -2807,16 +2805,6 @@ export const INVALID_TRACER_PROVIDER = {};
           {
             find: /^@elizaos\/ui\/(.+)$/,
             replacement: path.join(uiSource, "$1"),
-          },
-          // @elizaos/tui resolves from source like the rest of the workspace.
-          // @elizaos/ui's spatial/tui terminal renderer imports it; without a
-          // src alias it falls back to dist/index.js (no `exports`/`eliza-source`
-          // map), which is absent in renderer builds that don't pre-build tui,
-          // failing with "Failed to resolve entry for package @elizaos/tui".
-          // The terminal registration it carries never executes in the browser.
-          {
-            find: /^@elizaos\/tui$/,
-            replacement: path.join(tuiSource, "index.ts"),
           },
           // @elizaos/import-conversations resolves from source for the same
           // reason: the renderer (MemoryViewerView) imports its `/browser`

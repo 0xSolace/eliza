@@ -4,7 +4,9 @@
  *
  * It owns the live trajectory data (the 700ms polling hook + the selected-phase
  * drilldown state) and renders the one presentational
- * {@link TrajectoryLoggerSpatialView} inside a {@link SpatialSurface}.
+ * {@link TrajectoryLoggerSpatialView} inside a {@link SpatialSurface}. The
+ * browser DOM surface ships today, while the retained modality contract stays
+ * available for future adapters.
  */
 
 import type { OverlayAppContext } from "@elizaos/ui";
@@ -54,7 +56,7 @@ export function TrajectoryLoggerView({
       }
       if (action === "refresh") {
         // The hook polls continuously; a manual refresh is a no-op beyond the
-        // in-flight tick. Kept for action-contract parity with the TUI surface.
+        // in-flight tick. Kept for action-contract parity with the interact API.
         return;
       }
       if (action.startsWith("select:")) {

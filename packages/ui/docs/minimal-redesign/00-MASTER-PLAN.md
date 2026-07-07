@@ -40,9 +40,10 @@ black" the user sees comes from two places, both now being fixed:
    now one curated light look. (The `dark` token set + `.dark` CSS block are now
    dead and can be deleted in a later sweep.)
 2. **Hardcoded-dark plugin views.** ~7 plugin views hardcode `#0a0a0a` /
-   `#020617` inline themes, and the comms plugins ship a second `#020617`-cyan
-   "TUI twin" codepath. Against the now-light builtin views these read as a
-   jarring black gap. → fixed per-view (use tokens; delete TUI twins).
+   `#020617` inline themes, and the retired alternate renderer clones used the
+   same near-black/cyan treatment. Against the now-light builtin views these
+   read as a jarring black gap. → fixed per-view (use tokens; keep renderer
+   cleanup complete).
 
 ## Design laws (apply to every view)
 
@@ -89,10 +90,10 @@ black" the user sees comes from two places, both now being fixed:
 
 - **Dead/duplicate code:** `LifeOpsPageView` (pure stub printing its own class
   name), `StewardVaultOverview` (477 lines, never rendered), `DatabaseView`
-  legacy branch (~380 dup lines), comms `#020617` TUI twins (~1500 lines),
+  legacy branch (~380 dup lines), retired near-black alternate renderer clones,
   `HeartbeatsDesktopShell` dup, `plugin-view-modal` third config surface.
 - **Brand violations:** blue `primary` in `ElizaOsAppsView`, green `#10b981` in
-  `AppsPageView`, indigo/cyan in CharacterExperience/Relationships/XR, `#ff5800`
+  `AppsPageView`, indigo/cyan in CharacterExperience/Relationships, `#ff5800`
   drift, hover-lift `-translate-y` + shadow in `AdvancedSection`.
 - **Repeated motifs:** uppercase eyebrow (6–12×/view), bordered row-card,
   per-view pill components → one chip, "Open X." subtitles (every Views card),

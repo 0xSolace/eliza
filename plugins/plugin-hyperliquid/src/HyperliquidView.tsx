@@ -1,12 +1,11 @@
 /**
- * HyperliquidView — the single GUI/XR data wrapper for the Hyperliquid surface.
+ * HyperliquidView — the single GUI data wrapper for the Hyperliquid surface.
  *
  * It owns the live data (status + markets + the agent's own positions + open
  * orders, plus a background poll via {@link useHyperliquidState}) and renders
  * the one presentational {@link HyperliquidSpatialView} inside a
- * {@link SpatialSurface}. Omitting the `modality` prop lets `SpatialSurface`
- * auto-detect the host surface, so the SAME component serves them all. The
- * view ships GUI-only.
+ * {@link SpatialSurface}. The spatial child is presentational only, which keeps
+ * market/account polling isolated in the wrapper and hook.
  */
 
 import { useAgentElement } from "@elizaos/ui/agent-surface";
@@ -64,7 +63,7 @@ export function HyperliquidView() {
 	);
 
 	// The spatial primitives below carry only inert `data-agent-*` markers, so
-	// the GUI/XR wrapper registers the view's primary actions with the live
+	// the GUI wrapper registers the view's primary actions with the live
 	// agent-surface registry here, reusing the same handlers the spatial view
 	// dispatches through `onAction`.
 	const refreshControl = useAgentElement<HTMLButtonElement>({

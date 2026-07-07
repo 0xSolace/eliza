@@ -1,6 +1,6 @@
 /**
  * Terminal-aware global logging setup: maps log levels to priorities and themes
- * output for the TUI surface.
+ * output for CLI surfaces.
  */
 import { logger } from "@elizaos/logger";
 import { theme } from "../terminal/theme";

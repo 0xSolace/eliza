@@ -41,39 +41,43 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@elizaos/core", () => ({
-  ElizaError: class ElizaError extends Error {
-    readonly code: string;
-    readonly context?: Record<string, unknown>;
-    readonly severity?: string;
+vi.mock("@elizaos/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@elizaos/core")>();
+  return {
+    ...actual,
+    ElizaError: class ElizaError extends Error {
+      readonly code: string;
+      readonly context?: Record<string, unknown>;
+      readonly severity?: string;
 
-    constructor(
-      message: string,
-      options: {
-        code: string;
-        context?: Record<string, unknown>;
-        severity?: string;
-      },
-    ) {
-      super(message);
-      this.name = "ElizaError";
-      this.code = options.code;
-      this.context = options.context;
-      this.severity = options.severity;
-    }
-  },
-  roleRank: (role: string | undefined) =>
-    (
-      ({
-        NONE: 0,
-        GUEST: 1,
-        USER: 2,
-        MEMBER: 2,
-        ADMIN: 3,
-        OWNER: 4,
-      }) as Record<string, number>
-    )[role ?? "NONE"] ?? 0,
-}));
+      constructor(
+        message: string,
+        options: {
+          code: string;
+          context?: Record<string, unknown>;
+          severity?: string;
+        },
+      ) {
+        super(message);
+        this.name = "ElizaError";
+        this.code = options.code;
+        this.context = options.context;
+        this.severity = options.severity;
+      }
+    },
+    roleRank: (role: string | undefined) =>
+      (
+        ({
+          NONE: 0,
+          GUEST: 1,
+          USER: 2,
+          MEMBER: 2,
+          ADMIN: 3,
+          OWNER: 4,
+        }) as Record<string, number>
+      )[role ?? "NONE"] ?? 0,
+  };
+});
 
 vi.mock("@elizaos/shared", () => ({
   executeRawSql: mocks.executeRawSql,

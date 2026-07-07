@@ -546,9 +546,6 @@
       "@elizaos/three-agent-dialogue": [
         "./packages/benchmarks/three-agent-dialogue/runner/run-dialogue.ts"
       ],
-      "@elizaos/tui": [
-        "./packages/tui/dist/index.d.ts"
-      ],
       "@elizaos/ui": [
         "./packages/ui/dist/index.d.ts"
       ],

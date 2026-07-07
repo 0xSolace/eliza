@@ -112,7 +112,6 @@
 - src\components\connectors\SignalQrOverlay.tsx
 - src\components\connectors\TelegramAccountConnectorPanel.tsx
 - src\components\connectors\WhatsAppQrOverlay.tsx
-- src\components\connectors\XRPairingPanel.tsx
 
 ### chat (8)
 - src\components\chat\AppsSection.tsx

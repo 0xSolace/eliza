@@ -4,13 +4,14 @@
  * Each primitive is a branded React component. It serves two consumers from a
  * single source of truth (the `build*Spec` mappers):
  *
- *  1. **DOM (GUI/XR)** — the component renders real DOM via {@link renderDomNode}.
- *  2. **IR (TUI)**     — the evaluator (`evaluate.ts`) recognises the brand,
- *                        calls the same `build*Spec`, and recurses into children
- *                        to assemble a {@link SpatialNode} tree.
+ *  1. **DOM** — the component renders real DOM via {@link renderDomNode}.
+ *  2. **IR**  — the evaluator (`evaluate.ts`) recognises the brand, calls the
+ *               same `build*Spec`, and recurses into children to assemble a
+ *               {@link SpatialNode} tree for future adapters.
  *
- * Because both paths derive from the same spec mapper, GUI/XR and TUI can never
- * drift: there is exactly one definition of what a `<Stack gap={2}>` *is*.
+ * Because both paths derive from the same spec mapper, the shipped DOM renderer
+ * and future adapters share exactly one definition of what a
+ * `<Stack gap={2}>` *is*.
  *
  * Authoring sugar (`HStack`, `VStack`, `Card`, `List`) compiles to the same
  * `box` node — there is one container primitive underneath.
@@ -148,19 +149,16 @@ export interface ImageProps extends CommonProps {
 }
 
 /**
- * The DOM-escape hatch: render arbitrary real DOM (canvas / WebGL / 3D / charts /
- * `<audio>`) in GUI/XR, with a spatial-primitive fallback for TUI.
+ * The DOM escape hatch: render arbitrary real DOM (canvas / WebGL / 3D / charts /
+ * `<audio>`) in the shipped browser surface.
  *
- * In GUI/XR the {@link Escape} component renders `children` as real DOM inside a
- * growing flex box. In TUI the evaluator never renders the DOM children (they
- * can't run in a terminal) — it emits the evaluated `tui` fallback instead, or a
- * placeholder when none is given.
+ * {@link Escape} renders `children` as real DOM inside a growing flex box. The
+ * IR evaluator treats this as non-portable content and emits a placeholder for
+ * future adapters.
  */
 export interface EscapeProps extends CommonProps {
-  /** The real DOM/canvas content rendered in GUI/XR. */
+  /** The real DOM/canvas content rendered in the browser surface. */
   children?: ReactNode;
-  /** Spatial-primitive fallback rendered in TUI. */
-  tui?: ReactNode;
 }
 
 function normalizeAgent(
@@ -327,9 +325,9 @@ export function flattenText(children: ReactNode): string {
   return "";
 }
 
-// --- DOM rendering (GUI/XR) -------------------------------------------------
+// --- DOM rendering ----------------------------------------------------------
 
-/** Cell → rem multiplier per modality. XR scales up for headset legibility. */
+/** Cell → rem multiplier per retained modality. */
 const CELL_REM: Record<SpatialModality, number> = {
   gui: 0.25,
   tui: 0.25,
@@ -734,10 +732,10 @@ export const Image = brand<ImageProps>("image", function Image(props) {
 });
 
 /**
- * DOM-escape primitive. In GUI/XR it renders its real DOM `children` inside a
- * growing flex box so a `<canvas>`/WebGL/3D/chart surface can size to it. In TUI
- * it is never rendered — `evaluate.ts` intercepts the `escape` kind and emits the
- * `tui` fallback instead (the DOM children can't run in a terminal).
+ * DOM-escape primitive. It renders its real DOM `children` inside a growing flex
+ * box so a `<canvas>`/WebGL/3D/chart surface can size to it. The IR evaluator
+ * intercepts the `escape` kind and emits a placeholder because the DOM children
+ * are intentionally host-specific.
  *
  * The box defaults to `grow: 1` and `minHeight: 0` so a canvas styled
  * `width:100%; height:100%` (or `flex:1`) fills the available space.

@@ -45,22 +45,14 @@ describe("facewear registry entry", () => {
     expect(parsed.tags).toEqual(
       expect.arrayContaining([
         "facewear",
-        "xr",
         "smartglasses",
         "even-realities",
         "bluetooth",
         "wifi",
       ]),
     );
-    expect(parsed.render.actions).toContain("launch");
-    expect(data.launch.target).toBe("facewear");
-    expect(data.launch.capabilities).toEqual(
-      expect.arrayContaining([
-        "whole-headset-pairing",
-        "side-tap-microphone-control",
-        "wifi-provisioning",
-      ]),
-    );
+    expect(parsed.render.actions).toEqual(["enable", "configure"]);
+    expect(data.launch).toBeUndefined();
     expect(registry.byId.get("facewear")?.name).toBe("Facewear");
     expect(registry.byNpmName.get("@elizaos/plugin-facewear")?.id).toBe(
       "facewear",

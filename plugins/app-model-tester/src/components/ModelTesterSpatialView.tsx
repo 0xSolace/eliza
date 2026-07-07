@@ -1,11 +1,7 @@
 /**
- * ModelTesterSpatialView - the model-tester dashboard authored with the
- * spatial vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
- *
- * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports only the cross-modality primitives (no browser/Capacitor
- * runtime import). It mirrors the same probe data as the rich
- * `ModelTesterAppView` React view.
+ * Model tester dashboard presentation built from spatial primitives for the
+ * shipped GUI view. It consumes a resolved snapshot plus an action callback and
+ * mirrors the same probe data as the rich ModelTesterAppView React view.
  */
 
 import {

@@ -1,5 +1,5 @@
 /**
- * GoalsView — the single GUI/XR data wrapper for the Goals surface.
+ * GoalsView — the GUI data wrapper for the Goals surface.
  *
  * Data-fetching view over the single read-only goals endpoint served by the
  * personal-assistant routes (PA owns the persistence; this plugin only renders):
@@ -13,8 +13,9 @@
  * It owns the fetch state machine (loading / error / ready), the status-filter
  * selection, and the quiet 20s background poll, then renders the one
  * presentational {@link GoalsSpatialView} inside a {@link SpatialSurface}.
- * Omitting the `modality` prop lets `SpatialSurface` auto-detect the host
- * surface, so the SAME component serves them all. The view ships GUI-only.
+ * Omitting the `modality` prop lets `SpatialSurface` render the browser DOM
+ * surface today while the retained modality contract stays available for future
+ * adapters.
  *
  * This plugin MUST NOT import from @elizaos/plugin-personal-assistant. The wire
  * DTOs below are declared locally to match the JSON shape PA emits

@@ -6,7 +6,7 @@
 import {
   buildViewerUrl,
   fetchJson,
-  loadScreenshareTuiState,
+  loadScreenshareViewState,
   type PublicSession,
   type StartSessionResponse,
 } from "./screenshare-helpers";
@@ -15,13 +15,12 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-screenshare-state") {
-    return { viewType: "tui", ...(await loadScreenshareTuiState()) };
+  if (capability === "screenshare-state") {
+    return { ...(await loadScreenshareViewState()) };
   }
 
-  if (capability === "terminal-screenshare-start") {
+  if (capability === "screenshare-start") {
     return {
-      viewType: "tui",
       ...(await fetchJson<StartSessionResponse>(
         "/api/apps/screenshare/session",
         {
@@ -35,14 +34,13 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-screenshare-session") {
+  if (capability === "screenshare-session") {
     const sessionId =
       typeof params?.sessionId === "string" ? params.sessionId.trim() : "";
     const token = typeof params?.token === "string" ? params.token.trim() : "";
     if (!sessionId) throw new Error("sessionId is required");
     if (!token) throw new Error("token is required");
     return {
-      viewType: "tui",
       ...(await fetchJson<{ session: PublicSession }>(
         `/api/apps/screenshare/session/${encodeURIComponent(
           sessionId,
@@ -51,14 +49,13 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-screenshare-stop") {
+  if (capability === "screenshare-stop") {
     const sessionId =
       typeof params?.sessionId === "string" ? params.sessionId.trim() : "";
     const token = typeof params?.token === "string" ? params.token.trim() : "";
     if (!sessionId) throw new Error("sessionId is required");
     if (!token) throw new Error("token is required");
     return {
-      viewType: "tui",
       ...(await fetchJson<{ session: PublicSession }>(
         `/api/apps/screenshare/session/${encodeURIComponent(sessionId)}/stop`,
         {
@@ -70,14 +67,13 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-screenshare-input") {
+  if (capability === "screenshare-input") {
     const sessionId =
       typeof params?.sessionId === "string" ? params.sessionId.trim() : "";
     const token = typeof params?.token === "string" ? params.token.trim() : "";
     if (!sessionId) throw new Error("sessionId is required");
     if (!token) throw new Error("token is required");
     return {
-      viewType: "tui",
       ...(await fetchJson<Record<string, unknown>>(
         `/api/apps/screenshare/session/${encodeURIComponent(sessionId)}/input`,
         {
@@ -100,14 +96,13 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-screenshare-viewer-url") {
+  if (capability === "screenshare-viewer-url") {
     const sessionId =
       typeof params?.sessionId === "string" ? params.sessionId.trim() : "";
     const token = typeof params?.token === "string" ? params.token.trim() : "";
     if (!sessionId) throw new Error("sessionId is required");
     if (!token) throw new Error("token is required");
     return {
-      viewType: "tui",
       viewerUrl: buildViewerUrl({
         baseUrl: typeof params?.baseUrl === "string" ? params.baseUrl : "",
         sessionId,

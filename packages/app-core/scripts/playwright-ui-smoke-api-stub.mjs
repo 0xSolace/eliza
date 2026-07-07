@@ -64,37 +64,18 @@ const SMOKE_VOICE_TRANSCRIPT = "this is the voice smoke transcript";
 // the overlay's TTS output is non-empty and the assistant bubble is assertable.
 const SMOKE_VOICE_REPLY = "Got it, this is the spoken reply.";
 
-// A collapsed plugin declares ONE view that draws gui + tui (+ xr) from the
-// same `<Name>View` componentExport and the same bundle on the same `/<id>`
-// route. In the stub a `modalities` 6th element expands that single declaration
-// into one gui object + one tui object (both at `/<id>`, both serving the same
-// componentExport), mirroring how the real /api/views collapses modalities.
-// Plugins that still declare a standalone tui route (training) keep a separate
-// `tui` row with its own `/<id>/tui` path below.
+// The smoke stub mirrors shipped plugin views: one GUI declaration per route.
+// The viewType contract still accepts future modalities, but this fixture should
+// not manufacture concrete XR/TUI rows that production no longer ships.
 const smokeViewDeclarations = [
-  [
-    "birdclaw",
-    "Birdclaw",
-    "plugin-birdclaw",
-    "/birdclaw",
-    "BirdclawView",
-    ["gui", "tui"],
-  ],
-  [
-    "contacts",
-    "Contacts",
-    "plugin-contacts",
-    "/contacts",
-    "ContactsView",
-    ["gui", "tui"],
-  ],
+  ["birdclaw", "Birdclaw", "plugin-birdclaw", "/birdclaw", "BirdclawView"],
+  ["contacts", "Contacts", "plugin-contacts", "/contacts", "ContactsView"],
   [
     "hyperliquid",
     "Hyperliquid",
     "plugin-hyperliquid",
     "/hyperliquid",
     "HyperliquidView",
-    ["gui", "tui"],
   ],
   // NOTE: the LifeOps overview view was removed (PA no longer registers a
   // `lifeops` view). Its stub entries are deleted so the smoke launcher matches
@@ -119,49 +100,30 @@ const smokeViewDeclarations = [
     "/relationships",
     "RelationshipsView",
   ],
-  [
-    "messages",
-    "Messages",
-    "plugin-messages",
-    "/messages",
-    "MessagesView",
-    ["gui", "tui"],
-  ],
+  ["messages", "Messages", "plugin-messages", "/messages", "MessagesView"],
   [
     "model-tester",
     "Model Tester",
     "app-model-tester",
     "/model-tester",
     "ModelTesterView",
-    ["gui", "tui"],
   ],
-  // Phone collapsed to ONE source: gui + tui (+ xr) all mount the single
-  // PhoneView spatial component from the same bundle.
-  ["phone", "Phone", "plugin-phone", "/phone", "PhoneView", ["gui", "tui"]],
+  ["phone", "Phone", "plugin-phone", "/phone", "PhoneView"],
   [
     "polymarket",
     "Polymarket",
     "plugin-polymarket",
     "/polymarket",
     "PolymarketView",
-    ["gui", "tui"],
   ],
-  [
-    "shopify",
-    "Shopify",
-    "plugin-shopify",
-    "/shopify",
-    "ShopifyView",
-    ["gui", "tui"],
-  ],
-  ["steward", "Steward", "/steward", "StewardView", ["gui", "tui"]],
+  ["shopify", "Shopify", "plugin-shopify", "/shopify", "ShopifyView"],
+  ["steward", "Steward", "plugin-steward", "/steward", "StewardView"],
   [
     "wallet",
     "Wallet",
     "plugin-wallet-ui",
     "/wallet",
     "InventoryView",
-    ["gui", "tui"],
   ],
   [
     "vector-browser",
@@ -170,14 +132,13 @@ const smokeViewDeclarations = [
     "/vector-browser",
     "VectorBrowserView",
   ],
-  ["feed", "Feed", "plugin-feed", "/feed", "FeedView", ["gui", "tui"]],
+  ["feed", "Feed", "plugin-feed", "/feed", "FeedView"],
   [
     "views-manager",
     "Views",
     "plugin-app-control",
     "/views",
     "ViewManagerView",
-    ["gui", "tui"],
   ],
   [
     "screenshare",
@@ -185,7 +146,6 @@ const smokeViewDeclarations = [
     "plugin-screenshare",
     "/screenshare",
     "ScreenshareView",
-    ["gui", "tui"],
   ],
   [
     "social-alpha",
@@ -200,7 +160,6 @@ const smokeViewDeclarations = [
     "plugin-task-coordinator",
     "/task-coordinator",
     "TaskCoordinatorView",
-    ["gui", "tui"],
   ],
   [
     "orchestrator",
@@ -208,7 +167,6 @@ const smokeViewDeclarations = [
     "plugin-task-coordinator",
     "/orchestrator",
     "OrchestratorView",
-    ["gui", "tui"],
   ],
   [
     "trajectory-logger",
@@ -216,19 +174,8 @@ const smokeViewDeclarations = [
     "plugin-trajectory-logger",
     "/trajectory-logger",
     "TrajectoryLoggerView",
-    ["gui", "tui"],
   ],
-  // Training is NOT collapsed: it keeps a standalone gui route plus a separate
-  // tui declaration on its own `/training/tui` route.
   ["training", "Fine Tuning", "plugin-training", "/training", "FineTuningView"],
-  [
-    "training",
-    "Fine Tuning TUI",
-    "plugin-training",
-    "/training/tui",
-    "FineTuningTuiView",
-    "tui",
-  ],
 ];
 
 function smokeViewObject({
@@ -240,7 +187,7 @@ function smokeViewObject({
   viewType,
 }) {
   const encodedId = encodeURIComponent(id);
-  const query = viewType === "tui" ? "?viewType=tui&v=ui-smoke" : "?v=ui-smoke";
+  const query = "?v=ui-smoke";
   const bundlePath = path.join(
     repoRoot,
     "plugins",
@@ -273,10 +220,8 @@ function smokeViewObject({
   };
 }
 
-// A collapsed declaration carries a `modalities` array as its 6th element and
-// expands to one view object per surface (gui + tui), all sharing the same
-// `/<id>` route and `<Name>View` componentExport. A legacy declaration carries
-// a single `viewType` string (default "gui").
+// The 6th tuple slot remains a viewType override for future compatibility, but
+// shipped fixture declarations default to GUI.
 const smokeViews = smokeViewDeclarations.flatMap(
   ([
     id,
@@ -1525,119 +1470,6 @@ function safeComponentExportName(value) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value) ? value : "SmokeView";
 }
 
-function smokeTuiViewBundleSource(view, exportName) {
-  const label = JSON.stringify(view.label);
-  const id = JSON.stringify(view.id);
-  const viewType = JSON.stringify(view.viewType);
-  const pluginName = JSON.stringify(view.pluginName);
-  const commands =
-    view.id === "feed"
-      ? [
-          "refresh-agent-status",
-          "refresh-feed",
-          "list-agents",
-          "summarize-feed",
-        ]
-      : ["status", "refresh", "inspect", "help"];
-  return `import React from "react";
-
-const viewMeta = {
-  id: ${id},
-  label: ${label},
-  viewType: ${viewType},
-  pluginName: ${pluginName}
-};
-const commands = ${JSON.stringify(commands)};
-
-function SmokeView() {
-  const [outputs, setOutputs] = React.useState([]);
-  const runCommand = async (command) => {
-    window.dispatchEvent(new CustomEvent("eliza:tui-command", {
-      detail: { viewId: viewMeta.id, command }
-    }));
-    let result;
-    try {
-      const response = await fetch("/api/views/" + encodeURIComponent(viewMeta.id) + "/interact?viewType=tui", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ capability: command, timeoutMs: 5000 })
-      });
-      result = await response.json();
-    } catch (error) {
-      result = { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-    setOutputs((current) => [...current, { command, result }]);
-  };
-  const state = JSON.stringify({
-    viewId: viewMeta.id,
-    viewType: "tui",
-    status: "ready",
-    fixture: "ui-smoke",
-    commandCount: commands.length
-  });
-  return React.createElement(
-    "div",
-    {
-      "data-view-state": state,
-      style: {
-        minHeight: "100vh",
-        background: "#020617",
-        color: "#cbd5e1",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-        padding: 20
-      }
-    },
-    React.createElement("div", { style: { color: "#7dd3fc", marginBottom: 4 } }, "elizaos://" + viewMeta.id + " --type=tui"),
-    React.createElement("div", { style: { color: "#94a3b8", marginBottom: 16 } }, viewMeta.label + " smoke terminal"),
-    React.createElement(
-      "div",
-      { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
-      ...commands.map((command) =>
-        React.createElement(
-          "button",
-          {
-            key: command,
-            type: "button",
-            "data-terminal-command": command,
-            onClick: () => void runCommand(command),
-            style: {
-              border: "1px solid #38bdf8",
-              borderRadius: 4,
-              color: "#e0f2fe",
-              background: "transparent",
-              padding: "6px 10px"
-            }
-          },
-          command
-        )
-      )
-    ),
-    ...outputs.map((entry, index) =>
-      React.createElement(
-        "pre",
-        {
-          key: entry.command + index,
-          "data-terminal-output": entry.result?.ok ? "ok" : "error",
-          style: {
-            marginTop: 8,
-            whiteSpace: "pre-wrap",
-            color: entry.result?.ok ? "#bbf7d0" : "#fecaca"
-          }
-        },
-        "$ " + entry.command + "\\n" + JSON.stringify(entry.result, null, 2)
-      )
-    )
-  );
-}
-
-export { SmokeView as ${exportName} };
-export default SmokeView;
-export async function interact(capability, params = {}) {
-  return { ok: true, viewId: viewMeta.id, viewType: viewMeta.viewType, capability, params };
-}
-`;
-}
-
 function smokeScreenshareBundleSource(view, exportName) {
   const label = JSON.stringify(view.label);
   const id = JSON.stringify(view.id);
@@ -1927,9 +1759,6 @@ export async function interact(capability, params = {}) {
 
 function smokeViewBundleSource(view) {
   const exportName = safeComponentExportName(view.componentExport);
-  if (view.viewType === "tui") {
-    return smokeTuiViewBundleSource(view, exportName);
-  }
   if (view.id === "screenshare") {
     return smokeScreenshareBundleSource(view, exportName);
   }

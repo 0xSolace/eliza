@@ -29,10 +29,8 @@ export const appPhonePlugin: Plugin = {
   actions: [],
   providers: [phoneCallLogProvider],
   views: [
-    // ONE GUI declaration, drawn from the single PhoneView
-    // spatial source. `modalities` is a plain literal here (plugin.ts is not in
-    // the view bundle), so no brand-new `@elizaos/core` runtime export reaches
-    // the bundle build.
+    // One shipped GUI declaration drawn from PhoneView. The modality enum is
+    // retained in the contract for future alternate view entries.
     {
       id: "phone",
       label: "Phone",

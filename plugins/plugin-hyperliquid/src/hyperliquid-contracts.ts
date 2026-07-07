@@ -3,7 +3,7 @@
  * guidance/error copy for credential and execution states, and the typed
  * shapes of every `/api/hyperliquid/*` route response (status, markets,
  * funding, positions, orders). Consumed by `routes.ts`, `client.ts`, the
- * `PERPETUAL_MARKET` action, and the React/TUI views — this is the single
+ * `PERPETUAL_MARKET` action, and the React/GUI views — this is the single
  * source of truth for those shapes so route, client, and UI stay in sync.
  */
 export const HYPERLIQUID_API_BASE = "https://api.hyperliquid.xyz";

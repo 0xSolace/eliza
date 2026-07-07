@@ -1,21 +1,15 @@
 /**
  * Spatial layout IR — the modality-agnostic node tree.
  *
- * A view is authored once with the spatial primitives (`primitives.tsx`). When
- * rendered it produces a tree of {@link SpatialNode}s: pure, serialisable data
- * with no React and no DOM. Every renderer consumes the SAME tree:
+ * A view is authored once with the spatial primitives (`primitives.tsx`). The
+ * DOM runtime consumes the React tree directly today, while this pure,
+ * serialisable node model preserves the contract future adapters can consume
+ * without dragging in React or browser globals.
  *
- *  - **GUI** (`dom.tsx`)        → DOM via flexbox CSS.
- *  - **XR**  (`dom.tsx` + ctx)  → the same DOM, with spatially-scaled sizing.
- *  - **TUI** (`tui/`)           → terminal lines via a flexbox layout pass.
- *
- * The IR is the single contract that keeps the three modalities in parity: a
- * box is a flex container in all three, a `gap` of 2 means the same logical
- * spacing everywhere, `grow` distributes free space identically. Renderers only
- * differ in the *unit* a cell maps to (a CSS rem vs. a terminal column).
- *
- * Keep this file free of React/DOM imports so it can be unit-tested and shared
- * by the Node-side terminal renderer without dragging in a browser graph.
+ * The IR keeps layout semantics stable across modalities: a box is a flex
+ * container, a `gap` of 2 means the same logical spacing, and `grow` distributes
+ * free space identically. Renderers differ only in how a logical cell maps to
+ * their host surface.
  */
 
 /** Presentation modality of the surface a spatial view renders into. */
@@ -30,7 +24,7 @@ export type SpatialAlign = "start" | "center" | "end" | "stretch";
 /** Main-axis distribution of children within a container. */
 export type SpatialJustify = "start" | "center" | "end" | "between" | "around";
 
-/** Semantic tone, mapped to colours (GUI/XR) and ANSI styling (TUI). */
+/** Semantic tone, mapped to renderer-specific styling. */
 export type SpatialTone =
   | "default"
   | "muted"
@@ -39,7 +33,7 @@ export type SpatialTone =
   | "warning"
   | "danger";
 
-/** Text role; drives size/weight in GUI/XR and weight/underline in TUI. */
+/** Text role; drives renderer-specific size, weight, and emphasis. */
 export type SpatialTextStyle =
   | "heading"
   | "subheading"
@@ -53,11 +47,9 @@ export type SpatialBorder = "none" | "single" | "round" | "double";
 /**
  * A length along one axis.
  *
- *  - `number`       — logical cells. GUI/XR multiply by a per-modality cell
- *                     size (rem); TUI treats it as literal terminal columns/rows.
+ *  - `number`       — logical cells; each renderer maps cells to its host units.
  *  - `"auto"`       — size to content (the default).
- *  - `` `${n}%` ``  — percentage of the parent's inner size. Honoured by GUI/XR;
- *                     the TUI engine resolves it against the parent content box.
+ *  - `` `${n}%` ``  — percentage of the parent's inner size.
  */
 export type SpatialLength = number | "auto" | `${number}%`;
 
@@ -107,7 +99,7 @@ export interface SpatialBoxNode extends SpatialCommon {
   border?: SpatialBorder;
   /** Optional caption rendered into the top border / as a heading row. */
   title?: string;
-  /** Surface tone (background tint in GUI/XR, border colour in TUI). */
+  /** Surface tone for renderer-specific background/border treatment. */
   tone?: SpatialTone;
   children: SpatialNode[];
 }
@@ -163,7 +155,7 @@ export interface SpatialSpacerNode extends SpatialCommon {
   size?: number;
 }
 
-/** An image. Rendered as a real `<img>` in GUI/XR, alt/placeholder in TUI. */
+/** An image. DOM renders a real `<img>`; future adapters may choose placeholders. */
 export interface SpatialImageNode extends SpatialCommon {
   type: "image";
   src: string;

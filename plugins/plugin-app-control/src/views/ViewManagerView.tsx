@@ -6,7 +6,8 @@
  *
  * It owns the live view list (fetch + loading/error state and the open→navigate
  * handoff) and renders the one presentational {@link ViewManagerSpatialView}
- * inside a {@link SpatialSurface}.
+ * inside a {@link SpatialSurface}. The browser DOM surface ships today, while
+ * the retained modality contract stays available for future adapters.
  *
  * Built as a standalone ES-module view bundle; loaded dynamically by the
  * frontend shell via `import("/api/views/views-manager/bundle.js")`. External

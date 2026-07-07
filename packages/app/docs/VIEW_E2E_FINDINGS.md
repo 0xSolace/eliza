@@ -6,21 +6,15 @@ assert each view's actual features (populated data + every control + the exact
 ids/shapes the server accepts) surfaced real product bugs. Each is pinned by a
 committed tripwire test so it is change-detected. Status below.
 
-## View-type coverage (gui / tui / xr)
+## View-Type Coverage
 
 - **gui**: per-plugin component tests (this fan-out) render the real component
-  with realistic data and assert populated data + every control + TUI dispatch;
-  plus screenshot/interaction owners in `packages/app/test/ui-smoke`.
-- **tui**: per-plugin `interact()` capability tests + the central terminal-parity
-  gate (`packages/agent/src/__tests__/plugin-tui-view-coverage.test.ts`).
-- **xr**: covered by the same central test — its
-  `"can route-switch every bundled plugin view in gui, tui, and xr mode"` and
-  `"can dispatch standard interactions ... in gui, tui, and xr mode"` cases
-  register and exercise every declared xr view (23 plugins) through the real
-  navigate route + interaction dispatch. XR views reuse the gui `componentExport`
-  (e.g. `PolymarketAppView`), which the gui render tests already exercise, so the
-  component IS tested; a headless *visual* XR screenshot is not meaningful (no
-  WebXR/headset in jsdom/Playwright). Net: xr is covered for everything testable.
+  with realistic data and assert populated data plus every shipped control;
+  screenshot/interaction owners live in `packages/app/test/ui-smoke`.
+- **future modalities**: the `viewType` contract remains covered at the registry
+  and dispatch layers, but concrete alternate view implementations no longer ship.
+  New renderers should add their own visual evidence and interaction owners when
+  they are restored.
 
 ## Fixed
 
@@ -31,12 +25,10 @@ committed tripwire test so it is change-detected. Status below.
   alignment locked by `emote-picker-grid.test.ts`. (commit: "fix(companion):
   derive EmotePicker grid from the emote catalog".)
 
-- **app-model-tester — TUI capabilities not surfaced.** `ModelTesterTuiView`
-  passed `commands={[]}` to `TerminalPluginView`, so its 5 registered capabilities
-  never rendered. Fixed: export `MODEL_TESTER_TUI_CAPABILITIES` and wire
-  `commands={[...MODEL_TESTER_TUI_CAPABILITIES]}`; `tui-capabilities.test.ts`
-  asserts list==plugin.ts==interact() and guards the empty-list regression.
-  (commit: "fix(app-model-tester): surface TUI capabilities".)
+- **app-model-tester — retired alternate renderer issue.** The older terminal
+  view capability regression is historical; the concrete renderer and wrapper
+  were removed with the TUI cleanup. Keep future modality capability lists tied
+  to their restored renderer when that work returns.
 
 - **plugin-feed — FeedAgentSummary type lie.** `getFeedAgentSummary()` only
   proxies the upstream `/agent/summary` body but was typed `Promise<FeedAgentSummary>`

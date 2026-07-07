@@ -775,13 +775,8 @@ function expectViewsList(
   return (status, body) => {
     if (status !== 200) return `expected 200, saw ${status}`;
     const views = arrayOfRecords(record(body)?.views);
-    // The views-manager ships GUI-only (#15269): "tui"/"xr" stay valid
-    // compatibility modalities but are no longer declared, so no tui-typed
-    // entry is registered. `listViews` still surfaces the manager in the TUI
-    // list as its GUI fallback (it returns DEFAULT_VIEW_TYPE when the requested
-    // modality has no dedicated registration), so the entry reports
-    // viewType="gui" in both lists while its terminal capabilities remain
-    // reachable for headless server-interact.
+    // The views-manager ships GUI-only: compatibility-mode list requests still
+    // resolve to the GUI declaration instead of fabricating a TUI surface.
     const view = views.find((candidate) => candidate.id === "views-manager");
     if (!view) {
       return `expected views-manager in ${viewType} list, saw ${JSON.stringify(body)}`;
@@ -792,8 +787,8 @@ function expectViewsList(
     if (view.pluginName !== appControlPlugin.name) {
       return `expected pluginName=${appControlPlugin.name}, saw ${String(view.pluginName)}`;
     }
-    if (viewType === "tui" && !Array.isArray(view.capabilities)) {
-      return "expected TUI views-manager capabilities";
+    if (!Array.isArray(view.capabilities)) {
+      return "expected views-manager capabilities";
     }
     return undefined;
   };

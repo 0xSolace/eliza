@@ -1,11 +1,9 @@
 /**
- * BirdclawView — the single GUI/XR/TUI data wrapper for the Birdclaw archive
- * browser.
+ * Birdclaw archive browser GUI data wrapper.
  *
  * It owns the live data (the `/api/birdclaw/*` fetches, the tab selection,
  * the sync flow, and the loading/setup/error/empty/ready state machine) and
- * renders the one presentational {@link BirdclawSpatialView} — the same
- * component every surface draws.
+ * renders the one presentational {@link BirdclawSpatialView}.
  *
  * Data source (the plugin's own routes; the service owns the CLI):
  *   GET  {base}/api/birdclaw/status

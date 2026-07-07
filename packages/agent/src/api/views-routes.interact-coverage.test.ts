@@ -31,7 +31,7 @@ import {
 // Three claims:
 //   (a) the `serverInteract` extension point dispatches end-to-end and returns
 //       a real result for the views-manager reference capabilities
-//       (terminal-list-views / terminal-open-view) — proves serverInteract is a
+//       (list-views / open-view) — proves serverInteract is a
 //       live path, #8798 C7;
 //   (b) capability validation against the declared list rejects an undeclared
 //       capability and accepts/dispatches a declared one;
@@ -44,10 +44,10 @@ const SURFACE_PLUGIN = "@test/views-surface-grants";
 
 /**
  * A deterministic, self-contained stand-in for the plugin-app-control
- * `views-manager` TUI view's `serverInteract` (plugins/plugin-app-control,
+ * `views-manager` `serverInteract` (plugins/plugin-app-control,
  * ~L234). The real impl calls back over loopback HTTP via `createViewsClient`;
- * here we resolve the same capability contract (terminal-list-views /
- * terminal-open-view) purely in-process so the interact round-trip is
+ * here we resolve the same capability contract (list-views /
+ * open-view) purely in-process so the interact round-trip is
  * deterministic and browser-free while exercising the identical dispatch path.
  */
 const REFERENCE_VIEWS = [
@@ -60,10 +60,10 @@ async function referenceServerInteract(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-list-views") {
+  if (capability === "list-views") {
     return { views: REFERENCE_VIEWS };
   }
-  if (capability === "terminal-open-view") {
+  if (capability === "open-view") {
     const viewId =
       params && typeof params.viewId === "string" ? params.viewId : undefined;
     if (!viewId) {
@@ -112,7 +112,7 @@ describe("per-view interact e2e — serverInteract reaches view capabilities hea
     lastOpenedViewId = null;
 
     // (a) reference view: capabilities + a headless serverInteract, mirroring
-    // the plugin-app-control views-manager TUI declaration.
+    // the plugin-app-control views-manager declaration.
     await registerPluginViews(
       {
         name: REFERENCE_PLUGIN,
@@ -121,14 +121,14 @@ describe("per-view interact e2e — serverInteract reaches view capabilities hea
           {
             id: "views-manager-ref",
             label: "Views Manager (ref)",
-            path: "/views/tui",
+            path: "/views/ref",
             capabilities: [
               {
-                id: "terminal-list-views",
+                id: "list-views",
                 description: "Return the view list as structured data.",
               },
               {
-                id: "terminal-open-view",
+                id: "open-view",
                 description: "Open a listed view by id.",
                 params: {
                   viewId: {
@@ -210,11 +210,11 @@ describe("per-view interact e2e — serverInteract reaches view capabilities hea
     vi.restoreAllMocks();
   });
 
-  it("dispatches terminal-list-views through serverInteract and returns the view list", async () => {
+  it("dispatches list-views through serverInteract and returns the view list", async () => {
     const { ctx, json, error } = makeCtx(
       "POST",
       "/api/views/views-manager-ref/interact",
-      { capability: "terminal-list-views" },
+      { capability: "list-views" },
     );
 
     await expect(handleViewsRoutes(ctx)).resolves.toBe(true);
@@ -233,11 +233,11 @@ describe("per-view interact e2e — serverInteract reaches view capabilities hea
     expect(payload.result.views).toEqual(REFERENCE_VIEWS);
   });
 
-  it("dispatches terminal-open-view with params and mutates server-side state", async () => {
+  it("dispatches open-view with params and mutates server-side state", async () => {
     const { ctx, json, error } = makeCtx(
       "POST",
       "/api/views/views-manager-ref/interact",
-      { capability: "terminal-open-view", params: { viewId: "wallet" } },
+      { capability: "open-view", params: { viewId: "wallet" } },
     );
 
     await expect(handleViewsRoutes(ctx)).resolves.toBe(true);
@@ -254,13 +254,13 @@ describe("per-view interact e2e — serverInteract reaches view capabilities hea
   });
 
   it("propagates a capability-level failure result (params validation inside serverInteract)", async () => {
-    // terminal-open-view is declared, so it passes the route allowlist, but the
+    // open-view is declared, so it passes the route allowlist, but the
     // handler rejects the missing viewId — the route reports success=false with
     // the handler's error, proving the result (not the validation) shaped it.
     const { ctx, json, error } = makeCtx(
       "POST",
       "/api/views/views-manager-ref/interact",
-      { capability: "terminal-open-view" },
+      { capability: "open-view" },
     );
 
     await expect(handleViewsRoutes(ctx)).resolves.toBe(true);

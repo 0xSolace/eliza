@@ -49,7 +49,7 @@ export function registerOrchestratorCommands(agentId: string): void {
     scope: "both",
     category: "docks",
     icon: "Layers",
-    surfaces: ["gui", "tui"],
+    surfaces: ["gui"],
     views: [ORCHESTRATOR_VIEW_ID],
     target: { kind: "agent", action: ORCHESTRATOR_STATUS_COMMAND_ACTION },
     acceptsArgs: false,

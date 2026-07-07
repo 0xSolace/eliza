@@ -146,10 +146,9 @@ const LEVELS = [
     name: "plugin view training",
     file: "plugins/plugin-training/src/ui/FineTuningView.tsx",
   },
-  // facewear + smartglasses were converted from GUI views to TUI views
-  // (their GUI config moved to Settings → Wearables), so they no longer carry
-  // a GUI HMR source probe — their stale probes are removed to keep the matrix
-  // in lockstep with the GUI VIEW_CASES set.
+  // Facewear + smartglasses device controls moved to Settings → Wearables, so
+  // they no longer carry standalone GUI HMR source probes. Their stale probes
+  // stay out of this matrix to keep it in lockstep with the GUI VIEW_CASES set.
 ] as const;
 
 // Vite's client logs these to the page console when it processes a change.

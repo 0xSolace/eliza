@@ -1,4 +1,4 @@
-/** Covers the TUI `interact()` capability handler — status fetch, run-* capability-to-test mapping, param coercion, and error propagation — against a stubbed fetch (no live server). */
+/** Covers the view-bundle `interact()` capability handler — status fetch, run-* capability-to-test mapping, param coercion, and error propagation — against a stubbed fetch (no live server). */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { interact } from "./ModelTesterAppView.interact.js";
@@ -147,7 +147,7 @@ describe("interact error handling", () => {
     installFetch(() => ({ text: "{}" }));
 
     await expect(interact("run-nonexistent")).rejects.toThrow(
-      'Model Tester TUI does not support "run-nonexistent".',
+      'Model Tester view does not support "run-nonexistent".',
     );
   });
 });

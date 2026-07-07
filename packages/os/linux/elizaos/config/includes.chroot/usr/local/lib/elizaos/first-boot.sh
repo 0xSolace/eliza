@@ -1,14 +1,13 @@
 #!/bin/sh
 # Idempotent first-boot bootstrap. Provisions elizaOS user state, validates
-# the local agent and TUI path, and marks completion only after boot proof
-# markers have been emitted.
+# the local agent, and marks completion only after boot proof markers have been
+# emitted.
 set -eu
 
 STATE=/var/lib/elizaos
 ETC=/etc/elizaos
 MARK="${STATE}/.first-boot-complete"
 AGENT_HEALTH_URL="${ELIZA_AGENT_HEALTH_URL:-http://127.0.0.1:31337/api/health}"
-AGENT_BASE_URL="${ELIZA_AGENT_BASE_URL:-http://127.0.0.1:31337}"
 DEADLINE_SECONDS="${ELIZA_AGENT_HEALTH_TIMEOUT_SECONDS:-90}"
 
 emit_marker() {
@@ -91,9 +90,5 @@ if ! wait_for_agent_health; then
     dump_agent_diagnostics
     exit 1
 fi
-
-emit_marker "elizaos-tui-starting url=${AGENT_BASE_URL}"
-/usr/lib/elizaos/run-terminal-tui-smoke.sh "${AGENT_BASE_URL}"
-emit_marker "elizaos-tui-ready url=${AGENT_BASE_URL}"
 
 touch "${MARK}"

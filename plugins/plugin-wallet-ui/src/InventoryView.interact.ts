@@ -4,7 +4,7 @@
 // The view bundle re-exports `interact` via ./wallet-view-bundle.ts.
 import { client } from "@elizaos/ui/api";
 import {
-  loadWalletTuiState,
+  loadWalletViewState,
   resolveWalletAddresses,
 } from "./InventoryView.helpers";
 
@@ -12,14 +12,13 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-wallet-state") {
-    const state = await loadWalletTuiState();
+  if (capability === "wallet-state") {
+    const state = await loadWalletViewState();
     const addresses = resolveWalletAddresses({
       walletAddresses: state.walletAddresses,
       walletConfig: state.walletConfig,
     });
     return {
-      viewType: "tui",
       addresses,
       totalUsd: state.summary.totalUsd,
       tokenCount: state.summary.tokens.length,
@@ -36,14 +35,13 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-wallet-market-overview") {
+  if (capability === "wallet-market-overview") {
     return {
-      viewType: "tui",
       overview: await client.getWalletMarketOverview(),
     };
   }
 
-  if (capability === "terminal-wallet-trading-profile") {
+  if (capability === "wallet-trading-profile") {
     const window =
       params?.window === "24h" ||
       params?.window === "7d" ||
@@ -51,7 +49,6 @@ export async function interact(
         ? params.window
         : "30d";
     return {
-      viewType: "tui",
       profile: await client.getWalletTradingProfile(window),
     };
   }

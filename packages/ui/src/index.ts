@@ -319,7 +319,6 @@ export {
 export { Textarea } from "./components/ui/textarea";
 export { IconTooltip } from "./components/ui/tooltip-extended";
 export { KeepAliveViewHost } from "./components/views/KeepAliveViewHost";
-export { TerminalPluginView } from "./components/views/TerminalPluginView";
 export { ViewErrorBoundary } from "./components/views/ViewErrorBoundary";
 export { ViewTelemetryProfiler } from "./components/views/ViewTelemetryProfiler";
 export type {

@@ -54,7 +54,7 @@ const NON_MODEL_EXCLUSION_RULES = [
     reason:
       "Playwright/browser UI or visual audit suite; capture belongs to UI screenshots/traces rather than model-call trajectory artifacts.",
     matches: (row) =>
-      /playwright|run-ui-playwright|run-e2e|aesthetic-audit|contact-sheet|web-views|cloud-wallet|homepage|os-homepage|app-xr|llama-ui|packages\/test\/cloud-e2e/i.test(
+      /playwright|run-ui-playwright|run-e2e|aesthetic-audit|contact-sheet|web-views|cloud-wallet|homepage|os-homepage|llama-ui|packages\/test\/cloud-e2e/i.test(
         row.value,
       ),
   },

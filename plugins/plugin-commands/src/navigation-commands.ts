@@ -8,10 +8,10 @@
  *
  *   - `navigate` commands open a destination in the Eliza app; `path` is the
  *     in-app deep link a connector advertises, `tab`/`viewId`/`section` are the
- *     routing hints the GUI/TUI use to open it deterministically. Offered on
+ *     routing hints the local client uses to open it deterministically. Offered on
  *     every surface (chat connectors reply with the deep link).
- *   - `client` commands run a GUI/TUI-only behavior with no remote surface, so
- *     they declare `surfaces: ["gui", "tui"]` and are filtered off chat
+ *   - `client` commands run a local-client behavior with no remote surface, so
+ *     they declare local client surfaces and are filtered off chat
  *     connectors by surface, not by an ad-hoc branch.
  *
  * The `path`/`tab` values mirror the canonical route table in `@elizaos/ui`
@@ -21,7 +21,7 @@
 import { getSettingsSectionChoices } from "./settings-sections";
 import type { CommandDefinition, CommandSurface } from "./types";
 
-const IN_APP_SURFACES: CommandSurface[] = ["gui", "tui"];
+const IN_APP_SURFACES: CommandSurface[] = ["gui"];
 
 /** Navigation destinations — open an in-app route on any surface. */
 const NAVIGATE_COMMANDS: CommandDefinition[] = [
@@ -181,7 +181,7 @@ const NAVIGATE_COMMANDS: CommandDefinition[] = [
 ];
 
 /**
- * Client-only behaviors — run in the GUI/TUI, filtered off chat connectors by
+ * Client-only behaviors — run in local clients, filtered off chat connectors by
  * surface (a Discord/Telegram user has nothing to clear or full-screen).
  */
 const CLIENT_COMMANDS: CommandDefinition[] = [

@@ -1,11 +1,11 @@
 /**
- * Reference spatial view — authored ONCE, rendered to GUI, XR and TUI.
+ * Reference spatial view authored with the modality-neutral primitives.
  *
  * This is the worked example for the framework: it uses the full primitive
  * vocabulary (Card/HStack/List/Text/Field/Divider/Button), cross-modal state
  * (`useSpatialState`), `.map`, and conditionals — yet carries no per-modality
- * branching. The same component instance renders to DOM on GUI/XR and to
- * terminal lines via the IR. See `__tests__/parity.test.tsx`.
+ * branching. The shipped runtime renders it to DOM; the same IR contract is
+ * preserved for future adapters.
  */
 
 import {

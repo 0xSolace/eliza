@@ -3500,8 +3500,8 @@ export interface StartElizaOptions {
 export interface BootElizaRuntimeOptions {
   /**
    * When true, require an existing state-dir config file.
-   * This is used by non-CLI UIs (like the @elizaos/tui interface) where interactive
-   * first-run prompts would break the alternate screen.
+   * This is used by non-CLI UIs where interactive first-run prompts would break
+   * the host surface.
    */
   requireConfig?: boolean;
 }

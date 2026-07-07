@@ -29,10 +29,9 @@ export const goalsPlugin: Plugin = {
   services: [GoalsCheckinService, GoalsMigrationService],
   schema: dbSchema,
   views: [
-    // ONE GUI declaration, drawn from the single GoalsView
-    // spatial source. `modalities` is a plain literal here (plugin.ts is not in
-    // the view bundle), so no brand-new `@elizaos/core` runtime export reaches
-    // the bundle build.
+    // The shipped view is GUI-only. `modalities` is a plain literal here
+    // (plugin.ts is not in the view bundle), so no brand-new `@elizaos/core`
+    // runtime export reaches the bundle build.
     {
       id: "goals",
       label: "Goals",

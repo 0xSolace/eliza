@@ -3,7 +3,7 @@
  *
  * `serializeCommand` is the single projection from a `CommandDefinition` onto
  * the wire-safe `SerializedCommand` shape every client consumes (web composer,
- * TUI autocomplete, connector bridges). The `GET /api/commands` route is a pure
+ * connector bridges). The `GET /api/commands` route is a pure
  * pass-through of this function — it fabricates nothing. This is what closes the
  * "catalog contract dropped at the route" gap (#8790): `surfaces`, auth flags,
  * `category`, real `dynamicChoices`, `icon`, and the full `textAliases` all

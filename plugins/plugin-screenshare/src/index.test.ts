@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { screensharePlugin } from "./index";
 
 describe("screensharePlugin manifest", () => {
-  it("registers ONE screenshare GUI view", () => {
-    // Single source of truth: one declaration, modalities ["gui"],
-    // the unified ScreenshareView spatial component. No per-viewType duplicates.
+  it("registers one shipped GUI screenshare view", () => {
+    // Single source of truth: one declaration, one ScreenshareView component
+    // export, and no per-viewType duplicates.
     const views = screensharePlugin.views ?? [];
     expect(views).toHaveLength(1);
     const [view] = views;

@@ -2,13 +2,13 @@
  * FeedView — the GUI wrapper the view bundle exports (`componentExport:
  * "FeedView"`).
  *
- * With a live run viewer it embeds the full Feed web app, authenticated as the
+ * On the **GUI** surface it embeds the full Feed web app, authenticated as the
  * agent: the run's `viewer` carries the `FEED_AUTH` session token, and
  * {@link EmbeddedAppViewer} performs the `*_READY` → auth postMessage handshake
- * so the real product UI loads signed in. Without one, this wrapper owns the
- * live Feed data (the ten `getFeed*` loaders, the 12s refresh poll, the
- * pause/resume autonomy control, the suggested-prompt send) feeding the one
- * presentational {@link FeedSpatialView} operator dashboard.
+ * so the real product UI loads signed in. When no viewer is available, this
+ * wrapper renders the operator dashboard by feeding live Feed data (the ten
+ * `getFeed*` loaders, the 12s refresh poll, the pause/resume autonomy control,
+ * the suggested-prompt send) into the presentational {@link FeedSpatialView}.
  */
 
 import {
@@ -65,9 +65,9 @@ export function FeedView() {
     [appRuns],
   );
 
-  // With a live run viewer on the GUI surface, open the full Feed web app
-  // authenticated as the agent (the run's viewer carries the FEED_AUTH session
-  // token) instead of the operator dashboard.
+  // On the GUI surface, open the full Feed web app authenticated as the agent
+  // (the run's viewer carries the FEED_AUTH session token) instead of the
+  // operator dashboard.
   const viewerUrl = run?.viewer?.url ?? "";
   const viewerAuthMessage = run?.viewer?.authMessage ?? null;
   const showEmbeddedApp =
@@ -181,8 +181,8 @@ export function FeedView() {
   }, [run]);
 
   useEffect(() => {
-    // The embedded full app loads its own data — only the operator dashboard
-    // (XR/TUI) needs these loaders.
+    // The embedded full app loads its own data; the operator dashboard needs
+    // these loaders.
     if (showEmbeddedApp) return;
     void loadDashboard();
   }, [loadDashboard, showEmbeddedApp]);
@@ -281,7 +281,7 @@ export function FeedView() {
   // Surface the two primary operator actions to the agent surface. Both reuse
   // the live data-layer handlers this wrapper already owns (the same handlers
   // the spatial Refresh / Pause-Resume buttons dispatch through `onAction`), so
-  // the agent can address them directly on the GUI/XR surface.
+  // the agent can address them directly on the GUI surface.
   const refreshControl = useAgentElement<HTMLButtonElement>({
     id: "feed-refresh",
     role: "button",

@@ -608,9 +608,9 @@ dead source literals. Fixes (commit 193d7db2ed, pushed/in-sync 1b32a6d020): map
 `name: "BLOCK"` literal (was a const) so the static drift guard can see it (runtime name
 unchanged); delete the orphaned listActiveBlocks.ts / releaseBlock.ts. Gates: PA
 integration 6/6; agent view-action-affinity 61/61 (drift now resolves BLOCK); blocker
-12/12; PA build:types exit 0; PA suite 620. Also confirmed (not a bug): PA's "lifeops"
-view appears 3× as gui/tui/xr surface variants — the dedup is by (id+surface), not id.
-This is the "fully integrated" dimension made VERIFIABLE in-sandbox.
+12/12; PA build:types exit 0; PA suite 620. Also confirmed (not a bug): future
+same-id view variants must dedup by (id+surface), not id. This is the "fully
+integrated" dimension made VERIFIABLE in-sandbox.
 
 ### Session 2026-06-18 (round 20) — web/linux + mobile-viewport e2e EXECUTED green (not just wired)
 Stopped asserting "wired" and actually RAN the decomposed-views Playwright e2e

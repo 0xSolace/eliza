@@ -7,7 +7,7 @@ import "./client";
 import type { PolymarketClient } from "./client";
 import type { PolymarketOrderbookResponse } from "./polymarket-contracts";
 import {
-  loadPolymarketTuiState,
+  loadPolymarketViewState,
   postPolymarketCommand,
 } from "./polymarket-view.helpers";
 
@@ -15,11 +15,10 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-polymarket-state") {
+  if (capability === "polymarket-state") {
     const user = typeof params?.user === "string" ? params.user.trim() : "";
-    const state = await loadPolymarketTuiState(user || undefined);
+    const state = await loadPolymarketViewState(user || undefined);
     return {
-      viewType: "tui",
       status: state.status,
       markets: state.markets.markets.slice(
         0,
@@ -30,47 +29,43 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-polymarket-market") {
+  if (capability === "polymarket-market") {
     const id = typeof params?.id === "string" ? params.id.trim() : "";
     const slug = typeof params?.slug === "string" ? params.slug.trim() : "";
     const polymarketClient = client as PolymarketClient;
     if (id) {
       return {
-        viewType: "tui",
         ...(await polymarketClient.polymarketMarketById(id)),
       };
     }
     if (slug) {
       return {
-        viewType: "tui",
         ...(await polymarketClient.polymarketMarketBySlug(slug)),
       };
     }
     throw new Error("id or slug is required");
   }
 
-  if (capability === "terminal-polymarket-orderbook") {
+  if (capability === "polymarket-orderbook") {
     const tokenId =
       typeof params?.tokenId === "string" ? params.tokenId.trim() : "";
     if (!tokenId) throw new Error("tokenId is required");
     const orderbook: PolymarketOrderbookResponse = await (
       client as PolymarketClient
     ).polymarketOrderbook(tokenId);
-    return { viewType: "tui", orderbook };
+    return { orderbook };
   }
 
-  if (capability === "terminal-polymarket-positions") {
+  if (capability === "polymarket-positions") {
     const user = typeof params?.user === "string" ? params.user.trim() : "";
     if (!user) throw new Error("user is required");
     return {
-      viewType: "tui",
       positions: await (client as PolymarketClient).polymarketPositions(user),
     };
   }
 
-  if (capability === "terminal-polymarket-trading-check") {
+  if (capability === "polymarket-trading-check") {
     return {
-      viewType: "tui",
       result: await postPolymarketCommand("/api/polymarket/orders", {
         marketId: typeof params?.marketId === "string" ? params.marketId : "",
         side: typeof params?.side === "string" ? params.side : "buy",

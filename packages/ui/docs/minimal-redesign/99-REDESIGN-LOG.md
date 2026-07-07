@@ -13,7 +13,7 @@ Verdicts: `good` · `needs-work` · `broken`. Newest at bottom.
 ## P2 — plugin views (typecheck-verified; visual pending live-stack rebuild)
 - **Todos/Health/Goals/Focus/Inbox** — text "Refresh" → icon-only; Inbox subtitle dropped; #ff6a00 → #ff8a24. (Restating subtitles in Todos/Health/Goals left in place — pinned by tests; revisit with test updates.)
 - **AppsPageView** — green #10b981 section accent → orange #ff8a24.
-- Note: comms GUI views (Contacts/Phone/Messages) already clean. Dark TUI-twin code co-located in those GUI files (ContactsTuiView/PhoneTuiView/MessagesTuiView) flagged for a separate removal pass.
+- Note: comms GUI views (Contacts/Phone/Messages) already clean. Retired terminal twins are tracked as cleanup, not redesign.
 
 ## Infra note
 - Builtin views (App.tsx-rendered) hot-reload in the app vite dev server → full screenshot loop. Plugin views load as pre-built bundles via the stub API → source edits need a bundle/live-stack rebuild to verify visually; rely on typecheck + review in the meantime.
@@ -35,19 +35,22 @@ Verdicts: `good` · `needs-work` · `broken`. Newest at bottom.
 - The single light look + brand normalization is verified end-to-end; the "lots of black" is resolved by the pin (most views were already token-light; Finances/feed/social dark/hero treatments are now light/flat).
 
 ## Honest remaining (lower value / out-of-scope-for-redesign)
-- XR/facewear ViewDeclarations: research flags these as dead duplicates → cleanup, not redesign.
+- Retired facewear/view modality duplicates: cleanup, not redesign.
 - Dev/diagnostic views (Runtime/Trajectories/Database deep-clean): render light; recommend demote-behind-Advanced (product decision) over polish. Database has a double-render hazard.
-- Comms TUI-twin dead code removal (ContactsTuiView/PhoneTuiView/MessagesTuiView): verify-dead first.
+- Comms retired-renderer cleanup: verify dead paths before deleting code.
 - Plugin-view full visual sweep at scale + "every input" e2e: the spec harness now exists to extend.
 
 ## P4 — owner-approved structural work (status)
 - **Dead code removed**: StewardVaultOverview.tsx + test (fully built, never rendered, 0 refs repo-wide). ✓
 - **Dev views demoted**: vector-browser, trajectory-logger, model-tester views marked `developerOnly: true` → drop out of the default Views launcher (builtin Logs/Trajectories/Database/Memories were already developerOnly). ✓
 - **LifeOps stub — NOT safely removable as-is (deferred with reason).** The stub is `LifeOpsPageView.tsx` (static mockup) and the PA plugin's own CLAUDE.md says "No views", yet `plugin.ts` still registers `views: [lifeops ×3]`. BUT that registration is load-bearing: it's referenced by the view→action affinity map (`VIEW_ACTION_MAP lifeops → PERSONAL_ASSISTANT`, packages/agent) and `decomposition-integration.test.ts` invariants, and "lifeops" is a load-bearing concept (permission scope, auth scope, chat context — many files). App.tsx:825 also renders LifeOpsPageView directly for the builtin `lifeops` tab. Removing it cleanly = a deliberate refactor (rebuild as a proactive brief/hub + update affinity + App.tsx + boot config), not a mechanical deletion. Do NOT force-remove on the shared branch. Next: design the real LifeOps brief hub, then swap the stub content (keep the registration/affinity).
-- **Comms merge (Contacts+Phone+Messages → one Comms view) — deferred (architectural).** The three GUI views are already clean/minimal; merging means collapsing 3 plugins (separate native bridges, routing, registration) into one surface — an IA/architecture change, not a redesign. Worth doing as its own initiative; the dark TUI-twin dead code (ContactsTuiView/PhoneTuiView/MessagesTuiView) can be removed first once verified unreferenced.
+- **Comms merge (Contacts+Phone+Messages → one Comms view) — deferred (architectural).** The three GUI views are already clean/minimal; merging means collapsing 3 plugins (separate native bridges, routing, registration) into one surface — an IA/architecture change, not a redesign.
 
-## Correction — comms TUI-twins are NOT dead
-Verified: `ContactsTuiView`/`PhoneTuiView`/`MessagesTuiView` are still the registered `viewType: "tui"` views (e.g. plugin-contacts/src/plugin.ts:53-55 `componentExport: "ContactsTuiView"`). The *SpatialView files are a parallel surface, not a live replacement. So these are NOT removable dead code — deleting them would break the TUI-modality views. Earlier research/agent characterization as "dead" was wrong. Leave them. (StewardVaultOverview WAS genuinely dead — 0 refs — and is removed.)
+## Correction — retired modality cleanup
+Earlier notes treated duplicate modality renderers as live. The current cleanup
+removes concrete terminal/headset view variants while preserving the shared
+`viewType` contract for deliberate future adapters. StewardVaultOverview was
+also genuinely dead and removed.
 
 ## Net status
 A comprehensive minimal/light pass is shipped + verified (builtin views via production-build e2e at both viewports; ~27 plugin views via the 63-test plugin e2e + typecheck). The single light look is enforced. Remaining items are larger architectural initiatives (LifeOps brief hub, comms 3-plugin merge) or risky-on-shared-branch (DatabaseView double-render) — documented above, deferred over forcing.
@@ -61,4 +64,4 @@ Re-ran the loop end-to-end with a workflow-driven assessment of ALL 43 routed vi
 - **Wave 2a (15 plugin packages):** brand + de-slop (companion, contacts, finances, hyperliquid, messages, polymarket, relationships, vector-browser, social, feed, screenshare, wallet/inventory, tasks/task-coordinator, model-tester).
 - **Wave 2b (13 builtin views + shared page-panel chrome):** settings, plugins, database, memories, logs, relationships, runtime, skills, trajectories, automations, character, help, tutorial.
 
-Discipline notes: TUI/terminal variants left intentionally dark (terminal aesthetic); games + remote-desktop viewer out of scope; controls that `*.test.*` asserts (Refresh/search/filter chips) were RESTYLED on-brand, not deleted (deleting them needs the tests updated first — a follow-up). Verified: packages/ui typecheck 0 errors; every touched plugin typecheck/build:types clean; all 25 plugin view bundles rebuild. Stub view list de-stale'd (removed LifeOps).
+Discipline notes: games + remote-desktop viewer out of scope; controls that `*.test.*` asserts (Refresh/search/filter chips) were RESTYLED on-brand, not deleted (deleting them needs the tests updated first — a follow-up). Verified: packages/ui typecheck 0 errors; every touched plugin typecheck/build:types clean; all 25 plugin view bundles rebuild. Stub view list de-stale'd (removed LifeOps).

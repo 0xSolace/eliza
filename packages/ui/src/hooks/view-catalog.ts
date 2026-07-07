@@ -172,7 +172,7 @@ function appToEntry(app: RegistryAppInfo, isActive: boolean): ViewEntry {
  * - Catalog apps whose plugin is NOT already represented by a loaded view are
  *   appended as "Get" (or "Open" when active but viewless, e.g. external apps).
  * - The catalog is only surfaced on a GUI surface — installing is a GUI action;
- *   TUI/XR surfaces list only their loaded views.
+ *   future non-GUI surfaces list only their loaded views.
  */
 export function mergeViewCatalog(input: {
   views: ViewRegistryEntry[];
@@ -217,13 +217,13 @@ export function mergeViewCatalog(input: {
 
 /**
  * Collapse entries that share an `id` into one logical entry carrying the union
- * of every surface they render on. The GUI entry is preferred as the base (its
- * label has no "XR"/"TUI" suffix); its `modalities` becomes the deduped union of
- * all same-id entries. First-seen order is preserved. App entries (`kind:"app"`)
+ * of every surface they render on. The GUI entry is preferred as the base; its
+ * `modalities` becomes the deduped union of all same-id entries. First-seen
+ * order is preserved. App entries (`kind:"app"`)
  * have unique package-name ids, so they collapse to themselves.
  *
- * This is what makes a view appear ONCE with modality badges instead of one
- * duplicate row per surface ("Phone" / "Phone XR" / "Phone TUI").
+ * This is what makes a view appear once with modality badges instead of one
+ * duplicate row per future surface variant.
  */
 export function collapseViewEntries(entries: ViewEntry[]): ViewEntry[] {
   const order: string[] = [];

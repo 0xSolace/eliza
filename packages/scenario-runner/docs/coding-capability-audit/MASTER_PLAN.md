@@ -82,7 +82,7 @@ I'll synthesize the 12 domain audits into a master document. Let me produce the 
 ### E. Orchestrator/task UI
 - **OrchestratorWorkbench** (3925-line chat/coding room, SSE streaming, inspector, recovery actions) — `plugins/plugin-task-coordinator/src/OrchestratorWorkbench.tsx`
 - **orchestrator-stream renderer + buildConversation transform** — `src/orchestrator-stream.tsx`, `src/orchestrator-stream.helpers.ts`
-- **CodingAgentTasksPanel**, **PtyConsoleBase/Drawer/SidePanel + PtyTerminalPane**, **OrchestratorSpatialView** (TUI/GUI/XR), **15 capability descriptors** — same `src/` dir
+- **CodingAgentTasksPanel**, **PtyConsoleBase/Drawer/SidePanel + PtyTerminalPane**, **15 capability descriptors** — same `src/` dir
 
 ### F. Scenario-runner
 - **Executor / interceptor / final-checks (~30) / judge / reporter+run-viewer / native-export / CLI / runtime-factory** — `packages/scenario-runner/src/{executor,interceptor,final-checks/index,judge,reporter,native-export,cli,runtime-factory}.ts`

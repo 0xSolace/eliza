@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
-// Real-panel coverage for the fine-tuning dashboard GUI. The sibling
-// FineTuningTuiView.test.tsx stubs every panel from ./fine-tuning-panels.js, so
-// none of the panel data display or controls are asserted there. This file
-// renders the ACTUAL panel components with realistic fixture props and asserts
-// the populated rows render and that every interactive control fires its
-// callback / setter. Only the @elizaos/ui primitives the panels import are
-// mocked (Button, Input, Select*, SettingsControls) — never the panels.
+// Real-panel coverage for the fine-tuning dashboard GUI. This file renders the
+// actual panel components with realistic fixture props and asserts the populated
+// rows render and that every interactive control fires its callback / setter.
+// Only the @elizaos/ui primitives the panels import are mocked (Button, Input,
+// Select*, SettingsControls) — never the panels.
 
 import {
   cleanup,

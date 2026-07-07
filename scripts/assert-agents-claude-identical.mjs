@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -29,6 +29,7 @@ function guideFiles() {
   ])
     .split("\0")
     .filter(Boolean)
+    .filter((file) => existsSync(file))
     .filter(shouldCheckGuideFile);
 }
 

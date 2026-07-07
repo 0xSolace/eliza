@@ -13,8 +13,7 @@ transports populate a single SQLite DB (default `~/.birdclaw/`). Its stable
 integration surface is the CLI — "stable `--json` envelopes go to stdout,
 progress and warnings to stderr". This plugin wraps that CLI with a service,
 gives the agent an owner-gated `BIRDCLAW` action, serves `/api/birdclaw/*`
-routes, and registers the **Birdclaw** launcher view (GUI-only shipping; `"tui"`/`"xr"` remain
-valid compatibility modality values but are not declared).
+routes, and registers the **Birdclaw** launcher view.
 
 Everything degrades explicitly when birdclaw is missing: the view renders a
 setup screen with install guidance, data routes return

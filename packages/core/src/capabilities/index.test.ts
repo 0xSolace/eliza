@@ -1861,7 +1861,7 @@ describe("capability router", () => {
 		});
 	});
 
-	it("accepts remote plugin XR view manifests", async () => {
+	it("accepts remote plugin future spatial view manifests", async () => {
 		const router = new RuntimeBrokerCapabilityRouter({
 			invokeRuntime: async () => ({
 				modules: [
@@ -1873,7 +1873,7 @@ describe("capability router", () => {
 								id: "weather-spatial",
 								label: "Weather Spatial",
 								viewType: "xr",
-								bundlePath: "/assets/weather-xr.js",
+								bundlePath: "/assets/weather-spatial.js",
 							},
 						],
 					},

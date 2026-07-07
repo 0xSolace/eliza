@@ -1,9 +1,6 @@
 /**
- * LifeOpsLiveTestSpatialView — the HITL "LifeOps Live Test" surface authored
- * once with the spatial vocabulary so it renders on every modality:
- *
- *   - GUI / XR — mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      — the same tree rendered to terminal lines via the shared IR.
+ * LifeOps Live Test surface authored with the spatial vocabulary for the GUI
+ * view.
  *
  * It is purely presentational: a {@link LifeOpsLiveTestSnapshot} + an action
  * callback in, spatial primitives out. Every string — readiness copy, connector

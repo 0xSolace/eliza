@@ -19,7 +19,6 @@ import { isDeterministicCommand } from "./handlers";
 const OWNER_SOURCES: ReadonlySet<string> = new Set([
 	"client_chat",
 	"gui",
-	"tui",
 	"direct",
 	"dashboard",
 ]);

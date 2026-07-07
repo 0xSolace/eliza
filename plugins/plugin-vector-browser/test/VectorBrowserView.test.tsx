@@ -22,11 +22,9 @@
  * (never reachable in the packages/app smoke fixture) are covered here.
  *
  * This renders the adaptive `VectorBrowserView` (the single componentExport): a
- * `SpatialSurface` + `Escape` wrapper that, on the GUI/DOM surface, mounts the
- * rich `VectorBrowserRichView` as the escape child — so these assertions cover
- * the wrapper and the rich surface together. The TUI surface renders the
- * separate `VectorBrowserSpatialView` summary (covered by the packages/ui
- * registered-view parity gate, not here).
+ * `SpatialSurface` + `Escape` wrapper that mounts the rich
+ * `VectorBrowserRichView` as the DOM child, so these assertions cover the
+ * wrapper and the rich surface together.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -4,7 +4,7 @@ Non-custodial wallet inventory UI plugin for elizaOS — renders token balances,
 
 ## Purpose / role
 
-Adds a full wallet inventory surface to an Eliza agent's shell UI. It registers shell pages (`/inventory`), a standalone bundled GUI view, a chat-sidebar widget showing live balances, and all supporting React components and hooks. It is a UI-only plugin with no actions, providers, evaluators, or server-side services — all data is fetched from `@elizaos/plugin-wallet` via the `@elizaos/ui` `client` API layer. The plugin is opt-in; the host shell must import and register it (via `register.ts` side-effects) at boot.
+Adds a full wallet inventory surface to an Eliza agent's shell UI. It registers shell pages (`/inventory`), one standalone GUI bundled view (`/wallet`), a chat-sidebar widget showing live balances, and all supporting React components and hooks. It is a UI-only plugin with no actions, providers, evaluators, or server-side services — all data is fetched from `@elizaos/plugin-wallet` via the `@elizaos/ui` `client` API layer. The plugin is opt-in; the host shell must import and register it (via `register.ts` side-effects) at boot.
 
 Peer deps: `@elizaos/app-core`, `@elizaos/plugin-wallet`, `react >=18`.
 
@@ -15,7 +15,7 @@ This plugin registers no elizaOS actions, providers, services, or evaluators. It
 | Surface | ID / path | What it does |
 |---|---|---|
 | App shell page | `wallet.inventory` → `/inventory` | Full inventory view mounted in the agent shell |
-| Standalone view | `wallet` → `/wallet` | Bundled `InventoryView`; `dist/views/bundle.js`. GUI-only (`tui`/`xr` remain compatibility values in the manifest schema) |
+| Standalone view | `wallet` → `/wallet` | Bundled GUI `InventoryView`; `dist/views/bundle.js` |
 | Chat sidebar widget | `wallet.status` / slot: `chat-sidebar` | Compact balance + address summary in chat rail |
 
 The plugin descriptor object is `walletAppPlugin` (`src/plugin.ts`).
@@ -31,13 +31,12 @@ src/
   register-routes.ts       Calls registerAppRoutePluginLoader, registerAppShellPage,
                            registerBuiltinWidgets — must run once at boot
   plugin.ts                walletAppPlugin Plugin descriptor (views, widgets, navTabs)
-  InventoryView.tsx         Main full-page wallet view: balances, NFTs, trading profile,
-                           market overview, timeline. ~2578 lines.
-  InventoryView.helpers.ts  Shared wallet data helpers (loadWalletTuiState,
+  InventoryView.tsx        Escape wrapper around the rich InventoryAppView GUI.
+  InventoryView.helpers.ts  Shared wallet data helpers (loadWalletViewState,
                            resolveWalletAddresses) used by InventoryView.tsx and
                            InventoryView.interact.ts; kept separate for Fast-Refresh
                            compatibility.
-  InventoryView.interact.ts  The `interact` capability handler, split out of
+  InventoryView.interact.ts  The `interact` view capability handler, split out of
                            InventoryView.tsx so that file exports only React components
                            and stays Fast-Refresh-compatible. Re-exported via
                            wallet-view-bundle.ts.
@@ -46,7 +45,7 @@ src/
   wallet-view-bundle.ts    View-bundle entry that re-exports components and `interact`
                            for the standalone Vite bundle (dist/views/bundle.js).
   components/
-    InventorySpatialView.tsx  Spatial inventory view component.
+    InventoryAppView.tsx  DOM-only wallet dashboard mounted by InventoryView.
   inventory/
     chainConfig.ts         CHAIN_CONFIGS registry (8 chains), all URL/address/gas
                            helpers: getChainConfig, getExplorerTokenUrl,

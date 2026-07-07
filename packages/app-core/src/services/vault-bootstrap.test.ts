@@ -8,14 +8,18 @@
 import type { Vault } from "@elizaos/vault";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@elizaos/core", () => ({
-  logger: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
+vi.mock("@elizaos/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@elizaos/core")>();
+  return {
+    ...actual,
+    logger: {
+      debug: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+    },
+  };
+});
 
 vi.mock("@elizaos/agent", () => ({
   formatVaultRef: (key: string) => `vault://${key}`,

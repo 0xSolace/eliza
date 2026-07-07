@@ -112,8 +112,10 @@ const ANDROID_CHANNELS: Record<
 
 const ensuredChannels = new Set<string>();
 
-/** Test-only: clear the per-tier channel-creation cache between tests so a
- *  cached channel from an earlier case doesn't skip a later createChannel. */
+/**
+ * Test-only: clear the per-tier channel-creation cache between tests so a
+ * cached channel from an earlier case doesn't skip a later createChannel.
+ */
 export function __resetEnsuredChannelsForTests(): void {
   ensuredChannels.clear();
 }

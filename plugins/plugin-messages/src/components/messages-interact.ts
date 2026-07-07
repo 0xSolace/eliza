@@ -1,5 +1,5 @@
 /**
- * View-bundle `interact` capability handler for the terminal surface. Kept in
+ * View-bundle `interact` capability handler for the view surface. Kept in
  * its own module (not the React component file) so the view bundle can re-export
  * `interact` via ./messages-view-bundle.ts without coupling to JSX.
  */
@@ -15,12 +15,11 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-list-threads") {
+  if (capability === "list-threads") {
     const state = await loadMessagesState(
       normalizeMessagesLimit(params?.limit),
     );
     return {
-      viewType: "tui",
       threads: state.threads.map((thread) => ({
         id: thread.id,
         address: thread.address,
@@ -34,24 +33,23 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-send-sms") {
+  if (capability === "send-sms") {
     const address =
       typeof params?.address === "string" ? params.address.trim() : "";
     const body = typeof params?.body === "string" ? params.body.trim() : "";
     if (!address) throw new Error("address is required");
     if (!body) throw new Error("body is required");
     await Messages.sendSms({ address, body });
-    return { sent: true, address, bodyLength: body.length, viewType: "tui" };
+    return { sent: true, address, bodyLength: body.length };
   }
 
-  if (capability === "terminal-request-sms-role") {
+  if (capability === "request-sms-role") {
     await System.requestRole({ role: "sms" });
     const state = await loadMessagesState(200);
     return {
       requested: true,
       ownsSmsRole: state.ownsSmsRole,
       smsRoleHolder: state.smsRoleHolder,
-      viewType: "tui",
     };
   }
 

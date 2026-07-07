@@ -83,12 +83,6 @@ beforeEach(async () => {
           "SMARTGLASSES_STATUS",
           "SMARTGLASSES_DISPLAY_TEXT",
           "SMARTGLASSES_MICROPHONE",
-          "XR_OPEN_VIEW",
-          "XR_CLOSE_VIEW",
-          "XR_SWITCH_VIEW",
-          "XR_LIST_VIEWS",
-          "XR_RESIZE_VIEW",
-          "XR_QUERY_VISION",
         ],
       },
       { id: "steward", label: "Steward", relatedActions: ["WALLET"] },
@@ -157,7 +151,7 @@ describe("view-action-affinity", () => {
   });
 
   it("covers the major plugin views (expanded map)", () => {
-    // wallet / trading / xr surfaces boost their plugin actions.
+    // Wallet, trading, and wearable surfaces boost their plugin actions.
     expect(viewScopedActionNames("wallet").has("EVM_SWAP")).toBe(true);
     expect(viewScopedActionNames("wallet").has("SOLANA_TRANSFER")).toBe(true);
     expect(viewScopedActionNames("polymarket").has("POLYMARKET_STATUS")).toBe(
@@ -166,7 +160,9 @@ describe("view-action-affinity", () => {
     expect(viewScopedActionNames("hyperliquid").has("PERPETUAL_MARKET")).toBe(
       true,
     );
-    expect(viewScopedActionNames("facewear").has("XR_OPEN_VIEW")).toBe(true);
+    expect(viewScopedActionNames("facewear").has("SMARTGLASSES_CONTROL")).toBe(
+      true,
+    );
     expect(viewScopedActionNames("steward").has("WALLET")).toBe(true);
   });
 

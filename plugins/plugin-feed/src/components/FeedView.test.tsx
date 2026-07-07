@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
-// Drives the unified FeedView (the single GUI/XR data wrapper) through the
+// Drives the FeedView GUI data wrapper through the
 // rendered DOM: the same component the bundle exports for both the "gui" and
-// "xr" modalities. The Feed data layer (the ten `getFeed*` loaders + the
+// non-embedded state. The Feed data layer (the ten `getFeed*` loaders + the
 // pause/resume control + the suggested-prompt send) is mocked at the
 // `@elizaos/app-core/ui-compat` `client`, and the run list is injected via the
 // mocked `useAppSelector`. Asserts the populated dashboard, the autonomy toggle
 // + refresh + suggested-prompt controls reach the client with the exact args,
-// the loader-failure banner, and the no-session waiting state — functional
-// parity with the retired view-bundle FeedTuiView surface.
+// the loader-failure banner, and the no-session waiting state.
 
 import {
   cleanup,
@@ -235,7 +234,7 @@ afterEach(() => {
   appState.appRuns = [];
 });
 
-describe("FeedView — unified GUI/XR operator surface", () => {
+describe("FeedView — GUI operator surface", () => {
   it("loads the dashboard on mount and renders populated operator data", async () => {
     appState.appRuns = [makeRun()];
     render(React.createElement(FeedView));

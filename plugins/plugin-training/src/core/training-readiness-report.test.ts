@@ -291,7 +291,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "missing",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: { includeNaturalTrajectories: true },
       },
     });
@@ -325,7 +325,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "missing",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: { includeTestTrajectories: true },
       },
     });
@@ -351,7 +351,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -396,7 +396,7 @@ describe("training readiness report", () => {
       status: "partial",
       note: "A comparison artifact is present, but it does not include base score, trained score, and percentage improvement from the Eliza harness.",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
       },
     });
   });
@@ -510,7 +510,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           actionBenchmark: expect.objectContaining({ useMocks: false }),
         },
@@ -712,7 +712,7 @@ describe("training readiness report", () => {
       report.checks.find((item) => item.id === "huggingface_training_data")
         ?.recommendedAction,
     ).toMatchObject({
-      capability: "terminal-training-ingest-hf-dataset",
+      capability: "training-ingest-hf-dataset",
       params: { dryRun: false },
     });
     expect(
@@ -721,7 +721,7 @@ describe("training readiness report", () => {
       status: "partial",
       note: "A feed generation artifact is present, but it is a dry run or has no generated trajectory rows.",
       recommendedAction: {
-        capability: "terminal-training-feed-generate",
+        capability: "training-feed-generate",
         params: { dryRun: false },
       },
     });
@@ -733,7 +733,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -752,7 +752,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -771,7 +771,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-benchmark-vs-cerebras",
+        capability: "training-run-benchmark-vs-cerebras",
       },
     });
     expect(
@@ -779,7 +779,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -797,7 +797,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -816,7 +816,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "partial",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -836,7 +836,7 @@ describe("training readiness report", () => {
       report.checks.find((item) => item.id === "model_tracking")
         ?.recommendedAction,
     ).toMatchObject({
-      capability: "terminal-training-stage-eliza1-bundle",
+      capability: "training-stage-eliza1-bundle",
       params: { tier: "2b", apply: true },
     });
     expect(
@@ -852,7 +852,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "missing",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           includeActionBenchmark: true,
           includeBenchmarkMatrix: true,
@@ -873,7 +873,7 @@ describe("training readiness report", () => {
       report.checks.find((item) => item.id === "all_eliza1_tiers_benchmark"),
     ).toMatchObject({
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           actionBenchmarkPairs: [
             expect.objectContaining({ tier: "2b" }),
@@ -889,7 +889,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "missing",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           actionBenchmarkPairs: [
             expect.objectContaining({ tier: "2b" }),
@@ -904,7 +904,7 @@ describe("training readiness report", () => {
       report.checks.find((item) => item.id === "cerebras_reference"),
     ).toMatchObject({
       recommendedAction: {
-        capability: "terminal-training-run-benchmark-vs-cerebras",
+        capability: "training-run-benchmark-vs-cerebras",
       },
     });
     expect(
@@ -912,7 +912,7 @@ describe("training readiness report", () => {
     ).toMatchObject({
       status: "missing",
       recommendedAction: {
-        capability: "terminal-training-build-analysis-index",
+        capability: "training-build-analysis-index",
       },
     });
   });
@@ -966,7 +966,7 @@ describe("training readiness report", () => {
       artifactCount: 2,
       note: "Analysis coverage found collected trajectory sources that do not all expose readable samples yet.",
       recommendedAction: {
-        capability: "terminal-training-build-analysis-index",
+        capability: "training-build-analysis-index",
       },
     });
   });
@@ -998,7 +998,7 @@ describe("training readiness report", () => {
       status: "missing",
       note: "No Eliza harness benchmark artifact was found.",
       recommendedAction: {
-        capability: "terminal-training-run-collection",
+        capability: "training-run-collection",
         params: {
           actionBenchmark: expect.objectContaining({
             benchmark: "eliza_harness_action_selection",

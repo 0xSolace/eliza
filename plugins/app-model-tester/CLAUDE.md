@@ -4,7 +4,7 @@ Developer tool that exposes end-to-end probes for every Eliza model type through
 
 ## Purpose / role
 
-Adds a Model Tester surface to an Eliza agent's dashboard. It registers three HTTP routes and a single GUI view so developers can run live probes against text, embedding, speech synthesis, transcription, voice-activity-detection, image description, and image generation models — all from a browser. Load it by adding `modelTesterPlugin` to the agent's plugin list; it is opt-in (not default-enabled).
+Adds a Model Tester surface to an Eliza agent's dashboard. It registers HTTP routes and a GUI view so developers can run live probes against text, embedding, speech synthesis, transcription, voice-activity-detection, image description, and image generation models from the browser. Load it by adding `modelTesterPlugin` to the agent's plugin list; it is opt-in (not default-enabled).
 
 ## Plugin surface
 
@@ -16,11 +16,11 @@ Registered in `src/plugin.ts` as `modelTesterPlugin`:
 - `POST /api/model-tester/run` — runs one probe by `test` kind; accepts optional `prompt`, `imageDataUrl`, `audioDataUrl`, `pcmSamples`, and `sampleRateHz` in the JSON body.
 
 **Views** (registered via elizaOS view registry)
-- `model-tester` — `ModelTesterView` React component, path `/model-tester`, `modalities: ["gui"]`, with capabilities `get-status`, `run-text-small`, `run-transcription`, `run-vision`, `run-vad`. Shipping is GUI-only; `"tui"`/`"xr"` remain valid modality values for compatibility but this plugin no longer declares them.
+- `model-tester` (standard) — `ModelTesterAppView` React component, path `/model-tester`.
 
 **Overlay app + shell page** (registered at module load in `src/model-tester-app.ts`)
 - `registerOverlayApp` — adds the plugin to the overlay app registry under `@elizaos/app-model-tester`.
-- `registerAppShellPage` — mounts `ModelTesterShellPage` at `/model-tester` and `ModelTesterTuiView` at `/model-tester/tui`.
+- `registerAppShellPage` — mounts `ModelTesterShellPage` at `/model-tester`.
 
 No actions, providers, services, or evaluators are registered.
 
@@ -47,11 +47,11 @@ src/
   plugin.ts                     — defines modelTesterPlugin (Plugin object): routes + views
   routes.ts                     — handleModelTesterRoute() + all probe logic + static HTML shell
   model-tester-app.ts           — registerOverlayApp + registerAppShellPage (runs at import)
-  ModelTesterAppView.tsx        — React UI: ModelTesterAppView, ModelTesterTuiView
-  ModelTesterAppView.interact.ts — interact() TUI capability handler (split out for Fast Refresh compatibility)
+  ModelTesterAppView.tsx        — React UI: ModelTesterAppView
+  ModelTesterAppView.interact.ts — interact() capability handler (split out for Fast Refresh compatibility)
   model-tester-view-bundle.ts   — Vite view-bundle entry: re-exports components + interact for dist/views/bundle.js
   components/
-    ModelTesterSpatialView.tsx  — spatial presentational view (GUI-shipped)
+    ModelTesterSpatialView.tsx  — spatial presentational view retained for future modality adapters
   ui.ts                         — thin re-export of ModelTesterAppView + modelTesterApp for consumers
 scripts/
   model-tester-e2e.mjs          — Node e2e harness (used by test:e2e)
@@ -82,7 +82,7 @@ No plugin-specific env vars are read at load time. Model provider credentials (A
 2. Add a `MODEL_TESTS` entry in `src/routes.ts` with the matching `ModelType` constant.
 3. Add a `case` branch in `runModelTest()` (`src/routes.ts`) that calls `runtime.useModel(...)` and returns a plain serialisable object.
 4. Add a `TEST_COPY` entry in `src/ModelTesterAppView.tsx` for the UI label/subtitle.
-5. If the probe should be reachable from the TUI, add its `capability` to the `views` entry in `plugin.ts` and handle it in `interact()` and `MODEL_TESTER_COMMAND_TO_TEST` in `src/ModelTesterAppView.interact.ts`.
+5. If the probe should be reachable from agent-driven view interactions, add its `capability` to the `views` entry in `plugin.ts` and handle it in `interact()` and `MODEL_TESTER_COMMAND_TO_TEST` in `src/ModelTesterAppView.interact.ts`.
 
 **Add a new route:**
 1. Define a `Route` object in `plugin.ts` and push it into `modelTesterRoutes`.
@@ -97,7 +97,7 @@ No plugin-specific env vars are read at load time. Model provider credentials (A
 - **Audio defaults:** when no audio is uploaded the transcription probe synthesises speech from the prompt using local TTS and feeds that back as the transcription input (`source: "local-tts-loopback"`). The VAD probe falls back to a 1-second 440 Hz sine tone at 16 kHz.
 - **Module-side-effect registration:** importing `src/model-tester-app.ts` (or the package root) calls `registerOverlayApp` and `registerAppShellPage` immediately. This is intentional; do not tree-shake these imports.
 - **interact() split:** `interact()` lives in `src/ModelTesterAppView.interact.ts`, not `ModelTesterAppView.tsx`, so the component file exports only React components and remains Fast Refresh-compatible. The view bundle re-exports it via `model-tester-view-bundle.ts`.
-- **Spatial view:** `components/ModelTesterSpatialView.tsx` is a presentational component (pure snapshot + callback in, spatial primitives out) shipped for the GUI modality only.
+- **Spatial view:** `components/ModelTesterSpatialView.tsx` is a presentational component retained for future modality adapters (pure snapshot + callback in, spatial primitives out).
 - See the root `AGENTS.md` for repo-wide conventions (logger-only, ESM, architecture rules, naming).
 
 <!-- BEGIN: evidence-and-e2e-mandate (managed; canonical standard = repo-root AGENTS.md) -->

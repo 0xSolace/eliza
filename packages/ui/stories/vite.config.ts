@@ -23,7 +23,6 @@ const nodeBuiltinsShim = path.resolve(
   here,
   "src/node-builtins-browser-shim.ts",
 );
-const tuiBrowserShim = path.resolve(here, "src/elizaos-tui-browser-shim.ts");
 const loggerSrc = path.resolve(repoRoot, "packages/logger/src/index.ts");
 
 // Brand components (ElizaLogo, lockups, …) reference assets under `/brand/*`
@@ -80,19 +79,16 @@ export default defineConfig({
     alias: [
       { find: "@ui-src", replacement: uiSrc },
       // Resolve @elizaos/ui from THIS package's source (not its built dist) so
-      // every stories page and the modules it mounts share ONE spatial renderer
-      // instance; with a dist resolution they'd hit two different renderer
-      // modules and registry-backed pages would come up empty.
+      // the registered-views page and the plugin register modules share ONE
+      // spatial renderer instance — the source one that captures view thunks
+      // (`getSpatialViewThunk`). With a dist resolution they'd hit two different
+      // renderer modules and the thunk registry would come up empty.
       { find: /^@elizaos\/ui$/, replacement: path.resolve(uiSrc, "index.ts") },
       { find: /^@elizaos\/ui\/(.+)$/, replacement: `${uiSrc}/$1` },
       { find: "@elizaos/core", replacement: coreBrowserShim },
       { find: "@elizaos/logger", replacement: loggerSrc },
       { find: /^@elizaos\/shared$/, replacement: sharedSrc },
       { find: /^@elizaos\/shared\/(.+)$/, replacement: `${sharedSrc}/$1` },
-      // @elizaos/ui/spatial/tui → @elizaos/tui; the full tui entry pulls a
-      // node:child_process access that throws in the browser. Shim it to the
-      // pure registry + width utils so browser-mounted spatial pages render.
-      { find: "@elizaos/tui", replacement: tuiBrowserShim },
       { find: "fast-redact", replacement: fastRedactShim },
       // The shared barrel re-exports a node-only package-root resolver
       // (utils/eliza-root.ts). The catalog never calls it, but its top-level

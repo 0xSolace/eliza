@@ -121,11 +121,11 @@ export const DIRECT_ROUTE_CASES: readonly DirectRouteCase[] = [
     selector: '[data-testid="wallet-shell"]',
     timeoutMs: 90_000,
   },
-  // Hyperliquid/Polymarket (wallet sub-views) and Shopify (connector surface)
-  // consolidated onto single adaptive spatial views — the rich-DOM app shells
-  // that carried `data-testid="<id>-shell"` and literal title text were
-  // deleted (PolymarketAppView, ShopifyAppView). The one element each view
-  // wrapper still renders unconditionally on mount is its agent toolbar
+  // Hyperliquid/Polymarket wallet sub-views consolidated onto single adaptive
+  // spatial views — the rich-DOM app shells that carried
+  // `data-testid="<id>-shell"` and literal title text were deleted
+  // (PolymarketAppView). The one element each view wrapper still renders
+  // unconditionally on mount is its agent toolbar
   // (`aria-label="<Name> controls"`), so that is the readiness anchor proving
   // the real view bundle mounted (and not the Launcher fallback).
   {
@@ -180,34 +180,10 @@ export const DIRECT_ROUTE_CASES: readonly DirectRouteCase[] = [
     timeoutMs: 90_000,
   },
   {
-    // Facewear GUI config now lives in Settings -> Wearables, not a launcher
-    // app window. In the browser app-shell matrix the TUI-only path resolves to
-    // the view catalog fallback; terminal command coverage lives in the TUI
-    // view tests, not this GUI click-safe route pass.
-    name: "facewear tui app shell page",
-    path: "/apps/facewear/tui",
-    readyChecks: [{ text: "views" }, { text: "tui ready" }],
-    timeoutMs: 30_000,
-  },
-  {
-    // Smartglasses GUI config now lives in Settings -> Wearables; the browser
-    // app-shell matrix sees the same view catalog fallback as Facewear.
-    name: "smartglasses tui app shell page",
-    path: "/apps/smartglasses/tui",
-    readyChecks: [{ text: "views" }, { text: "tui ready" }],
-    timeoutMs: 30_000,
-  },
-  {
     name: "orchestrator app shell page",
     path: "/orchestrator",
     selector: '[data-testid="orchestrator-workbench"]',
     timeoutMs: 90_000,
-  },
-  {
-    name: "orchestrator tui app shell page",
-    path: "/orchestrator/tui",
-    readyChecks: [{ text: "views" }, { text: "tui ready" }],
-    timeoutMs: 30_000,
   },
   {
     // Pinned home tile → Settings.

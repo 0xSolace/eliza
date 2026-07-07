@@ -1,8 +1,7 @@
 /**
  * Guards the appPhonePlugin manifest shape: no actions (VOICE_CALL stays
  * host-adapted by personal-assistant), exactly the phoneCallLog provider, and
- * one phone view advertising the "gui" modality (XR/TUI surfaces removed in
- * #15269/#15291).
+ * one shipped phone GUI view.
  */
 
 import { describe, expect, it } from "vitest";
@@ -15,14 +14,13 @@ describe("appPhonePlugin manifest", () => {
     expect("voiceCallAction" in phoneExports).toBe(false);
   });
 
-  it("registers ONE gui-modality phone view + the read-only call-log provider", () => {
+  it("registers one phone GUI view and the read-only call-log provider", () => {
     expect(appPhonePlugin.providers?.map((provider) => provider.name)).toEqual([
       "phoneCallLog",
     ]);
 
-    // Single source of truth: one declaration for the unified PhoneView. #15269
-    // /#15291 removed the shipped XR/TUI view surfaces (preserving viewType), so
-    // the view now advertises the "gui" modality only.
+    // Single source of truth: one GUI declaration drawn from PhoneView. The
+    // modality enum remains available for future alternate view entries.
     const views = appPhonePlugin.views ?? [];
     expect(views).toHaveLength(1);
     const [view] = views;

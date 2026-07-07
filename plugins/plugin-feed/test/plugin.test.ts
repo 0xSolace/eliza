@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 // `src/index.ts` is a plain view-manifest object that re-exports the pure
-// proxy/data layers (`./routes`, `./ui/feed-data`). Stub the (heavy) app-core
-// UI registries those paths can transitively reach so this stays a boot-free
+// proxy/data layers (`./routes`, `./ui/feed-data`). Stub the (heavy) app-core UI
+// registries those paths can transitively reach so this stays a boot-free
 // assertion on the view declaration shape.
 vi.mock("@elizaos/app-core/ui-compat", () => ({
   client: {},
@@ -24,9 +24,8 @@ vi.mock("@elizaos/ui/agent-surface", () => ({
 import feedPlugin from "../src/index.ts";
 
 describe("feedPlugin manifest", () => {
-  it("registers ONE GUI feed view from the unified FeedView", () => {
-    // Single source of truth: one GUI declaration, the unified FeedView
-    // spatial component — no per-viewType duplicates.
+  it("registers one shipped GUI feed view", () => {
+    // Single source of truth: one declaration, no per-viewType duplicates.
     const views = feedPlugin.views ?? [];
     expect(views).toHaveLength(1);
     const [view] = views;
@@ -47,7 +46,7 @@ describe("feedPlugin manifest", () => {
     expect(view.viewKind).toBe("preview");
   });
 
-  it("carries the four terminal capability descriptors on the single declaration", () => {
+  it("carries the four view capability descriptors on the single declaration", () => {
     const [view] = feedPlugin.views ?? [];
     const capabilityIds = (view?.capabilities ?? []).map((cap) => cap.id);
     expect(capabilityIds).toEqual([

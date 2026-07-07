@@ -755,7 +755,7 @@ export async function createScenarioRuntime(
   // complete so the firstRun provider stays silent and action-routing is
   // order-independent. Without this, scenarios run in --lane discovery order
   // can see a "first-run pending" planner context the strict fixtures do not
-  // cover (e.g. deterministic-xr-view-actions when it runs last).
+  // cover when a later scenario is routed last.
   await runtime.setCache("eliza:lifeops:first-run:v1", {
     status: "complete",
     partialAnswers: {},

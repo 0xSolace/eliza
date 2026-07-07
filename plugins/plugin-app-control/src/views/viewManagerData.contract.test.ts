@@ -38,13 +38,13 @@ const fullEntry = {
 	desktopTabEnabled: true,
 };
 
-const tuiEntry = {
-	id: "messages.terminal",
-	label: "Messages",
+const futureEntry = {
+	id: "future.console",
+	label: "Future Console",
 	viewType: "tui",
-	path: "/messages/tui",
+	path: "/future-console",
 	available: false,
-	pluginName: "@elizaos/plugin-messages",
+	pluginName: "@elizaos/plugin-future-surface",
 };
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -66,14 +66,14 @@ describe("fetchViewEntries contract (/api/views ViewRegistryEntry shape)", () =>
 			"fetch",
 			vi.fn(async (input: RequestInfo | URL) => {
 				expect(String(input)).toBe("/api/views");
-				return jsonResponse({ views: [fullEntry, tuiEntry] });
+				return jsonResponse({ views: [fullEntry, futureEntry] });
 			}),
 		);
 
 		const entries = await fetchViewEntries();
 		expect(entries).toHaveLength(2);
 
-		const [wallet, messages] = entries;
+		const [wallet, future] = entries;
 		// Fields the ViewManager UI actually renders survive the parse intact.
 		expect(wallet.id).toBe("wallet.inventory");
 		expect(wallet.label).toBe("Wallet");
@@ -84,22 +84,22 @@ describe("fetchViewEntries contract (/api/views ViewRegistryEntry shape)", () =>
 		expect(wallet.heroImageUrl).toBe("/api/views/wallet.inventory/hero");
 		expect(wallet.description).toBe("Inspect balances and recent transactions");
 
-		expect(messages.id).toBe("messages.terminal");
-		expect(messages.viewType).toBe("tui");
-		expect(messages.available).toBe(false);
-		expect(messages.pluginName).toBe("@elizaos/plugin-messages");
+		expect(future.id).toBe("future.console");
+		expect(future.viewType).toBe("tui");
+		expect(future.available).toBe(false);
+		expect(future.pluginName).toBe("@elizaos/plugin-future-surface");
 	});
 
-	it("forwards ?viewType=tui to the endpoint when scoped", async () => {
+	it("forwards a non-GUI viewType to the endpoint when scoped", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 			expect(String(input)).toBe("/api/views?viewType=tui");
-			return jsonResponse({ views: [tuiEntry] });
+			return jsonResponse({ views: [futureEntry] });
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		const entries = await fetchViewEntries("tui");
 		expect(entries).toHaveLength(1);
-		expect(entries[0].id).toBe("messages.terminal");
+		expect(entries[0].id).toBe("future.console");
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
@@ -143,37 +143,46 @@ function entry(id: string, patch: Partial<ViewEntry> = {}): ViewEntry {
 }
 
 describe("collapseViewEntries", () => {
-	it("collapses same-id gui/xr/tui declarations into one entry with the surface union", () => {
+	it("collapses same-id future-modality declarations into one entry with the surface union", () => {
 		const collapsed = collapseViewEntries([
-			entry("phone", { label: "Phone", viewType: "gui" }),
-			entry("phone", { label: "Phone XR", viewType: "xr" }),
-			entry("phone", { label: "Phone TUI", viewType: "tui" }),
+			entry("future-surface", { label: "Future Surface", viewType: "gui" }),
+			entry("future-surface", {
+				label: "Future Surface Spatial",
+				viewType: "xr",
+			}),
+			entry("future-surface", {
+				label: "Future Surface Terminal",
+				viewType: "tui",
+			}),
 		]);
 		expect(collapsed).toHaveLength(1);
-		expect(collapsed[0].id).toBe("phone");
+		expect(collapsed[0].id).toBe("future-surface");
 		// gui base wins the label (clean, no surface suffix).
-		expect(collapsed[0].label).toBe("Phone");
+		expect(collapsed[0].label).toBe("Future Surface");
 		// Surfaces unioned and ordered gui · xr · tui.
 		expect(collapsed[0].modalities).toEqual(["gui", "xr", "tui"]);
 	});
 
 	it("prefers the gui declaration as the base even when it arrives after a non-gui one", () => {
 		const collapsed = collapseViewEntries([
-			entry("phone", { label: "Phone TUI", viewType: "tui" }),
-			entry("phone", { label: "Phone", viewType: "gui" }),
+			entry("future-surface", {
+				label: "Future Surface Terminal",
+				viewType: "tui",
+			}),
+			entry("future-surface", { label: "Future Surface", viewType: "gui" }),
 		]);
 		expect(collapsed).toHaveLength(1);
-		expect(collapsed[0].label).toBe("Phone");
+		expect(collapsed[0].label).toBe("Future Surface");
 		expect(collapsed[0].modalities).toEqual(["gui", "tui"]);
 	});
 
 	it("preserves first-seen order and leaves distinct ids untouched (one modality each)", () => {
 		const collapsed = collapseViewEntries([
 			entry("wallet", { viewType: "gui" }),
-			entry("messages", { viewType: "tui" }),
+			entry("future-surface", { viewType: "tui" }),
 			entry("wallet", { viewType: "tui" }),
 		]);
-		expect(collapsed.map((e) => e.id)).toEqual(["wallet", "messages"]);
+		expect(collapsed.map((e) => e.id)).toEqual(["wallet", "future-surface"]);
 		expect(collapsed[0].modalities).toEqual(["gui", "tui"]);
 		expect(collapsed[1].modalities).toEqual(["tui"]);
 	});
@@ -183,7 +192,7 @@ describe("collapseViewEntries", () => {
 		// collapse contract must keep honoring multi-modal declarations so
 		// reintroduction stays a manifest edit, not a schema change.
 		const collapsed = collapseViewEntries([
-			entry("phone", { modalities: ["gui", "xr", "tui"] }),
+			entry("future-surface", { modalities: ["gui", "xr", "tui"] }),
 		]);
 		expect(collapsed).toHaveLength(1);
 		expect(collapsed[0].modalities).toEqual(["gui", "xr", "tui"]);

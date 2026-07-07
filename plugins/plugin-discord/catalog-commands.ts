@@ -26,7 +26,7 @@
  *                  pipeline and reply with the agent's answer.
  *   - `navigate` → reply (ephemeral) describing the destination, resolving the
  *                  `/settings <section>` argument when present.
- *   - `client`   → GUI/TUI-only behaviors are filtered out of the discord
+ *   - `client`   → local-client behaviors are filtered out of the discord
  *                  surface upstream; handled defensively with a short reply.
  *
  * Auth gating: `requiresAuth` / `requiresElevated` commands are gated at the
@@ -350,7 +350,7 @@ async function dispatchClientCommand(
 	interaction: ChatInputCommandInteraction,
 	command: ConnectorCommand,
 ): Promise<void> {
-	// GUI/TUI-only behaviors are filtered out of the discord surface, so this
+	// Local-client behaviors are filtered out of the discord surface, so this
 	// branch should not be reached. Handle defensively rather than crash.
 	await safeInteractionCall(() =>
 		interaction.reply({

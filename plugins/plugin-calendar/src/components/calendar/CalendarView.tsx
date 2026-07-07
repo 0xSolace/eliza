@@ -4,7 +4,9 @@
  * It owns the live calendar feed (via {@link useCalendarWeek}: the event list,
  * the day/week/month view mode, prev/today/next nav, and the loading/error
  * state), derives a presentational agenda from it, and renders the one
- * {@link CalendarSpatialView} inside a {@link SpatialSurface}.
+ * {@link CalendarSpatialView} inside a {@link SpatialSurface}. The browser DOM
+ * surface ships today, while the retained modality contract stays available for
+ * future adapters.
  *
  * Selecting an event routes a chat-about-event notice through the shared
  * `setActionNotice` affordance — the same honest behavior the previous

@@ -1,4 +1,4 @@
-// Contract test: the GUI/TUI views render whatever GET /api/apps/screenshare/
+// Contract test: the GUI/GUI views render whatever GET /api/apps/screenshare/
 // capabilities returns, and that route returns getScreenshareCapabilities() ===
 // detectDesktopControlCapabilities() from @elizaos/plugin-computeruse. This test
 // runs the REAL capability detector and asserts:
@@ -92,8 +92,8 @@ describe("screenshare capabilities contract", () => {
       expect(titles.some((title) => title.startsWith(`${key}:`))).toBe(true);
     }
 
-    // Mirror the TUI viewState capability map: name -> available bool, and the
-    // "N live" count the TUI capabilities section shows.
+    // Mirror the GUI viewState capability map: name -> available bool, and the
+    // "N live" count the GUI capabilities section shows.
     const map = Object.fromEntries(
       Object.entries(response.capabilities).map(([name, capability]) => [
         name,

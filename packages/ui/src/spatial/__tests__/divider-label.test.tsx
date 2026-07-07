@@ -1,6 +1,6 @@
 /**
- * Regression guard for the labeled Divider affordance across GUI + TUI renders.
- * Static-markup + line renders, no live terminal.
+ * Regression guard for the labeled Divider affordance in the DOM renderer.
+ * Static markup only; future adapters consume the same primitive prop.
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

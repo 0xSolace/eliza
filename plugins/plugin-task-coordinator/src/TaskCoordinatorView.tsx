@@ -1,10 +1,11 @@
 /**
- * TaskCoordinatorView — the GUI data wrapper for the Task Coordinator surface.
+ * TaskCoordinatorView — GUI data wrapper for the Task Coordinator surface.
  *
  * It owns the live coding-agent task data (the searchable thread list on a 5s
  * poll, the open thread's detail, and the archive/reopen mutations) and renders
- * the one presentational {@link TaskCoordinatorSpatialView} inside a
- * {@link SpatialSurface}.
+ * the one presentational {@link TaskCoordinatorSpatialView}. The spatial
+ * vocabulary remains useful as a future-modality adapter seam while this
+ * package ships the GUI route only.
  *
  * The legacy GUI panel ({@link CodingAgentTasksPanel}) still mounts through the
  * app-core slot registry (the packages/ui Tasks page); this wrapper is the

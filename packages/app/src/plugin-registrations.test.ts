@@ -29,7 +29,6 @@ const EXPECTED_SIDE_EFFECT_PACKAGES = [
   "@elizaos/plugin-facewear",
   "@elizaos/plugin-feed",
   "@elizaos/plugin-hyperliquid",
-  "@elizaos/plugin-messages",
   "@elizaos/plugin-native-settings",
   "@elizaos/plugin-phone",
   "@elizaos/plugin-polymarket",

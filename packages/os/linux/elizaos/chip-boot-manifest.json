@@ -39,8 +39,7 @@
           "systemctl is-active elizaos-agent.service: active",
           "process.pid > 0 for /opt/elizaos/bin/elizaos",
           "GET /api/health HTTP 200 with ready full-agent response",
-          "fallback_payload_used=false",
-          "elizaos-tui-ready"
+          "fallback_payload_used=false"
         ],
         "notes": "Must capture elizaos-agent.service active state and localhost health/API probe after generated AP boot."
       }

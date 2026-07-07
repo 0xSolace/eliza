@@ -54,14 +54,6 @@ export default defineConfig({
         find: /^@elizaos\/ui\/(.+)$/,
         replacement: path.join(monorepoRoot, "packages/ui/src/$1"),
       },
-      {
-        find: /^@elizaos\/tui$/,
-        replacement: path.join(monorepoRoot, "packages/tui/src/index.ts"),
-      },
-      {
-        find: /^@elizaos\/tui\/(.+)$/,
-        replacement: path.join(monorepoRoot, "packages/tui/src/$1"),
-      },
       // Explicitly pin react/react-dom to the workspace copies in the bun-managed
       // flat hoisted structure. Without this, bun's module resolver can walk up
       // to parent directories and pick up a different react version (e.g., a

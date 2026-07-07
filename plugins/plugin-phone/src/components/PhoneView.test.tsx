@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 
-// Drives the unified PhoneView (the single GUI/XR data wrapper) through the
-// rendered DOM: the same component the bundle exports for both the "gui" and
-// "xr" modalities. Asserts the dialer keypad, place-call, backspace, leading-+,
+// Drives PhoneView through the rendered DOM for the shipped GUI surface.
+// Asserts the dialer keypad, place-call, backspace, leading-+,
 // the recent-call rows, the Contacts link, and the error path all reach the
-// native bridge with the exact normalized arguments — functional parity with
-// the retired hand-written PhonePluginView/PhoneTuiView surfaces.
+// native bridge with the exact normalized arguments.
 
 import { NAVIGATE_VIEW_EVENT } from "@elizaos/ui/events";
 import {
@@ -102,7 +100,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("PhoneView — unified GUI/XR dialer", () => {
+describe("PhoneView — unified GUI dialer", () => {
   it("prefills the dialer from a generic navigation payload", async () => {
     __setNavigateViewPayloadForTests("phone", { number: " +1 (555) 0100 " });
 

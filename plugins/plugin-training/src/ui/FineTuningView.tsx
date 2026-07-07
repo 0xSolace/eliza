@@ -1,5 +1,5 @@
 /**
- * FineTuningView — the fine-tuning dashboard's rich GUI/XR React component: the
+ * FineTuningView — the fine-tuning dashboard's rich GUI React component: the
  * status, trajectories, datasets, backends, jobs, models, benchmark, and
  * analysis-coverage panels wired to the `/api/training/*` endpoints through the
  * shared UI client. Pure formatting/parsing helpers live in
@@ -68,10 +68,6 @@ import {
   ELIZA_ONE_BENCHMARK_TIERS,
 } from "../core/eliza1-benchmark-recipe.js";
 import { toLocalFileUrl } from "../util/local-file-url.js";
-import {
-  type FineTuningSnapshot,
-  FineTuningSpatialView,
-} from "./FineTuningSpatialView";
 import { asArray, parseCollectionTierList } from "./FineTuningView.helpers";
 import { interact } from "./FineTuningView.interact";
 import {
@@ -835,30 +831,14 @@ function TrainingActionButton({
   );
 }
 
-const EMPTY_FINE_TUNING_SNAPSHOT: FineTuningSnapshot = {
-  runtimeAvailable: false,
-  runningJobs: 0,
-  queuedJobs: 0,
-  completedJobs: 0,
-  failedJobs: 0,
-  jobs: [],
-  models: 0,
-  datasets: 0,
-  trajectoryCount: 0,
-};
-
 /**
- * FineTuningView — the GUI componentExport.
+ * FineTuningView is the single shipped GUI componentExport.
  *
- * Renders the full rich {@link FineTuningDashboard} (its real DOM: forms,
- * panels, the live-event stream) through the spatial `Escape` hatch, with the
- * presentational {@link FineTuningSpatialView} summary as the escape fallback.
+ * The rich {@link FineTuningDashboard} is the real DOM experience.
  */
 export function FineTuningView(props: { contentHeader?: ReactNode } = {}) {
   return (
-    <Escape
-      tui={<FineTuningSpatialView snapshot={EMPTY_FINE_TUNING_SNAPSHOT} />}
-    >
+    <Escape>
       <FineTuningDashboard {...props} />
     </Escape>
   );
@@ -1344,42 +1324,30 @@ export function FineTuningDashboard({
       setReadinessActionRunning(checkId);
       try {
         const result = await interact(action.capability, action.params);
-        if (action.capability === "terminal-training-build-analysis-index") {
+        if (action.capability === "training-build-analysis-index") {
           setAnalysisIndex(result as TrainingAnalysisIndexResponse);
-        } else if (
-          action.capability === "terminal-training-build-readiness-report"
-        ) {
+        } else if (action.capability === "training-build-readiness-report") {
           setReadinessReport(result as TrainingReadinessReportResponse);
-        } else if (
-          action.capability === "terminal-training-ingest-hf-dataset"
-        ) {
+        } else if (action.capability === "training-ingest-hf-dataset") {
           setHfIngestResult(result as HuggingFaceDatasetIngestResponse);
-        } else if (action.capability === "terminal-training-feed-generate") {
+        } else if (action.capability === "training-feed-generate") {
           setFeedGenerationResult(result as RunFeedGenerationResponse);
-        } else if (
-          action.capability === "terminal-training-run-eval-comparison"
-        ) {
+        } else if (action.capability === "training-run-eval-comparison") {
           setEvalComparisonResult(result as RunLocalEvalComparisonResponse);
-        } else if (action.capability === "terminal-training-run-scenarios") {
+        } else if (action.capability === "training-run-scenarios") {
           setScenarioResult(result as RunScenarioResponse);
-        } else if (
-          action.capability === "terminal-training-run-benchmark-vs-cerebras"
-        ) {
+        } else if (action.capability === "training-run-benchmark-vs-cerebras") {
           setBenchmarkResult(result as RunBenchmarkVsCerebrasResponse);
-        } else if (
-          action.capability === "terminal-training-stage-eliza1-bundle"
-        ) {
+        } else if (action.capability === "training-stage-eliza1-bundle") {
           setBundleStageResult(result as StageEliza1BundleResponse);
-        } else if (
-          action.capability === "terminal-training-run-action-benchmark"
-        ) {
+        } else if (action.capability === "training-run-action-benchmark") {
           setActionBenchmarkResult(result as RunActionBenchmarkResponse);
-        } else if (action.capability === "terminal-training-run-collection") {
+        } else if (action.capability === "training-run-collection") {
           setCollectionResult(result as RunTrainingCollectionResponse);
           await loadCollectionHistory();
         }
 
-        if (action.capability !== "terminal-training-build-readiness-report") {
+        if (action.capability !== "training-build-readiness-report") {
           const refreshed = await client.buildTrainingReadinessReport();
           setReadinessReport(refreshed);
         }

@@ -113,29 +113,16 @@ describe("useAvailableViews", () => {
     expect(fetchWithCsrf).not.toHaveBeenCalled();
   });
 
-  it("fetches GUI, TUI, and XR views with the platform header and merges by view type/id", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [
-            view("wallet", { viewType: "gui", label: "Wallet GUI" }),
-            view("shared", { label: "Shared GUI" }),
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [
-            view("wallet", { viewType: "tui", label: "Wallet TUI" }),
-            view("not-tui", { viewType: "gui", label: "Filtered GUI" }),
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [view("spatial-room", { viewType: "xr", label: "Spatial" })],
-        }),
-      );
+  it("fetches shipped registry views with the platform header and merges by view type/id", async () => {
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [
+          view("wallet", { viewType: "gui", label: "Wallet GUI" }),
+          view("shared", { label: "Shared GUI" }),
+          view("spatial-room", { viewType: "xr", label: "Spatial" }),
+        ],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
 
@@ -147,37 +134,25 @@ describe("useAvailableViews", () => {
       result.current.views.map(
         (item) => `${item.viewType ?? "gui"}:${item.id}`,
       ),
-    ).toEqual(["gui:wallet", "gui:shared", "tui:wallet", "xr:spatial-room"]);
+    ).toEqual(["gui:wallet", "gui:shared", "xr:spatial-room"]);
     expect(fetchWithCsrf).toHaveBeenNthCalledWith(1, "/api/views", {
       headers: { "X-Eliza-Platform": "desktop" },
     });
-    expect(fetchWithCsrf).toHaveBeenNthCalledWith(
-      2,
-      "/api/views?viewType=tui",
-      {
-        headers: { "X-Eliza-Platform": "desktop" },
-      },
-    );
-    expect(fetchWithCsrf).toHaveBeenNthCalledWith(3, "/api/views?viewType=xr", {
-      headers: { "X-Eliza-Platform": "desktop" },
-    });
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(1);
   });
 
   it("strips views declaring `nativeOs: true` off the AOSP fork", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [
-            view("phone", { nativeOs: true }),
-            view("messages", { nativeOs: true }),
-            view("contacts", { nativeOs: true }),
-            view("camera", { nativeOs: true }),
-            view("wallet"),
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [
+          view("phone", { nativeOs: true }),
+          view("messages", { nativeOs: true }),
+          view("contacts", { nativeOs: true }),
+          view("camera", { nativeOs: true }),
+          view("wallet"),
+        ],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -190,18 +165,15 @@ describe("useAvailableViews", () => {
     // A view id-matching an old native surface but WITHOUT the flag survives;
     // a plugin-owned view declaring the flag is stripped. Proves the filter is
     // declaration-driven rather than a hardcoded id set.
-    fetchWithCsrf
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [
-            view("phone"),
-            view("some-plugin-native-app", { nativeOs: true }),
-            view("wallet"),
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [
+          view("phone"),
+          view("some-plugin-native-app", { nativeOs: true }),
+          view("wallet"),
+        ],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -214,14 +186,11 @@ describe("useAvailableViews", () => {
 
   it("keeps native-OS views on the AOSP fork (?android=true)", async () => {
     window.history.replaceState(null, "", "/?android=true");
-    fetchWithCsrf
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [view("phone", { nativeOs: true }), view("wallet")],
-        }),
-      )
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [view("phone", { nativeOs: true }), view("wallet")],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -233,15 +202,12 @@ describe("useAvailableViews", () => {
     window.history.replaceState(null, "", "/");
   });
 
-  it("keeps XR views returned by the explicit XR registry endpoint", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [view("spatial-room", { viewType: "xr", label: "Spatial" })],
-        }),
-      );
+  it("preserves retained modality metadata returned by the default registry", async () => {
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [view("spatial-room", { viewType: "xr", label: "Spatial" })],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -256,17 +222,14 @@ describe("useAvailableViews", () => {
   });
 
   it("dedupes repeated GUI entries and lets the later entry win", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [
-            view("duplicate", { label: "Old label" }),
-            view("duplicate", { label: "New label" }),
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+    fetchWithCsrf.mockResolvedValueOnce(
+      response(200, {
+        views: [
+          view("duplicate", { label: "Old label" }),
+          view("duplicate", { label: "New label" }),
+        ],
+      }),
+    );
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -277,10 +240,7 @@ describe("useAvailableViews", () => {
   });
 
   it("treats malformed payloads as empty lists", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(response(200, { ok: true }))
-      .mockResolvedValueOnce(response(200, { views: "not-an-array" }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+    fetchWithCsrf.mockResolvedValueOnce(response(200, { ok: true }));
 
     const { result } = renderHook(() => useAvailableViews());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -350,54 +310,12 @@ describe("useAvailableViews", () => {
     expect(result.current.error?.message).toContain("HTTP 500");
   });
 
-  it("keeps successful GUI views when the TUI endpoint fails", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(response(200, { views: [view("wallet")] }))
-      .mockResolvedValueOnce(response(500, { error: "tui down" }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
-
-    const { result } = renderHook(() => useAvailableViews());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    expect(result.current.error).toBeNull();
-    expect(result.current.views).toEqual([
-      expect.objectContaining({ id: "wallet" }),
-    ]);
-  });
-
-  it("keeps successful TUI views when the GUI endpoint fails", async () => {
-    fetchWithCsrf
-      .mockResolvedValueOnce(response(500, { error: "gui down" }))
-      .mockResolvedValueOnce(
-        response(200, {
-          views: [view("terminal", { viewType: "tui" })],
-        }),
-      )
-      .mockResolvedValueOnce(response(200, { views: [] }));
-
-    const { result } = renderHook(() => useAvailableViews());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    expect(result.current.error).toBeNull();
-    expect(result.current.views).toEqual([
-      expect.objectContaining({ id: "terminal", viewType: "tui" }),
-    ]);
-  });
-
   it("keeps the latest refresh result when an older request resolves last", async () => {
     const staleGui = deferredResponse();
-    const staleTui = deferredResponse();
-    const staleXr = deferredResponse();
     const freshGui = deferredResponse();
-    const freshTui = deferredResponse();
-    const freshXr = deferredResponse();
     fetchWithCsrf
       .mockReturnValueOnce(staleGui.promise)
-      .mockReturnValueOnce(staleTui.promise)
-      .mockReturnValueOnce(staleXr.promise)
-      .mockReturnValueOnce(freshGui.promise)
-      .mockReturnValueOnce(freshTui.promise)
-      .mockReturnValueOnce(freshXr.promise);
+      .mockReturnValueOnce(freshGui.promise);
 
     const { result } = renderHook(() => useAvailableViews());
 
@@ -405,14 +323,10 @@ describe("useAvailableViews", () => {
       result.current.refresh();
     });
     freshGui.resolve(response(200, { views: [view("fresh")] }));
-    freshTui.resolve(response(200, { views: [] }));
-    freshXr.resolve(response(200, { views: [] }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.views[0]?.id).toBe("fresh");
 
     staleGui.resolve(response(200, { views: [view("stale")] }));
-    staleTui.resolve(response(200, { views: [] }));
-    staleXr.resolve(response(200, { views: [] }));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -425,14 +339,8 @@ describe("useAvailableViews", () => {
     vi.useFakeTimers();
     fetchWithCsrf
       .mockResolvedValueOnce(response(200, { views: [view("first")] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
       .mockResolvedValueOnce(response(200, { views: [view("second")] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [view("third")] }))
-      .mockResolvedValueOnce(response(200, { views: [] }))
-      .mockResolvedValueOnce(response(200, { views: [] }));
+      .mockResolvedValueOnce(response(200, { views: [view("third")] }));
 
     const { result, unmount } = renderHook(() => useAvailableViews());
     await flushHookEffects();
@@ -449,21 +357,20 @@ describe("useAvailableViews", () => {
     });
     await flushHookEffects();
     expect(result.current.views[0]?.id).toBe("third");
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(9);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
 
     unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(9);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
   });
 
   it("runs only one background poll when the hook is mounted twice", async () => {
     vi.useFakeTimers();
     // Two simultaneous mounts (App.tsx mounts the hook in ViewRouter and again
     // in the shell). They share one cache key, so they must share one poll timer
-    // — a single 30s tick should issue exactly one GUI+TUI+XR fetch round, not
-    // two. Each round is 3 requests (gui, tui, xr).
+    // — a single 30s tick should issue exactly one registry fetch, not two.
     fetchWithCsrf.mockResolvedValue(response(200, { views: [] }));
 
     const first = renderHook(() => useAvailableViews());
@@ -471,15 +378,15 @@ describe("useAvailableViews", () => {
     await flushHookEffects();
 
     // Initial mount fetch is shared (one in-flight round across both mounts).
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     await flushHookEffects();
 
-    // One poll tick → one extra round of 3, not two rounds (6).
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(6);
+    // One poll tick -> one extra fetch, not two.
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(2);
 
     // With one mount unmounted, the surviving mount keeps the single timer alive.
     first.unmount();
@@ -487,14 +394,14 @@ describe("useAvailableViews", () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     await flushHookEffects();
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(9);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
 
     // Last unmount tears the timer down — no further polling.
     second.unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(9);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
   });
 
   it("pauses background polling while hidden and refreshes when visible again", async () => {
@@ -507,13 +414,13 @@ describe("useAvailableViews", () => {
 
     const { unmount } = renderHook(() => useAvailableViews());
     await flushHookEffects();
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     await flushHookEffects();
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(3);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(1);
 
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -521,7 +428,7 @@ describe("useAvailableViews", () => {
     });
     document.dispatchEvent(new Event("visibilitychange"));
     await flushHookEffects();
-    expect(fetchWithCsrf).toHaveBeenCalledTimes(6);
+    expect(fetchWithCsrf).toHaveBeenCalledTimes(2);
 
     unmount();
   });

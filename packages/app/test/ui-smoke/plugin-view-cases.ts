@@ -20,12 +20,12 @@ type ViewCaseTuple = readonly [
 
 export const VIEW_CASES: ViewCase[] = (
   [
-    // Shipped plugin views are GUI-only (#15269). The ViewCase type keeps
-    // "tui" as a valid value so the reintroduction path stays typed, but no
-    // shipped case declares it.
+    // Shipped plugin views are GUI-only. The shared viewType contract still
+    // accepts future modalities, but this smoke matrix tracks what the app can
+    // render today.
     ["birdclaw", "gui", "/birdclaw"],
-    ["contacts", "gui", "/contacts"],
     ["cloud", "gui", "/cloud"],
+    ["contacts", "gui", "/contacts"],
     ["hyperliquid", "gui", "/hyperliquid"],
     ["focus", "gui", "/focus"],
     ["calendar", "gui", "/calendar"],
@@ -48,13 +48,9 @@ export const VIEW_CASES: ViewCase[] = (
     ["screenshare", "gui", "/screenshare"],
     ["task-coordinator", "gui", "/task-coordinator"],
     ["orchestrator", "gui", "/orchestrator"],
-    // The coding cockpit is a developer-only, GUI-only plugin view.
     ["cockpit", "gui", "/cockpit"],
     ["trajectory-logger", "gui", "/trajectory-logger"],
     ["training", "gui", "/apps/fine-tuning"],
-    // Facewear + smartglasses GUI config lives under Settings -> Wearables;
-    // their former TUI-only surfaces were removed with the shipped TUI
-    // inventory (#15269).
   ] satisfies ViewCaseTuple[]
 ).map(([id, viewType, viewPath, options]) => ({
   id,

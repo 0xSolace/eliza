@@ -1,5 +1,5 @@
 /**
- * Facewear settings registration adds the wearables section to GUI hosts.
+ * Facewear settings registration adds the smartglasses section to GUI hosts.
  */
 import { registerSettingsSection } from "@elizaos/ui/components/settings/settings-section-registry";
 import { Glasses } from "lucide-react";

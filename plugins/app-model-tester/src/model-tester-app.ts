@@ -1,9 +1,8 @@
 /**
  * Registers the Model Tester with the app-shell and overlay-app registries at
- * import time: the overlay app (`@elizaos/app-model-tester`) and the `/model-tester`
- * shell page, both lazy-loading `ModelTesterAppView`. In a terminal host (no DOM) it
- * also registers the unified spatial terminal view. Importing this module for its
- * side effects is intentional; do not tree-shake it.
+ * import time: the overlay app (`@elizaos/app-model-tester`) and the
+ * `/model-tester` shell page, both lazy-loading `ModelTesterAppView`. Importing
+ * this module for its side effects is intentional; do not tree-shake it.
  */
 
 import { registerAppShellPage } from "@elizaos/ui/app-shell-registry";

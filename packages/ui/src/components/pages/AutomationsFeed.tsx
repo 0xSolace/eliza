@@ -24,6 +24,7 @@ import {
   Layers,
   Play,
   PlayCircle,
+  Plus,
   Workflow,
 } from "lucide-react";
 import {
@@ -389,6 +390,16 @@ export function AutomationsFeed({
     ],
     [allRows, filterCounts.active, t],
   );
+  const newAutomationAction = useAgentElement<HTMLButtonElement>({
+    id: "action-new",
+    role: "button",
+    label: t("automationsfeed.newAutomation", {
+      defaultValue: "New automation",
+    }),
+    group: "automations-actions",
+    description: "Open the prompt automation editor",
+    onActivate: () => setEditor({ kind: "task", taskId: null }),
+  });
 
   // Editor mode
   if (editor.kind === "scheduled") {
@@ -462,6 +473,22 @@ export function AutomationsFeed({
       {/* Uniform view header (#13451/#13597): bare-icon back, centered title. */}
       <ViewHeader
         title={t("automationsfeed.title", { defaultValue: "Automations" })}
+        right={
+          <Button
+            ref={newAutomationAction.ref}
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("automationsfeed.addAutomation", {
+              defaultValue: "Add automation",
+            })}
+            className="h-9 w-9 rounded-md text-muted-strong hover:bg-bg-hover hover:text-txt"
+            onClick={() => setEditor({ kind: "task", taskId: null })}
+            {...newAutomationAction.agentProps}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+          </Button>
+        }
       />
       {/* Flat — no card/border. The shell owns the page's horizontal padding. */}
       <div

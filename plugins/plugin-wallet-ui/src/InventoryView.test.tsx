@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 //
-// Drives the unified InventoryView wrapper through the rendered DOM — the single
-// component the bundle exports for the "gui"/"xr"/"tui" modalities. Its
-// `@elizaos/ui/spatial` `Escape` hatch renders its real-DOM children (the rich
-// InventoryAppView dashboard) on the GUI/XR surface and only falls back to the
-// spatial `InventorySpatialView` in TUI. This file asserts the GUI/XR Escape
-// contract: the rich dashboard mounts and the degraded spatial buttons stay out
-// of the DOM. The rich dashboard's own behaviour is covered by
-// InventoryAppView.gui.test.tsx; the spatial fallback by InventorySpatialView.test.tsx.
+// Drives InventoryView through the rendered DOM for the shipped GUI surface. Its
+// `@elizaos/ui/spatial` `Escape` hatch renders the real-DOM InventoryAppView
+// dashboard. This file asserts that wrapper contract; the rich dashboard's own
+// behaviour is covered by InventoryAppView.gui.test.tsx.
 
 import { cleanup, render, screen } from "@testing-library/react";
 import React from "react";
@@ -30,7 +26,7 @@ vi.mock("@elizaos/ui", () => ({
 }));
 
 // The rich dashboard is exhaustively covered by InventoryAppView.gui.test.tsx;
-// here we only assert the wrapper mounts it as the GUI/XR Escape surface, so a
+// here we only assert the wrapper mounts it as the GUI Escape surface, so a
 // lightweight marker stub keeps this test focused on the consolidation contract.
 vi.mock("./components/InventoryAppView.tsx", () => ({
   InventoryAppView: () =>
@@ -128,17 +124,15 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe("InventoryView — unified Escape wrapper", () => {
-  it("renders the rich dashboard as the GUI/XR Escape surface", () => {
+describe("InventoryView — GUI Escape wrapper", () => {
+  it("renders the rich dashboard as the GUI Escape surface", () => {
     render(React.createElement(InventoryView));
-    // Escape renders its real-DOM children in GUI/XR — the full dashboard.
+    // Escape renders its real-DOM children in GUI — the full dashboard.
     expect(screen.getByTestId("wallet-rich-dashboard")).toBeTruthy();
   });
 
-  it("keeps the spatial fallback buttons out of the GUI DOM", () => {
+  it("does not mount removed compatibility controls", () => {
     render(React.createElement(InventoryView));
-    // The degraded InventorySpatialView is the Escape `tui` prop — never rendered
-    // on the GUI surface — so its agent buttons must be absent here.
     expect(document.querySelector('[data-agent-id="copy-evm"]')).toBeNull();
     expect(document.querySelector('[data-agent-id="refresh"]')).toBeNull();
   });

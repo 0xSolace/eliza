@@ -938,8 +938,8 @@
     ]
   },
   {
-    "domain": "Orchestrator/task UI surfaces (plugins/plugin-task-coordinator) — OrchestratorWorkbench, CodingAgentTasksPanel, PTY consoles, orchestrator-stream/diff/plan/reasoning/markdown chat rendering, TaskCardList, OrchestratorSpatialView, CodingAgentSettingsSection",
-    "summary": "plugin-task-coordinator is the display/control layer for coding-agent task threads and PTY sessions; it owns zero server runtime (all state lives in @elizaos/plugin-agent-orchestrator) and renders entirely as views + slot fills. The chat/coding UX is mature and well-built: OrchestratorWorkbench.tsx (3925 lines) renders a Claude-Code/Codex-style flowing conversation (user bubbles, flat agent markdown, structured tool-call cards with diffs/output, collapsible reasoning, plan/acceptance/usage inspector, recovery actions like retry/rerun/restart-with-edited-plan), driven by SSE streaming + debounced tail-refetch + active-poll. CodingAgentTasksPanel is the simpler task-coordinator landing; PtyConsoleBase/Drawer/SidePanel/TerminalPane render live PTY output (raw <pre> buffer cap 200k, plus an xterm.js pane). The conversation-builder transform (orchestrator-stream.helpers) is heavily unit-tested (118 unit tests pass overall), and OrchestratorSpatialView has a one-source/three-modality (TUI/GUI/XR) test. HOWEVER: the live e2e (test/orchestrator-workbench.live.e2e.test.ts) is STALE — it asserts test IDs that no longer exist in source (orchestrator-task-item, orchestrator-composer, orchestrator-new-task, orchestrator-create-dialog), so it is a no-op even when a stack is up. The screenshot harness (run-dashboard-shot.mjs) only shoots static TaskCard fixtures (not the real workbench/PTY/settings), its output is gitignored, and it is wired into no package.json script. The largest behavioral DOM test (TaskInspector terminal-task guards) currently FAILS TO LOAD (broken @elizaos/shared/voice-eot resolution), so `bun run test` exits non-zero and that suite does not run. No committed screenshot/video/trajectory evidence exists for this domain.",
+    "domain": "Orchestrator/task UI surfaces (plugins/plugin-task-coordinator) — OrchestratorWorkbench, CodingAgentTasksPanel, PTY consoles, orchestrator-stream/diff/plan/reasoning/markdown chat rendering, TaskCardList, CodingAgentSettingsSection",
+    "summary": "plugin-task-coordinator is the display/control layer for coding-agent task threads and PTY sessions; it owns zero server runtime (all state lives in @elizaos/plugin-agent-orchestrator) and renders entirely as views + slot fills. The chat/coding UX is mature and well-built: OrchestratorWorkbench.tsx (3925 lines) renders a Claude-Code/Codex-style flowing conversation (user bubbles, flat agent markdown, structured tool-call cards with diffs/output, collapsible reasoning, plan/acceptance/usage inspector, recovery actions like retry/rerun/restart-with-edited-plan), driven by SSE streaming + debounced tail-refetch + active-poll. CodingAgentTasksPanel is the simpler task-coordinator landing; PtyConsoleBase/Drawer/SidePanel/TerminalPane render live PTY output (raw <pre> buffer cap 200k, plus an xterm.js pane). The conversation-builder transform (orchestrator-stream.helpers) is heavily unit-tested (118 unit tests pass overall). HOWEVER: the live e2e (test/orchestrator-workbench.live.e2e.test.ts) is STALE — it asserts test IDs that no longer exist in source (orchestrator-task-item, orchestrator-composer, orchestrator-new-task, orchestrator-create-dialog), so it is a no-op even when a stack is up. The screenshot harness (run-dashboard-shot.mjs) only shoots static TaskCard fixtures (not the real workbench/PTY/settings), its output is gitignored, and it is wired into no package.json script. The largest behavioral DOM test (TaskInspector terminal-task guards) currently FAILS TO LOAD (broken @elizaos/shared/voice-eot resolution), so `bun run test` exits non-zero and that suite does not run. No committed screenshot/video/trajectory evidence exists for this domain.",
     "maturity": "partial",
     "existing": [
       {
@@ -963,7 +963,7 @@
       {
         "component": "CodingAgentTasksPanel — task-coordinator landing + slot fill",
         "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/CodingAgentTasksPanel.tsx",
-        "whatItDoes": "Task-thread list (cards) -> full-pane detail (sessions, pending decisions, artifacts, coordinator decisions, events, ANSI-stripped transcript messages, delete/reopen). 404-tolerant (treats orchestrator-backend absence as empty, not error). Also exports TUI views.",
+        "whatItDoes": "Task-thread list (cards) -> full-pane detail (sessions, pending decisions, artifacts, coordinator decisions, events, ANSI-stripped transcript messages, delete/reopen). 404-tolerant (treats orchestrator-backend absence as empty, not error).",
         "maturity": "solid"
       },
       {
@@ -973,15 +973,9 @@
         "maturity": "solid"
       },
       {
-        "component": "OrchestratorSpatialView — one-source TUI/GUI/XR",
-        "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/components/OrchestratorSpatialView.tsx",
-        "whatItDoes": "Presentational spatial-vocabulary orchestrator view (list + detail) rendering identically in terminal, GUI, and XR via SpatialSurface; registered into the TUI terminal registry by register-terminal-view.tsx.",
-        "maturity": "solid"
-      },
-      {
         "component": "orchestrator-capabilities + index.ts capability manifest",
         "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/orchestrator-capabilities.ts",
-        "whatItDoes": "15 typed capability descriptors (status/list/open/create/pause/resume/pause-all/resume-all/delete/fork/update/validate/add-agent/stop-agent/send-message) with a dispatch map driving the voice/chat-driven and TUI surfaces. Manifest<->dispatch parity is unit-asserted.",
+        "whatItDoes": "15 typed capability descriptors (status/list/open/create/pause/resume/pause-all/resume-all/delete/fork/update/validate/add-agent/stop-agent/send-message) with a dispatch map driving the voice/chat-driven GUI surfaces. Manifest<->dispatch parity is unit-asserted.",
         "maturity": "solid"
       },
       {
@@ -1008,19 +1002,13 @@
         "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/__tests__/unit/orchestrator-inspector-terminal-task.test.tsx",
         "kind": "unit",
         "covers": "TaskInspector DOM behavior: terminal-status action-bar guards (done/failed/archived hide Edit group + priority), Pause/Resume/Fork/Restart/Validate/Archive/Reopen/Delete/CopyLink/SetPriority/AddAgent/inspect/stop callbacks, populated data display (sub-agent/plan/acceptance/artifact/usage).",
-        "gaps": "CURRENTLY BROKEN: suite fails to load (Vite cannot resolve @elizaos/shared/voice-eot, transitively imported by @elizaos/ui) because vitest.config.ts aliases only @elizaos/ui and @elizaos/tui to src, not @elizaos/shared. This makes `bun run test` exit non-zero and the entire inspector behavioral suite does not run."
+        "gaps": "CURRENTLY BROKEN: suite fails to load (Vite cannot resolve @elizaos/shared/voice-eot, transitively imported by @elizaos/ui) because vitest.config.ts aliases @elizaos/ui to source but not @elizaos/shared. This makes `bun run test` exit non-zero and the entire inspector behavioral suite does not run."
       },
       {
         "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/__tests__/unit/CodingAgentTasksPanel.test.tsx",
         "kind": "unit",
         "covers": "CodingAgentTasksPanel DOM: list render with count chips, initial fetch params, empty state, search re-fetch, show-archived toggle, card-click detail pane with populated regions, back chip, delete/reopen via client calls.",
         "gaps": "Does not cover the orchestrator-backend-404 -> empty-state branch explicitly, nor the polling reconcile path."
-      },
-      {
-        "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/components/OrchestratorSpatialView.test.tsx",
-        "kind": "unit",
-        "covers": "One-source/three-modality rendering: TUI width contract (54+32 cols), task list + detail (plan steps, session label, artifact, pending input) content, GUI/XR DOM with agent hooks, terminal-registry mount.",
-        "gaps": "Static snapshots only; no interaction (open task, fire actions) and no real-backend data."
       },
       {
         "path": "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/__tests__/unit/run-orchestrator-capability.test.ts",
@@ -1083,7 +1071,7 @@
       {
         "title": "TaskInspector behavioral suite is broken and silently not running",
         "severity": "high",
-        "description": "__tests__/unit/orchestrator-inspector-terminal-task.test.tsx fails to load: Vite cannot resolve @elizaos/shared/voice-eot (imported transitively via @elizaos/ui) because vitest.config.ts aliases only @elizaos/ui and @elizaos/tui to their src, not @elizaos/shared (which is unbuilt: no dist/voice-eot). `bun run --cwd plugins/plugin-task-coordinator test` exits code 1 (1 failed suite | 11 passed; 118 tests pass) and the largest inspector DOM suite (action-bar guards + all control callbacks) does not execute. This is a regression-blind spot in the most action-rich part of the UI.",
+        "description": "__tests__/unit/orchestrator-inspector-terminal-task.test.tsx fails to load: Vite cannot resolve @elizaos/shared/voice-eot (imported transitively via @elizaos/ui) because vitest.config.ts aliases @elizaos/ui to source but not @elizaos/shared (which is unbuilt: no dist/voice-eot). `bun run --cwd plugins/plugin-task-coordinator test` exits code 1 (1 failed suite | 11 passed; 118 tests pass) and the largest inspector DOM suite (action-bar guards + all control callbacks) does not execute. This is a regression-blind spot in the most action-rich part of the UI.",
         "suggestedWork": "Add an @elizaos/shared (and @elizaos/shared/* subpath) src alias to plugins/plugin-task-coordinator/vitest.config.ts mirroring the @elizaos/ui aliasing, or ensure shared is built before this suite. Then confirm the inspector suite runs green and wire it into CI so the failure cannot recur silently."
       },
       {
@@ -1131,7 +1119,6 @@
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/PtyConsoleBase.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/PtyTerminalPane.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/PtyConsoleDrawer.tsx",
-      "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/components/OrchestratorSpatialView.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/CodingAgentSettingsSection.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/orchestrator-capabilities.ts",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/index.ts",
@@ -1140,7 +1127,6 @@
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/__e2e__/run-dashboard-shot.mjs",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/__tests__/unit/orchestrator-inspector-terminal-task.test.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/__tests__/unit/orchestrator-stream.test.ts",
-      "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/src/components/OrchestratorSpatialView.test.tsx",
       "/Users/shawwalters/eliza/plugins/plugin-task-coordinator/vitest.config.ts"
     ]
   },
@@ -1380,7 +1366,7 @@
       {
         "component": "E2E suite registry",
         "path": "/Users/shawwalters/eliza/scripts/e2e-recordings/suites.mjs",
-        "whatItDoes": "Declares the 9 recordable suites (app, cloud-frontend, cloud-e2e, homepage, os-homepage, os-usb-installer, ui-agent-surface, app-xr, feed-dag-visualizer) plus covered-by/skipped lists. Each entry has configDir/script/recordEnv. Notably the app suite is forced into stub mode (ELIZA_UI_SMOKE_FORCE_STUB=1) so recordings are deterministic, not real.",
+        "whatItDoes": "Declares the recordable suites (app, cloud-frontend, cloud-e2e, homepage, os-homepage, os-usb-installer, ui-agent-surface, feed-dag-visualizer) plus covered-by/skipped lists. Each entry has configDir/script/recordEnv. Notably the app suite is forced into stub mode (ELIZA_UI_SMOKE_FORCE_STUB=1) so recordings are deterministic, not real.",
         "maturity": "solid"
       },
       {

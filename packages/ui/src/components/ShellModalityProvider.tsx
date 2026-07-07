@@ -1,9 +1,9 @@
 /**
- * ShellModalityProvider (#9946) — the single shell-level owner of the GUI/TUI/XR
- * modality contract. The GUI shell (`packages/app`) mounts this once; it sets
- * the shell-level modality so every leaf's `detectDomModality()` reads one
- * authoritative source instead of each re-guessing per-leaf. A headset
- * (`__elizaXRContext`) still wins, so the XR host is never overridden.
+ * ShellModalityProvider (#9946) — the single shell-level owner of the modality
+ * contract. The GUI shell (`packages/app`) mounts this once; it sets the
+ * shell-level modality so every leaf's `detectDomModality()` reads one
+ * authoritative source instead of each re-guessing per-leaf. Future adapters can
+ * set their own modality through the same retained contract.
  */
 
 import { type ReactNode, useEffect } from "react";

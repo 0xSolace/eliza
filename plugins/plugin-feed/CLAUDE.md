@@ -4,19 +4,19 @@ Operator surface for the Feed prediction market game, embedded as an elizaOS app
 
 ## Purpose / role
 
-Connects an Eliza agent to the Feed prediction market platform. It registers **one** GUI view (`"tui"`/`"xr"` remain valid compatibility modality values but are no longer declared) and a full HTTP proxy layer that forwards agent, market, social, messaging, and admin requests to the Feed backend. The plugin is opt-in — add it to an agent's character or plugin list; it is not auto-enabled. Configuration is read entirely from env vars or agent settings.
+Connects an Eliza agent to the Feed prediction market platform. It registers one GUI view and a full HTTP proxy layer that forwards agent, market, social, messaging, and admin requests to the Feed backend. The plugin is opt-in — add it to an agent's character or plugin list; it is not auto-enabled. Configuration is read entirely from env vars or agent settings.
 
 ## Plugin surface
 
 This plugin registers **views** only — no actions, providers, services, or evaluators. All runtime behaviour is UI-side or route-proxy-side.
 
-**View** (registered in `src/index.ts`) — ONE declaration drives all three modalities:
+**View** (registered in `src/index.ts`) — one declaration drives the shipped GUI view:
 
 | id | label | modalities | componentExport | description |
 |----|-------|------------|-----------------|-------------|
 | `feed` | Feed | `gui` | `FeedView` | Feed prediction market operator dashboard |
 
-`FeedView` (`src/components/FeedView.tsx`) embeds the **full Feed web app, authenticated as the agent** when a live run viewer exists: the run's `viewer` carries the `FEED_AUTH` session token and `EmbeddedAppViewer` (from `@elizaos/ui`) runs the `*_READY` → auth postMessage handshake so the real product UI loads signed in. Without a viewer it renders the operator dashboard — the one presentational `FeedSpatialView`, fed by FeedView's live data layer (the ten `getFeed*` loaders + 12s poll). The view declares capabilities: `get-state`, `refresh-agent-status`, `open-live-dashboard`, `send-team-message` (handled by `src/ui/feed-interact.ts`).
+`FeedView` (`src/components/FeedView.tsx`) embeds the full Feed web app, authenticated as the agent: the run's `viewer` carries the `FEED_AUTH` session token and `EmbeddedAppViewer` (from `@elizaos/ui`) runs the `*_READY` → auth postMessage handshake so the real product UI loads signed in. When no viewer is available, it renders the operator dashboard — the presentational `FeedSpatialView`, fed by FeedView's live data layer (the ten `getFeed*` loaders + 12s poll). The view declares capabilities: `get-state`, `refresh-agent-status`, `open-live-dashboard`, `send-team-message` (handled by `src/ui/feed-interact.ts`).
 
 **Route exports** (from `src/routes.ts`, consumed by the elizaOS app-core host):
 
@@ -40,12 +40,12 @@ plugins/plugin-feed/
     register.ts                     Renderer/native app-shell registration entry
     components/
       FeedView.tsx                  GUI wrapper: live data layer + <SpatialSurface>
-      FeedSpatialView.tsx           Presentational spatial view — renders in all modalities
+      FeedSpatialView.tsx           Presentational spatial view
     ui/
       feed-data.ts                  Pure data parsers: extractAgentSummary,
                                     extractTeamDashboard, summarizeFeedActivity, etc.
       feed-view-bundle.ts           View-bundle entry (exports FeedView + interact)
-      feed-interact.ts              interact() capability handler
+      feed-interact.ts              View-bundle interact() capability handler
   assets/
     hero.png                        App store hero image
   vite.config.views.ts              Vite config for the view bundle (dist/views/bundle.js)
@@ -98,9 +98,9 @@ Session tokens (`FEED_AGENT_SESSION_TOKEN`, `FEED_AGENT_SESSION_EXPIRES_AT`) are
 
 **Change the operator surface UI:**
 
-1. Edit the one presentational component `src/components/FeedSpatialView.tsx` — authored with `@elizaos/ui/spatial` primitives (`Card`, `Text`, `Button`, `HStack`, `VStack`, `List`). It is shipped for the GUI modality. Keep it purely presentational (snapshot in, `onAction` out).
+1. Edit the presentational component `src/components/FeedSpatialView.tsx` — authored with `@elizaos/ui/spatial` primitives (`Card`, `Text`, `Button`, `HStack`, `VStack`, `List`). Keep it purely presentational (snapshot in, `onAction` out).
 2. Live-data wiring (loaders, refresh poll, autonomy control) lives in the GUI wrapper `src/components/FeedView.tsx`.
-3. New capabilities go in `src/ui/feed-interact.ts` (re-exported by `src/ui/feed-view-bundle.ts`) AND must be declared in the view's `capabilities` array in `src/index.ts`.
+3. New view capabilities go in `src/ui/feed-interact.ts` (re-exported by `src/ui/feed-view-bundle.ts`) AND must be declared in the view's `capabilities` array in `src/index.ts`.
 
 **Add a new view:**
 
@@ -110,7 +110,7 @@ Session tokens (`FEED_AGENT_SESSION_TOKEN`, `FEED_AGENT_SESSION_EXPIRES_AT`) are
 ## Conventions / gotchas
 
 - The view bundle (`dist/views/bundle.js`) is built separately by Vite (`build:views`). Running only `build:js` leaves the views stale. Always run `build` or `build:views` before shipping a UI change.
-- The **operator dashboard** has exactly ONE view component: `FeedSpatialView`, which `FeedView` renders when no live run viewer exists. Do NOT reintroduce a separate rich-DOM operator surface — the spatial view is the single source for the dashboard. With a live run viewer, `FeedView` instead embeds the real external Feed web app via `EmbeddedAppViewer` (a cross-origin iframe + auth handshake), not a reimplemented dashboard.
+- The GUI surface embeds the real external Feed web app via `EmbeddedAppViewer` (a cross-origin iframe + auth handshake) when a viewer session exists. The spatial dashboard is the fallback when no viewer is available.
 - The `elizaos.app` block in `package.json` controls how the elizaOS app manager discovers and launches Feed: `launchType: "url"`, viewer `postMessageAuth: true`, session mode `spectate-and-steer`.
 - Auth is Steward-first: `proxyFeedRequest` prefers the agent's Steward JWT (`STEWARD_AGENT_TOKEN`/`FEED_STEWARD_TOKEN`) and forwards it as `Authorization: Bearer` with no `/api/agents/auth` exchange (Feed verifies the shared-secret HS256 `iss:"steward"` token inline). On 401 it falls back to the `FEED_AGENT_ID/SECRET` agent-session path, which uses an in-process token cache (`cachedToken`) cleared + re-authed once on its own 401.
 - `persistFeedCredential` writes to both `process.env` and `runtime.setSetting` and patches the character's `settings.secrets` in-memory. This means credentials set during auto-provisioning survive in the runtime object but are not written to disk automatically.

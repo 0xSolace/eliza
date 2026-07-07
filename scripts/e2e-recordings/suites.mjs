@@ -68,14 +68,6 @@ export const UI_E2E_SUITES = [
       "Runs the Launcher launcher fixture in Chromium, asserts tiles + image tiles render, captures desktop/mobile rest + edit screenshots, drives tap-launch/long-press-edit/favorite/page-nav with a recorded video, and asserts the view-interaction telemetry stream fired.",
   },
   {
-    name: "app-xr",
-    displayName: "Facewear XR app",
-    configDir: "plugins/plugin-facewear/app-xr",
-    script: "test:e2e",
-    coverage:
-      "Runs XR app view CRUD, camera pose, voice form interactions, screenshots, traces, and videos.",
-  },
-  {
     name: "feed-dag-visualizer",
     displayName: "Feed DAG visualizer",
     configDir: "packages/feed/tools/dag-visualizer",

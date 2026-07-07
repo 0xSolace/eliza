@@ -1,12 +1,13 @@
 /**
- * FinancesView — the single GUI/XR data wrapper for the owner finance dashboard.
+ * FinancesView — the GUI data wrapper for the owner finance dashboard.
  *
  * It owns the live money data (the fetcher seams over the four read-only
  * endpoints PA serves, the quiet background poll, wire->display mapping, the
  * USD-float->minor-units boundary, and the proactive signal) and renders the one
  * presentational {@link FinancesSpatialView} inside a {@link SpatialSurface}.
- * Omitting the `modality` prop lets `SpatialSurface` auto-detect the host
- * surface, so the SAME component serves them all. The view ships GUI-only.
+ * Omitting the `modality` prop lets `SpatialSurface` render the browser DOM
+ * surface today while the retained modality contract stays available for future
+ * adapters.
  *
  * Data sources (PA owns the persistence; this plugin only reads):
  *   GET {base}/api/lifeops/money/dashboard       (balance summary)

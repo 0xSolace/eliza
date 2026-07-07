@@ -1,7 +1,6 @@
-// Shared wallet data helpers for the inventory view, used by both InventoryView /
-// InventoryTuiView (in InventoryView.tsx) and the `interact` capability handler
-// (in InventoryView.interact.ts). Kept out of the .tsx so that file exports only
-// React components and stays Fast-Refresh-compatible in dev.
+// Shared wallet data helpers for InventoryView and the `interact` capability
+// handler. Kept out of the .tsx so that file exports only React components and
+// stays Fast-Refresh-compatible in dev.
 import type {
   WalletAddresses,
   WalletBalancesResponse,
@@ -118,7 +117,7 @@ function summarizeWalletBalances(
   };
 }
 
-export async function loadWalletTuiState() {
+export async function loadWalletViewState() {
   const [
     walletAddresses,
     walletConfig,

@@ -152,16 +152,11 @@ interface UseAvailableViewsOptions {
 
 const POLL_INTERVAL_MS = 30_000;
 
-async function fetchViewList(
-  viewType?: "gui" | "tui" | "xr",
-): Promise<ViewRegistryEntry[]> {
+async function fetchViewList(): Promise<ViewRegistryEntry[]> {
   const platform = getFrontendPlatform();
-  const response = await fetchWithCsrf(
-    `/api/views${viewType ? `?viewType=${viewType}` : ""}`,
-    {
-      headers: { "X-Eliza-Platform": platform },
-    },
-  );
+  const response = await fetchWithCsrf("/api/views", {
+    headers: { "X-Eliza-Platform": platform },
+  });
   if (!response.ok) {
     throw new Error(`GET /api/views returned HTTP ${response.status}`);
   }
@@ -189,39 +184,16 @@ export async function fetchAvailableViews(): Promise<ViewRegistryEntry[]> {
 }
 
 async function fetchViews(): Promise<ViewRegistryEntry[]> {
-  const [guiResult, tuiResult, xrResult] = await Promise.allSettled([
-    fetchViewList(),
-    fetchViewList("tui"),
-    fetchViewList("xr"),
-  ]);
-  const guiViews = guiResult.status === "fulfilled" ? guiResult.value : [];
-  const tuiViews =
-    tuiResult.status === "fulfilled"
-      ? tuiResult.value.filter((view) => view.viewType === "tui")
-      : [];
-  const xrViews =
-    xrResult.status === "fulfilled"
-      ? xrResult.value.filter((view) => view.viewType === "xr")
-      : [];
-  if (
-    guiResult.status === "rejected" &&
-    tuiResult.status === "rejected" &&
-    xrResult.status === "rejected" &&
-    !String(guiResult.reason).includes("404") &&
-    !String(tuiResult.reason).includes("404") &&
-    !String(xrResult.reason).includes("404")
-  ) {
-    throw guiResult.reason;
+  let guiViews: ViewRegistryEntry[];
+  try {
+    guiViews = await fetchViewList();
+  } catch (err) {
+    if (String(err).includes("404")) return [];
+    throw err;
   }
   const merged = new Map<string, ViewRegistryEntry>();
   for (const view of guiViews) {
     merged.set(`${view.viewType ?? "gui"}:${view.id}`, view);
-  }
-  for (const view of tuiViews) {
-    merged.set(`tui:${view.id}`, view);
-  }
-  for (const view of xrViews) {
-    merged.set(`xr:${view.id}`, view);
   }
   return [...merged.values()];
 }

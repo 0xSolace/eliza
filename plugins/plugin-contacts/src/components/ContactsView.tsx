@@ -1,14 +1,16 @@
 /**
- * ContactsView — the GUI data wrapper for the Contacts surface.
+ * ContactsView — the single GUI data wrapper for the Contacts surface.
  *
  * It owns the live Android address-book data (contact fetch, permission gate,
  * background poll, list/detail/new mode, the new-contact form, and the
  * Call/Text handoffs to the Phone/Messages views) and renders the one
  * presentational {@link ContactsSpatialView} inside a {@link SpatialSurface}.
+ * The spatial child is presentational only, which keeps native permission and
+ * routing concerns isolated in this wrapper.
  *
  * The full-screen overlay-app variant (with vCard import + permission-recovery
  * callout) remains `ContactsAppView`, loaded by the overlay-app registry on
- * ElizaOS; this wrapper is the cross-modality view-bundle export.
+ * elizaOS; this wrapper is the shipped GUI view-bundle export.
  */
 
 import {

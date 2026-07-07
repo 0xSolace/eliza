@@ -58,9 +58,6 @@ const localPackages = [
   "eliza/packages/cloud/sdk",
   "eliza/packages/shared",
   "eliza/packages/skills",
-  // @elizaos/agent's cli imports @elizaos/tui for the bundled `tui` command;
-  // keep it linked so the command works inside the image.
-  "eliza/packages/tui",
   "eliza/packages/ui",
   "eliza/packages/vault",
   "eliza/plugins/plugin-agent-skills",

@@ -1,13 +1,13 @@
 /**
- * RelationshipsView — the single GUI/XR data wrapper for the entity /
- * relationship knowledge-graph viewer.
+ * RelationshipsView — the GUI data wrapper for the entity / relationship
+ * knowledge-graph viewer.
  *
  * It owns the live graph data (the fetcher seam over the two read-only endpoints
  * the personal-assistant routes serve, the quiet background poll, and the
  * wire->display join) and renders the one presentational
- * {@link RelationshipsSpatialView} inside a {@link SpatialSurface}. Omitting the
- * `modality` prop lets `SpatialSurface` auto-detect the host surface, so the
- * SAME component serves them all. The view ships GUI-only.
+ * {@link RelationshipsSpatialView} inside a {@link SpatialSurface}. The browser
+ * DOM surface ships today, while the retained modality contract stays available
+ * for future adapters.
  *
  * Data source (the runtime owns the EntityStore / RelationshipStore persistence;
  * this plugin only reads):

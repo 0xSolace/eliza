@@ -1,9 +1,13 @@
 /**
- * FocusSpatialView — the Focus / blocker surface authored with the spatial
- * vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
+ * FocusSpatialView — the Focus / blocker surface authored once with the spatial
+ * vocabulary, so it renders correctly wherever it is displayed:
+ *
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports only the cross-modality primitives (no DOM/runtime imports).
+ * out) and imports only the cross-modality primitives, so it is safe to render
+ * without pulling browser-only runtime imports into the presentational layer.
  */
 
 import { Button, Card, Divider, HStack, List, Text } from "@elizaos/ui/spatial";

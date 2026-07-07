@@ -1,6 +1,6 @@
 /**
  * Static source-text assertions on `components/InventoryAppView.tsx` (the rich
- * dashboard that `InventoryView` renders as its GUI/XR child) guarding two
+ * dashboard that `InventoryView` renders as its GUI child) guarding two
  * copy regressions: raw bullet separators in the RPC-provider status line,
  * and reintroduced paragraph helper copy in the empty-wallet market pulse.
  * No rendering — this is a text-fixture check, not a component test.

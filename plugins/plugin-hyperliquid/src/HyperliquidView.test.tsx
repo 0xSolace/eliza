@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 
-// Drives the unified HyperliquidView (the single GUI/XR data wrapper) through
-// the rendered DOM: the same component the bundle exports for the "gui", "xr",
-// and (via the spatial terminal registry) "tui" modalities. Asserts the
+// Drives HyperliquidView through the rendered DOM for the shipped GUI surface.
+// Asserts the
 // populated markets/positions/orders snapshot, the readiness tiles, the
 // executionBlockedReason and vault-guidance banners, the positions/orders
 // read-blocked surfaces, the DOM-clickable Refresh / Back controls, the
-// read-blocked + error + unavailable branches — functional parity with the
-// retired HyperliquidTuiView surface. Also covers the unchanged `interact`
-// terminal capability handler the view bundle re-exports.
+// read-blocked + error + unavailable branches. Also covers the `interact`
+// capability handler the view bundle re-exports.
 
 import {
 	type AgentElementSnapshot,
@@ -391,7 +389,7 @@ describe("HyperliquidView — error + unavailable paths", () => {
 	});
 });
 
-describe("HyperliquidView — terminal interact capabilities", () => {
+describe("HyperliquidView interact capabilities", () => {
 	it("supports state, market lookup, and execution-check capabilities", async () => {
 		vi.stubGlobal(
 			"fetch",
@@ -405,9 +403,8 @@ describe("HyperliquidView — terminal interact capabilities", () => {
 		);
 
 		await expect(
-			interact("terminal-hyperliquid-state", { limit: 1 }),
+			interact("hyperliquid-state", { limit: 1 }),
 		).resolves.toMatchObject({
-			viewType: "tui",
 			status: sampleStatus,
 			markets: [sampleMarkets.markets[0]],
 			positions: samplePositions,
@@ -415,14 +412,13 @@ describe("HyperliquidView — terminal interact capabilities", () => {
 		});
 
 		await expect(
-			interact("terminal-hyperliquid-market", { coin: "btc" }),
+			interact("hyperliquid-market", { coin: "btc" }),
 		).resolves.toMatchObject({
-			viewType: "tui",
 			market: { name: "BTC", maxLeverage: 50 },
 		});
 
 		await expect(
-			interact("terminal-hyperliquid-execution-check", {
+			interact("hyperliquid-execution-check", {
 				coin: "BTC",
 				side: "buy",
 				size: "0",
@@ -448,9 +444,9 @@ describe("HyperliquidView — terminal interact capabilities", () => {
 			}),
 		);
 
-		await expect(
-			interact("terminal-hyperliquid-execution-check"),
-		).resolves.toEqual({ viewType: "tui", result: okBody });
+		await expect(interact("hyperliquid-execution-check")).resolves.toEqual({
+			result: okBody,
+		});
 		expect(fetch).toHaveBeenCalledWith(
 			"/api/hyperliquid/orders/open",
 			expect.objectContaining({
@@ -461,17 +457,17 @@ describe("HyperliquidView — terminal interact capabilities", () => {
 	});
 
 	it("market lookup throws on a missing coin and returns null for an unknown coin", async () => {
-		await expect(interact("terminal-hyperliquid-market", {})).rejects.toThrow(
+		await expect(interact("hyperliquid-market", {})).rejects.toThrow(
 			"coin is required",
 		);
 		await expect(
-			interact("terminal-hyperliquid-market", { coin: "DOGE" }),
-		).resolves.toMatchObject({ viewType: "tui", market: null });
+			interact("hyperliquid-market", { coin: "DOGE" }),
+		).resolves.toMatchObject({ market: null });
 	});
 
 	it("throws on an unsupported capability", async () => {
-		await expect(interact("terminal-hyperliquid-unknown")).rejects.toThrow(
-			'Unsupported capability "terminal-hyperliquid-unknown"',
+		await expect(interact("hyperliquid-unknown")).rejects.toThrow(
+			'Unsupported capability "hyperliquid-unknown"',
 		);
 	});
 });

@@ -1,7 +1,7 @@
-// View-bundle `interact` capability handler for the Feed TUI surface. Kept in
-// its own module (not on the React component file) so the view bundle can
-// re-export a plain function without tripping Fast Refresh. The view bundle
-// re-exports `interact` via ./feed-view-bundle.ts.
+// View-bundle `interact` capability handler for Feed view actions. Kept in its
+// own module (not on the React component file) so the view bundle can re-export
+// a plain function without tripping Fast Refresh. The view bundle re-exports
+// `interact` via ./feed-view-bundle.ts.
 
 async function readFeedJson(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -47,7 +47,7 @@ export async function interact(
     const content =
       typeof params?.content === "string" && params.content.trim()
         ? params.content.trim()
-        : "Terminal status check";
+        : "Feed status check";
     const response = await fetch("/api/apps/feed/team/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -56,5 +56,5 @@ export async function interact(
     return readFeedJson(response);
   }
 
-  throw new Error(`Feed TUI does not support "${capability}".`);
+  throw new Error(`Feed view does not support "${capability}".`);
 }

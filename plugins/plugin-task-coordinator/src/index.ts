@@ -2,12 +2,12 @@
  * Plugin definition for the coding-agent task coordinator: the view manifest,
  * the orchestrator view's typed capability descriptors, and `init()`.
  *
- * Declares three views (`task-coordinator`, `orchestrator`, `cockpit`) with
- * their bundle path + component exports, and the capability list the TUI layer
- * uses to drive the orchestrator workbench. `init()` registers the
- * view-scoped `/orchestrator-status` slash command into the per-runtime
- * command registry; the deterministic handler action is the only server-side
- * runtime contribution. All task/session state is owned by
+ * Declares three GUI views (`task-coordinator`, `orchestrator`, `cockpit`) with
+ * their bundle path + component exports, and the capability list remote/control
+ * surfaces use to drive the orchestrator workbench. `init()` registers the
+ * view-scoped `/orchestrator-status` slash command into the per-runtime command
+ * registry; the deterministic handler action is the only server-side runtime
+ * contribution. All task/session state is owned by
  * `@elizaos/plugin-agent-orchestrator` — this plugin is display + control only.
  */
 import type { Plugin, ViewCapability } from "@elizaos/core";
@@ -208,7 +208,10 @@ const taskCoordinatorPlugin: Plugin = {
   // Deterministic handler for the registered slash command.
   actions: [orchestratorStatusCommandAction],
   views: [
-    // Single GUI declaration drawn from the TaskCoordinatorView spatial source.
+    // The shipped view is GUI-only. `modalities` is a plain literal here
+    // (index.ts is not in the view bundle), so no brand-new `@elizaos/core`
+    // runtime export reaches the bundle build; future adapters can extend the
+    // retained view contract without changing the component export.
     {
       id: "task-coordinator",
       viewKind: "preview",
@@ -269,7 +272,8 @@ const taskCoordinatorPlugin: Plugin = {
       visibleInManager: true,
       desktopTabEnabled: true,
     },
-    // Single GUI declaration drawn from the OrchestratorView spatial source.
+    // The shipped view is GUI-only; the retained view contract can carry future
+    // adapters without changing the component export.
     {
       id: "orchestrator",
       viewKind: "developer",

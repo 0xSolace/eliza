@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
 
-// The sibling FineTuningTuiView.test.tsx never renders the GUI Analysis coverage
-// panel: it stubs the panels and only ever drives buildTrainingAnalysisIndex via
-// the TUI interact() path, so summarizeAnalysisCoverage (FineTuningView.tsx
-// 234-360) — the 2-branch parser turning a TrainingAnalysisIndexResponse into the
-// rendered coverage — is untested at the view level. This file renders the real
+// View-level coverage for the GUI Analysis panel. This file renders the real
 // FineTuningView, clicks the GUI Build-index button, and asserts the populated
-// coverage panel for BOTH parser branches (manifest.coverage vs artifact
+// coverage panel for both parser branches (manifest.coverage vs artifact
 // aggregation).
 
 import {

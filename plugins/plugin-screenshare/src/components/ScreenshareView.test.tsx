@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
-// Drives the unified ScreenshareView (the single GUI/XR data wrapper) through
-// the rendered DOM: the same component the bundle exports for both the "gui"
-// and "xr" modalities. Asserts the host lifecycle (start/rotate/stop), the
+// Drives ScreenshareView through the rendered DOM for the shipped GUI surface.
+// Asserts the host lifecycle (start/rotate/stop), the
 // open-viewer + copy controls, the editable remote-connect fields + connect,
 // the capability list, the refresh, and the error path all reach the screenshare
-// API with the exact arguments — the single source of truth for the GUI/XR
-// surface now that the per-modality operator/TUI duplicates are retired.
+// API with the exact arguments.
 
 import {
   cleanup,

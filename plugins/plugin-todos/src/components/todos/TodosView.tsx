@@ -4,7 +4,9 @@
  * It owns the live todos data (the fetcher seam over the single read-only
  * endpoint PA serves, the quiet background poll, wire->display mapping, lane
  * grouping, and the overdue signal) and renders the one presentational
- * {@link TodosSpatialView} inside a {@link SpatialSurface}.
+ * {@link TodosSpatialView} inside a {@link SpatialSurface}. The browser DOM
+ * surface ships today, while the retained modality contract stays available for
+ * future adapters.
  *
  * Data source (PA owns the shared scheduled-task spine; this plugin only reads):
  *   GET {base}/api/lifeops/todos -> { todos: TodoWire[] }

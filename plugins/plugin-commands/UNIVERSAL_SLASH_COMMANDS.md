@@ -1,15 +1,15 @@
 # Universal slash commands
 
-One command catalog, every surface. A user types `/settings model` in the
-floating chat, a Discord channel, a Telegram DM, or the terminal UI, and the
-same command runs — discovered from one source, rendered natively per surface.
+One command catalog, every shipped surface. A user types `/settings model` in
+the floating chat, a Discord channel, or a Telegram DM, and the same command
+runs — discovered from one source, rendered natively per surface.
 
 ## Why one catalog
 
 Before this, four disconnected slash systems existed: the web composer parsed
 slashes only at send-time (no menu), the Cmd+K palette had its own nav
-vocabulary, Discord had native application commands, Telegram had almost
-nothing, and the TUI library had an unused autocomplete engine. Nothing shared
+vocabulary, Discord had native application commands, and Telegram had almost
+nothing. Nothing shared
 a definition. This system makes **`@elizaos/plugin-commands` the single
 source of truth** and exposes it over HTTP so every surface consumes the same
 list.
@@ -21,13 +21,13 @@ list.
               getCatalogCommands(surface) / getConnectorCommands(surface)
               each definition → serializeCommand()  ── wire-safe, no functions
                                    │
-        ┌──────────────────┬───────┴────────┬───────────────────┐
-   GET /api/commands   getConnectorCommands  getConnectorCommands  GET /api/commands
-     ?surface=gui         ("discord")          ("telegram")          ?surface=tui
-        │                    │                     │                    │
-   Web composer        Discord native        Telegram                 TUI Editor
-   inline menu         app commands          setMyCommands +          autocomplete
-   (SlashCommandMenu)  (application.commands) bot.command handlers    (CombinedAutocompleteProvider)
+        ┌──────────────────┬───────┴────────┐
+   GET /api/commands   getConnectorCommands  getConnectorCommands
+     ?surface=gui         ("discord")          ("telegram")
+        │                    │                     │
+   Web composer        Discord native        Telegram
+   inline menu         app commands          setMyCommands +
+   (SlashCommandMenu)  (application.commands) bot.command handlers
 ```
 
 `GET /api/commands` is a pure projection: the route
@@ -44,18 +44,18 @@ A `CommandDefinition` (see `src/types.ts`) carries these dimensions beyond name 
 description:
 
 - **`surfaces?: CommandSurface[]`** — which client surfaces it appears on
-  (`gui` · `tui` · `discord` · `telegram`). Absent = all four. e.g. `/clear`,
-  `/fullscreen`, and `/transcribe` are `["gui", "tui"]`, so they are filtered
-  off the chat connectors by surface.
+  (`gui` · `discord` · `telegram`, with `tui` reserved in the contract). Absent
+  = all known surfaces. e.g. `/clear`, `/fullscreen`, and `/transcribe` are
+  `["gui"]`, so they are filtered off chat connectors and reserved surfaces.
 - **`target?: CommandTarget`** — what it *does*, surface-agnostically. Absent =
   `{ kind: "agent" }`:
   - `{ kind: "navigate", path, tab?, viewId?, section? }` — jump to a view /
-    sub-view. GUI selects the tab/section, TUI navigates the view registry,
-    chat connectors reply with a deep link.
+    sub-view. GUI selects the tab/section; chat connectors reply with a deep
+    link.
   - `{ kind: "agent", action? }` — send the command text to the agent; a
     deterministic `*_COMMAND` action produces the reply. Works on every surface.
   - `{ kind: "client", clientAction }` — a pure-client behavior (clear chat,
-    toggle fullscreen, toggle transcription). GUI/TUI only.
+    toggle fullscreen, toggle transcription). Local client only.
 - **`icon?: string`** — a lucide icon hint for menu rendering.
 - **`views?: string[]`** — view-scoping (#8798): the command is surfaced only
   while one of these views is the active foreground surface. Omitted = global.
@@ -89,7 +89,7 @@ registry, so all three target kinds flow through one serializer.
 | `/logs` | logs view |
 | `/database` | database browser |
 
-### Client (target: `client`) — `surfaces: ["gui", "tui"]`
+### Client (target: `client`) — `surfaces: ["gui"]`
 
 | Command | Action |
 |---|---|
@@ -118,8 +118,9 @@ serialization onto the wire.
 - Connector navigation degrades gracefully: a Discord/Telegram user has no app
   view to jump to, so `navigate` commands reply with a destination + deep link
   rather than failing.
-- `client` commands declare `surfaces: ["gui", "tui"]`, so they are filtered out
-  of the connector surfaces entirely (`/fullscreen` makes no sense in Telegram).
+- `client` commands declare `surfaces: ["gui"]`, so they are filtered out of
+  connector and reserved surfaces entirely (`/fullscreen` makes no sense in
+  Telegram).
 - `/new` is an **agent** command (a new conversation is a runtime concern), not a
   client command — only `/clear`, `/fullscreen`, and `/transcribe` are `client`.
 
@@ -172,16 +173,12 @@ commands force a reply through the message pipeline even when
 `navigate` commands reply with the destination + optional deep link. Command
 names are sanitized to Telegram's `[a-z0-9_]{1,32}`.
 
-### TUI — the Editor autocomplete
+### Future Non-GUI Surfaces
 
-`packages/agent/src/tui` fetches `GET /api/commands?surface=tui`, maps to the
-`@elizaos/tui` `SlashCommand[]`, and feeds the rich `Editor`'s
-`CombinedAutocompleteProvider` (dropdown via `SelectList`, `/`-at-line-start
-trigger, Tab/Enter completion, arg completions). On submit: deterministic
-`agent` commands resolve via registered actions, pipeline-owned `agent` commands
-send to the agent; `navigate` (view) →
-`POST /api/views/:id/navigate?viewType=tui`; `client` → local `/clear`,
-`/fullscreen`, and `/transcribe`.
+The command catalog still accepts a `surface` query parameter so future
+non-GUI hosts can ask for scoped commands without changing the API shape. No
+concrete terminal UI package ships today; GUI clients use the same deterministic
+`agent` / `navigate` / `client` command classification described above.
 
 ## Verification status
 
@@ -195,12 +192,6 @@ send to the agent; `navigate` (view) →
   with mocked `json`/`error`: surface filtering, auth pass-through, dynamic-choice
   emission; `commands-routes.real-server.test.ts` exercises the wire over a real
   loopback socket).
-- **TUI:** live-verified — `packages/agent/scripts/verify-tui-slash.ts` drives
-  the real `AgentTerminalView` + Editor against a booted agent (open menu / 36
-  commands, filter, 39 section completions, dispatch — 4/4), and a real-PTY
-  launch (`expect`) confirms the dropdown renders + filters in an actual
-  terminal. That PTY run also surfaced + fixed a width-overflow crash on 80-col
-  terminals (`render()` now truncates every line to width).
 - **Discord / Telegram:** code-complete + unit-tested (mapping + dispatch
   branching). End-to-end requires live bot tokens, not available here —
   exercised at the unit level only.
@@ -217,12 +208,11 @@ registerCommand({
   textAliases: ["/myview"],
   scope: "both",
   category: "docks",
-  surfaces: ["gui", "tui"],          // omit for everywhere
+  surfaces: ["gui"],                 // omit for every known surface
   target: { kind: "navigate", viewId: "my-view", path: "/my-view" },
 });
 ```
 
-It appears automatically in the web menu, the TUI autocomplete, and (if a
-connector surface is listed) Discord/Telegram registration — no per-surface
-wiring.
+It appears automatically in the web menu and, if a connector surface is listed,
+Discord/Telegram registration — no per-surface wiring.
 ```

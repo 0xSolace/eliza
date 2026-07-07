@@ -41,7 +41,7 @@ const UI_ALIASES: Array<{ find: string; replacement: string }> = [
   { find: "@elizaos/ui/hooks", replacement: stub("hooks") },
   { find: "@elizaos/ui/layouts", replacement: stub("layouts") },
   // The adaptive wrapper + spatial fallback import the real spatial barrel;
-  // it is browser-safe (no @elizaos/tui), so alias it to source. The exports
+  // it is browser-safe, so alias it to source. The exports
   // map does not resolve the bare subpath under vitest's resolver.
   {
     find: "@elizaos/ui/spatial",

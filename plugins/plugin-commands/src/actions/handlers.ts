@@ -5,7 +5,7 @@
  * does. It reads real runtime/registry state, persists option settings, invokes
  * owned runtime actions when needed, and returns a deterministic
  * `CommandResult`. No LLM improvisation: the same command path runs on web,
- * TUI, Discord, and Telegram.
+ * Discord, and Telegram.
  */
 
 import type {

@@ -1,8 +1,7 @@
 /**
- * Side-effect entry point: registers the wallet shell page/widgets. Also
- * re-exports the chain/address constants that consumers import from the package
- * root, since the app build aliases `@elizaos/plugin-wallet-ui` to this module
- * rather than the full barrel.
+ * Side-effect entry point that registers wallet shell routes/widgets and
+ * re-exports chain/address constants used by consumers that alias the package
+ * root to this app-register module.
  */
 import "./register-routes.ts";
 

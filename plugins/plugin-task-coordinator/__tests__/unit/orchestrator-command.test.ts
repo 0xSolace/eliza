@@ -1,6 +1,6 @@
 // Covers the `/orchestrator-status` slash command: view-scoped/agent-target
 // registration, slash-only validate(), the deterministic callback reply with no
-// LLM call, and the gui/tui wire serialization. Deterministic, no live model.
+// LLM call, and the GUI wire serialization. Deterministic, no live model.
 import type { IAgentRuntime, Memory } from "@elizaos/core";
 import {
   commandVisibleForSurface,
@@ -23,7 +23,7 @@ import {
  * (task-coordinator's `/orchestrator-status`, #8790 / PR #9104), which shipped
  * untested. Proves a view-owning app plugin lights up the universal command
  * surface end to end: registration shape, slash-only validate (the misrouting
- * guard), a deterministic no-LLM handler, and the gui/tui surface contract.
+ * guard), a deterministic no-LLM handler, and the GUI surface contract.
  */
 const AGENT = "agent-orchestrator-command-test";
 
@@ -46,7 +46,7 @@ describe("orchestrator slash command (#8790)", () => {
       action: ORCHESTRATOR_STATUS_COMMAND_ACTION,
     });
     expect(cmd?.views).toEqual([ORCHESTRATOR_VIEW_ID]);
-    expect(cmd?.surfaces).toEqual(["gui", "tui"]);
+    expect(cmd?.surfaces).toEqual(["gui"]);
     expect(cmd?.acceptsArgs).toBe(false);
   });
 
@@ -79,7 +79,7 @@ describe("orchestrator slash command (#8790)", () => {
     expect(result).toEqual({ success: true, text: "Orchestrator is online." });
   });
 
-  it("serializes onto the wire shape and honors the gui/tui surface contract", () => {
+  it("serializes onto the wire shape and honors the GUI surface contract", () => {
     const cmd = findCommandByKey(ORCHESTRATOR_STATUS_COMMAND_KEY);
     expect(cmd).toBeDefined();
     if (!cmd) return;
@@ -91,7 +91,7 @@ describe("orchestrator slash command (#8790)", () => {
     expect(wire.views).toEqual([ORCHESTRATOR_VIEW_ID]);
     // Visible on the surfaces it declares, filtered out everywhere else.
     expect(commandVisibleForSurface(cmd.surfaces, "gui")).toBe(true);
-    expect(commandVisibleForSurface(cmd.surfaces, "tui")).toBe(true);
+    expect(commandVisibleForSurface(cmd.surfaces, "tui")).toBe(false);
     expect(commandVisibleForSurface(cmd.surfaces, "discord")).toBe(false);
     expect(commandVisibleForSurface(cmd.surfaces, "telegram")).toBe(false);
   });

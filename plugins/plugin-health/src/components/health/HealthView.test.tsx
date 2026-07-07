@@ -1,9 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * Drives the unified HealthView (the single GUI/XR data wrapper) through the
- * rendered spatial DOM: the same component the bundle exports for both the
- * "gui" and "xr" modalities. It is a read-only sleep summary over the three
+ * Drives the HealthView GUI data wrapper through the rendered spatial DOM. It is
+ * a read-only sleep summary over the three
  * endpoints the host serves:
  *   GET {base}/api/lifeops/sleep/{history,regularity,baseline}
  *

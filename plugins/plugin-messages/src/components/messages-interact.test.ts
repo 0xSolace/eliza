@@ -1,7 +1,6 @@
 /**
- * Covers the `interact` view-bundle capability handler (terminal list/send/role
- * capabilities). Render coverage for the unified spatial surface lives in
- * MessagesView.test.tsx and MessagesSpatialView.test.tsx.
+ * Covers the `interact` view-bundle capability handler for list/send/role
+ * capabilities. Render coverage for the GUI surface lives in MessagesView.test.tsx.
  */
 
 import fc from "fast-check";
@@ -91,12 +90,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("interact — terminal capabilities", () => {
-  it("supports terminal capabilities for list, send, and sms role request", async () => {
+describe("interact view capabilities", () => {
+  it("supports capabilities for list, send, and sms role request", async () => {
     mockBridge();
 
-    await expect(interact("terminal-list-threads")).resolves.toMatchObject({
-      viewType: "tui",
+    await expect(interact("list-threads")).resolves.toMatchObject({
       ownsSmsRole: false,
       smsRoleHolder: "com.android.messages",
       threads: [
@@ -118,7 +116,7 @@ describe("interact — terminal capabilities", () => {
     });
 
     await expect(
-      interact("terminal-send-sms", {
+      interact("send-sms", {
         address: "+15550300",
         body: "sent from test",
       }),
@@ -126,21 +124,19 @@ describe("interact — terminal capabilities", () => {
       sent: true,
       address: "+15550300",
       bodyLength: 14,
-      viewType: "tui",
     });
     expect(bridge.sendSms).toHaveBeenCalledWith({
       address: "+15550300",
       body: "sent from test",
     });
 
-    await expect(interact("terminal-request-sms-role")).resolves.toMatchObject({
+    await expect(interact("request-sms-role")).resolves.toMatchObject({
       requested: true,
-      viewType: "tui",
     });
     expect(bridge.requestRole).toHaveBeenCalledWith({ role: "sms" });
   });
 
-  it("clamps hostile terminal-list-threads limits before hitting the native bridge", async () => {
+  it("clamps hostile list-threads limits before hitting the native bridge", async () => {
     mockBridge();
 
     await fc.assert(
@@ -153,7 +149,7 @@ describe("interact — terminal capabilities", () => {
         ),
         async (limit) => {
           bridge.listMessages.mockClear();
-          await interact("terminal-list-threads", { limit });
+          await interact("list-threads", { limit });
 
           const requested = bridge.listMessages.mock.calls[0]?.[0] as
             | { limit?: number }
@@ -167,17 +163,17 @@ describe("interact — terminal capabilities", () => {
     );
   });
 
-  it("rejects malformed terminal-send-sms payloads without calling native send", async () => {
+  it("rejects malformed send-sms payloads without calling native send", async () => {
     mockBridge();
 
     await expect(
-      interact("terminal-send-sms", { address: " ", body: "hello" }),
+      interact("send-sms", { address: " ", body: "hello" }),
     ).rejects.toThrow("address is required");
     await expect(
-      interact("terminal-send-sms", { address: "+15550300", body: "\n\t" }),
+      interact("send-sms", { address: "+15550300", body: "\n\t" }),
     ).rejects.toThrow("body is required");
     await expect(
-      interact("terminal-send-sms", {
+      interact("send-sms", {
         address: ["+15550300"] as unknown as string,
         body: { text: "hello" } as unknown as string,
       }),

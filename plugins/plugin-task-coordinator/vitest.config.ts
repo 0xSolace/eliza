@@ -8,7 +8,6 @@ const toVitePath = (value: string): string => value.replaceAll("\\", "/");
 const pluginBrowserSrc = resolve(rootDir, "../plugin-browser/src");
 const pluginCommandsSrc = resolve(rootDir, "../plugin-commands/src");
 const pluginTrainingSrc = resolve(rootDir, "../plugin-training/src");
-const tuiSrc = resolve(rootDir, "../../packages/tui/src");
 const sharedSrc = resolve(rootDir, "../../packages/shared/src");
 
 export default defineConfig({
@@ -19,8 +18,8 @@ export default defineConfig({
       // only ship from `dist/`, which is frequently stale or unbuilt when this
       // package's suite runs standalone — causing the whole suite to fail to load.
       // Resolve `@elizaos/shared` to source too (this suite runs in the `node`
-      // environment, so node-only shared modules load fine), mirroring how ui/tui/
-      // plugin-browser/plugin-training are already redirected to source above.
+      // environment, so node-only shared modules load fine), mirroring how ui,
+      // plugin-browser, and plugin-training are already redirected to source above.
       {
         find: /^@elizaos\/shared$/,
         replacement: toVitePath(resolve(sharedSrc, "index.ts")),
@@ -34,14 +33,6 @@ export default defineConfig({
         replacement: toVitePath(
           resolve(rootDir, "../../packages/ui/src/index.ts"),
         ),
-      },
-      {
-        find: /^@elizaos\/tui$/,
-        replacement: toVitePath(resolve(tuiSrc, "index.ts")),
-      },
-      {
-        find: /^@elizaos\/tui\/(.+)$/,
-        replacement: `${toVitePath(tuiSrc)}/$1`,
       },
       {
         find: /^@elizaos\/ui\/(.+)$/,

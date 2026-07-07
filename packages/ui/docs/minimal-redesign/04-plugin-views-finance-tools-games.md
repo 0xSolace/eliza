@@ -13,17 +13,18 @@ Per-view UX + code + state inventory of elizaOS **plugin** views (under `plugins
 **Essentially everything is REAL** — live data wiring, real protocols, no "coming soon." The honest exceptions:
 
 - **Steward `StewardVaultOverview.tsx` (477 lines) — DEAD CODE:** fully built, test-covered, **never rendered** (`StewardView` only mounts `ApprovalQueue` + `TransactionHistory`; grep finds only self + test referencing it).
-- **plugin-xr — registers NO ViewDeclaration:** it ships only a server-side XR HTML host-chrome route (`plugins/plugin-xr/src/routes/xr-view-host.ts`) that mounts *other* plugins' bundles. Assessed as chrome only.
+- **Retired headset host chrome:** the old host route mounted other plugins'
+  bundles and was assessed as chrome only.
 - **Finances DTO layer self-declares as a "migration scaffold"** (`plugins/plugin-finances/src/types.ts:1-9`) even though the view renders real route data.
 
 ### Structural redundancy patterns (apply across many plugins)
 
-1. **XR ViewDeclarations are dead duplicates.** Almost every plugin declares `default` + `xr` + `tui`, but the `xr` entry re-points at the **same web component** as `default` (hyperliquid/shopify/steward/task-coordinator/screenshare/model-tester all do this). No XR-specific render exists. The genuinely separate surface is the authored-once `*SpatialView.tsx` (terminal/XR via `@elizaos/ui/spatial`), registered for the terminal only.
-2. **The `*SpatialView.tsx` files are the minimalist reference the GUI views should converge toward.** `OrchestratorSpatialView.tsx`, `ModelTesterSpatialView.tsx`, `TrajectoryLoggerSpatialView.tsx` already use single-glyph-by-color status marks + `Divider label="…"` sections + borderless lists — exactly the target density. The web twins diverged into maximalism. This is **convergence, not new design.**
-3. **A second full dark codepath: hand-maintained `#020617`/cyan TUI trees.** Hyperliquid/shopify/steward/wallet/polymarket each clone the web view as an inline-styled near-black JSX tree with hardcoded `rgba(125,211,252,…)` cyan borders — the exact heavy/dark treatment the redesign abandons, and ignoring Eliza tokens.
+1. **Retired modality duplicates.** The old default/xr/tui declaration pattern has been removed from the shipped plugin manifests in this cleanup. Keep any future renderer work behind the retained `viewType` contract instead of reintroducing duplicate component trees.
+2. **The remaining `*SpatialView.tsx` files are minimalist GUI references.** `ModelTesterSpatialView.tsx` and `TrajectoryLoggerSpatialView.tsx` already use single-glyph-by-color status marks + `Divider label="…"` sections + borderless lists — exactly the target density. The heavier web twins should converge toward this density.
+3. **A second full dark codepath was removed.** The hand-maintained near-black alternate trees were the exact heavy/dark treatment the redesign abandons, and ignored Eliza tokens.
 4. **Copy-pasted heavy card recipes.** The `linear-gradient + inset-shadow rounded-2xl/3xl` card is pasted 6+ times across Steward.
 5. **State over-encoding.** Connection/run status routinely shown 3-4× on one screen (border tint + badge + icon color + summary card + header pill). Wallet's account header packs ~12 chips/badges.
-6. **Off-brand color drift.** Shopify hardcodes `#ff5800` (≠ brand `#ff8a24`); XR host chrome hardcodes indigo `#6366f1` (blue is forbidden) + near-black bg, with its own inline design system.
+6. **Off-brand color drift.** Shopify hardcodes `#ff5800` (≠ brand `#ff8a24`); keep any future adapter chrome on the shared tokens instead of reintroducing indigo/near-black inline systems.
 
 ### Worst slop offenders (ranked, cross-section)
 
@@ -64,9 +65,9 @@ All three wire **real live data** (no stubs). Theme split is the key lever: wall
 
 Theme citations: Finances dark bg `plugins/plugin-finances/src/components/finances/FinancesView.tsx:299`; Wallet dark `InventoryView.tsx:2240,:1755,:1866`; Polymarket light `plugins/plugin-polymarket/src/PolymarketAppView.tsx:14-15,186`.
 
-## 1. Wallet — `wallet` / `InventoryView` (desktop+XR) — `plugins/plugin-wallet-ui/src/InventoryView.tsx:2042`
+## 1. Wallet — `wallet` / `InventoryView` (dashboard GUI) — `plugins/plugin-wallet-ui/src/InventoryView.tsx:2042`
 
-ViewDeclaration: `plugins/plugin-wallet-ui/src/plugin.ts:23-62` (standard `/wallet`, XR `/wallet`, TUI `/wallet/tui` → `InventoryTuiView`); shell nav tab `wallet.inventory` → `/inventory` (`plugin.ts:12-21`); chat-sidebar widget `wallet.status` (`plugin.ts:63-73`).
+ViewDeclaration: `plugins/plugin-wallet-ui/src/plugin.ts:23-62` (GUI `/wallet`); shell nav tab `wallet.inventory` → `/inventory`; chat-sidebar widget `wallet.status`.
 
 - **Purpose:** Full non-custodial portfolio page — balances, token list, NFTs, DeFi/LP positions, trading P&L, market overview, activity timeline.
 - **Real or stub?** **REAL.** Live via `useApp()` + `client.getWalletTradingProfile()` / `client.getWalletMarketOverview()` (`:2043-2058, 2085, 2113`); localStorage hidden-token persistence (`:104-130`).
@@ -85,11 +86,11 @@ ViewDeclaration: `plugins/plugin-wallet-ui/src/plugin.ts:23-62` (standard `/wall
 - **Minimization recommendations:** Collapse rail + dashboard into one column (don't show NFTs/LP/positions twice). Keep balance number, allocation bar, one token list, optional P&L sparkline. Move Movers/Activity/Market into chat. Delete the chain-support cluster; replace EVM/SOL chips + provider dots + RPC pill with a **single status dot** next to the balance (tap→RPC). Collapse the two address pills into one truncated address + copy. Convert P&L window/refresh/RPC to icon-only (orange active). View-dependent chat actions: refresh, hide token, copy address, open RPC settings, "show my P&L", "what moved today" (most already have `useAgentElement` ids).
 - **Even-simpler note:** Strong chat-merge candidate — Movers, Activity, Market overview are read-only context the floating agent can narrate on demand. The chat-sidebar widget already covers the glanceable balance, so the full page is mostly redundant for the common case.
 
-## 2. Wallet TUI — `wallet` (tui) / `InventoryTuiView` — `InventoryView.tsx:2351`
+## 2. Wallet Retired Alternate Renderer
 
-- **Real or stub?** **REAL** — `loadWalletTuiState()` (`:2363`), emits `data-view-state` JSON for the agent (`:2426`).
-- **Structure:** 2 sections w/ `1px solid rgba(125,211,252,0.3)` borders (`:2454,2531`), monospace, hardcoded slate/cyan/emerald hex (`#020617`, `#7dd3fc`…). Refresh, address lines, 16-token grid, 4 movers, 4 nfts.
-- **Critique/fix:** Minimal by design; the only issue is the **hardcoded palette ignores Eliza tokens** (cyan/emerald, not orange/blue) (`:2429-2432,2436,2518`). Align palette; otherwise leave. **Structurally identical to the Polymarket TUI** — extract one shared two-pane monospace frame.
+The old terminal wallet renderer was removed. Keep future adapter work behind
+the retained `viewType` contract instead of reintroducing a parallel
+hand-styled clone.
 
 ## 3. Wallet chat-sidebar widget — `wallet.status` — `plugins/plugin-wallet-ui/src/widgets/wallet-status.tsx:168`
 
@@ -109,9 +110,9 @@ ViewDeclaration: `plugins/plugin-finances/src/plugin.ts:26-40` (single view, no 
 - **Minimization recommendations:** Flip to light surface. Empty state → one line + button ("No source connected" + Connect); delete the 3-line paragraph. Balance card → flat header row (big net number, "+in/−out" pair in green/red, drop "As of"). Transactions/recurring → borderless rows, color the amount. Error → inline one-liner + Retry icon. Chat actions: refresh, connect-source, "what did I spend on X", "cancel <subscription>" (recurring list is the natural cancel surface). Proactive: "next recurring charge in N days" is the one line worth keeping.
 - **Even-simpler note:** Won't merge with wallet (separate domains/services) but should share **one minimal "money list" visual primitive** (balance header + borderless amount-colored list).
 
-## 5. Polymarket — `polymarket` / `PolymarketAppView` (desktop+XR) — `plugins/plugin-polymarket/src/PolymarketAppView.tsx:36`
+## 5. Polymarket — `polymarket` / `PolymarketAppView` (dashboard GUI) — `plugins/plugin-polymarket/src/PolymarketAppView.tsx:36`
 
-ViewDeclaration: `plugins/plugin-polymarket/src/plugin.ts:105-145` (standard, XR, TUI→`PolymarketTuiView`).
+ViewDeclaration: `plugins/plugin-polymarket/src/plugin.ts:105-145` (GUI declaration).
 
 - **Purpose:** Prediction-market discovery — readiness strip, market list, market detail with outcomes/odds.
 - **Real or stub?** **REAL** — `usePolymarketState()` fetches live `polymarketStatus()` + `polymarketMarkets({limit:25})` (`usePolymarketState.ts:24-29`). Trading intentionally read-only (documented).
@@ -121,19 +122,21 @@ ViewDeclaration: `plugins/plugin-polymarket/src/plugin.ts:105-145` (standard, XR
   **Heaviest offending JSX** — `DisconnectedState` (`:273-369`): 96×96 glyph tile + h2 + ~2-line paragraph + **both CapabilityChips repeated** (already shown in `ReadinessStrip`) + a third paragraph with inline `<code>` listing missing env vars. Second: `CapabilityChip` (`:209-241`) dot + label + literal "on"/"off" word (the dot already encodes state).
 - **Heaviness / slop critique:** Redundant readiness chips (shown on list view AND again in `DisconnectedState` `:341-351`). "on/off" text beside a state dot. Env-var `<code>` hint (`:360-366`) is developer-facing copy in a user view. `MarketDetail` 3 `Metric` cards each bordered — could be a single inline row.
 - **Minimization recommendations:** Delete the duplicate chips + env-var hint in `DisconnectedState`; keep one short line + glyph. `CapabilityChip`→dot + label only. Collapse market-card footer to one muted line (or just Vol). MarketDetail metrics→one inline row. Keep the outcome progress-bar (on-brand, orange accent). Chat actions: refresh, select-market, "show me <topic> markets", "what are the odds on X" (already wired `useAgentElement` `:51-64,449-456`).
-- **Even-simpler note:** Not mergeable, but it's the **reference look** for the other two views to copy. Its TUI (`:802`) shares the hardcoded cyan/slate palette with the wallet TUI — share a frame, adopt Eliza tokens.
+- **Even-simpler note:** Not mergeable, but it's the **reference look** for the other two views to copy.
 
 ### Part A cross-cutting
 
-Theme split (make all 3 light like polymarket); two near-identical hardcoded-palette TUIs (`InventoryView.tsx:2424-2576`≈`PolymarketAppView.tsx:861-998`); wallet rail-vs-dashboard duplication is the single largest cut; badge/chip soup in the wallet header + duplicated polymarket readiness chips; over-explained empty/error states reducible to one line + chat; finances DTO is a self-declared scaffold.
+Theme split (make all 3 light like polymarket); wallet rail-vs-dashboard duplication is the single largest cut; badge/chip soup in the wallet header + duplicated polymarket readiness chips; over-explained empty/error states reducible to one line + chat; finances DTO is a self-declared scaffold.
 
 ---
 
 # Part B — Hyperliquid · Shopify · Steward
 
-Each plugin declares **3 ViewDeclarations** but only **2 distinct components** — the `xr` variant reuses the same React component as the default web view; the 3rd is a hand-maintained `#020617`/cyan TUI. All three follow an identical pattern: full-screen `fixed inset-0 z-50` overlay shells with header (back + status pill + refresh), a polling hook, and the dark TUI clone. Each re-implements its own header and owns a manual Refresh button despite existing polling.
+These notes were written against the old duplicate renderer set. Current cleanup
+removes the alternate renderer clones; evaluate the remaining GUI components as
+the shipped surface.
 
-## 1. Hyperliquid — `hyperliquid` (web+xr) — `src/HyperliquidAppView.tsx:72-258`
+## 1. Hyperliquid — `hyperliquid` (GUI) — `src/HyperliquidAppView.tsx:72-258`
 
 ViewDeclaration: `src/plugin.ts:128-154`.
 
@@ -147,9 +150,10 @@ ViewDeclaration: `src/plugin.ts:128-154`.
 - **Minimization recommendations:** Collapse 3 StatusTiles + Positions + Orders into **one thin status strip** (colored dots: `reads · signer · account · positions(n) · orders(n)`); delete `ReadinessPill` + both stat cards. Markets→flat list `NAME · 50x`, drop borders/dividers/`sz` noise, lazy scroll. Drop manual refresh (add polling; currently fetches once on mount `:65-67`). Funding/PnL alerts→floating chat.
 - **Even-simpler note:** Because execution is permanently disabled, this is a **read-only ticker** — could be reduced to a one-line status strip + scrollable market list, or **replaced by chat** ("what are my Hyperliquid positions?").
 
-**TUI** (`HyperliquidTuiView` `:260-477`, ViewDecl `:155-168`): REAL (`loadHyperliquidTuiState`); 2 bordered `#020617`/cyan `minHeight:420` sections, `data-view-state` JSON (`:317`). The double-near-black aesthetic is exactly what the redesign moves away from; candidate to generate from the view-state contract.
+**Retired alternate renderer:** The old Hyperliquid terminal view was removed; the
+current plugin ships one GUI declaration backed by `HyperliquidView`.
 
-## 2. Shopify — `shopify` (web+xr) — `src/ShopifyAppView.tsx:385-772`
+## 2. Shopify — `shopify` (GUI) — `src/ShopifyAppView.tsx:385-772`
 
 ViewDeclaration: `src/plugin.ts:115-141`. Panels: `ProductsPanel`/`OrdersPanel`/`InventoryLevelsPanel`/`CustomersPanel`/`StoreOverviewCard`.
 
@@ -163,9 +167,10 @@ ViewDeclaration: `src/plugin.ts:115-141`. Panels: `ProductsPanel`/`OrdersPanel`/
 - **Minimization recommendations:** Setup card→one line + "Configure" button. Collapse 5 tabs→Overview-as-home (the 4 OverviewTiles are the real surface; entity lists reachable by tapping a tile or via chat). Kill OrdersPanel expand grid (labels inline; "more"=chat). `StoreOverviewCard`→shop name + one status dot. Badges→labels not dot+legend. Drop manual refresh. Use brand `#ff8a24`. Proactive: low-stock/new-order alerts→floating chat, not the two static "recent" cards.
 - **Even-simpler note:** The one view that justifies staying a real surface (create-product + inventory-adjust are genuine writes), but 2-3× heavier than needed. Minimum: Overview (4 tiles + connection dot) as home, entity lists as flat lazy lists, writes from chat or a floating "+".
 
-**TUI** (`ShopifyTuiView` `:774-966`): same `#020617` parallel impl, 2 `minHeight:420` sections, `data-view-state` JSON (`:822`).
+**Retired alternate renderer:** the old Shopify terminal clone was removed; the
+remaining view surface is the GUI declaration.
 
-## 3. Steward — `steward` (web+xr) — `src/StewardView.tsx:61-208`
+## 3. Steward — `steward` (GUI) — `src/StewardView.tsx:61-208`
 
 ViewDeclaration: `src/plugin.ts:379-405`. Children: `ApprovalQueue.tsx`, `TransactionHistory.tsx`. (`StewardVaultOverview.tsx` — DEAD, see below.)
 
@@ -181,15 +186,18 @@ ViewDeclaration: `src/plugin.ts:379-405`. Children: `ApprovalQueue.tsx`, `Transa
 
 **DEAD CODE — `StewardVaultOverview.tsx` (477 lines):** fully-built vault overview (addresses, per-chain balances, webhook events) but **never rendered** — `StewardView` mounts only `ApprovalQueue` + `TransactionHistory` (`:189-204`); grep finds only self + `.test.tsx`. Recommend deletion (or wire as a 3rd tab). Contains heavy `try/Promise.allSettled` chain-snapshot logic + the same gradient-card aesthetic.
 
-**TUI** (`StewardTuiView` `:210-401`): same `#020617` parallel impl, 2 `minHeight:420` sections, `data-view-state` JSON (`:256`).
+**Retired alternate renderer:** the old Steward terminal clone was removed; the
+remaining view surface is the GUI declaration.
 
 ---
 
 # Part C — Task-Coordinator · Screenshare · Model-Tester
 
-Three plugins, **8 ViewDeclarations**, **4 real web components** (the rest are XR/TUI re-pointers or the authored-once spatial variant). The default+xr declarations ship the same DOM; the genuinely separate XR/TUI surface is the `*SpatialView.tsx` (terminal-only).
+Three plugins, now reduced to shipped GUI declarations. Older XR/TUI re-pointers
+and terminal-only variants were retired; the notes below focus on the remaining
+DOM surfaces.
 
-## VIEW 1 — `task-coordinator` (default/xr) — `CodingAgentTasksPanel` — `plugins/plugin-task-coordinator/src/CodingAgentTasksPanel.tsx`
+## VIEW 1 — `task-coordinator` (GUI) — `CodingAgentTasksPanel` — `plugins/plugin-task-coordinator/src/CodingAgentTasksPanel.tsx`
 
 - **Purpose:** List + read-only drill-down of coding-agent task threads (sessions, decisions, artifacts, transcripts, pending inputs). One of the two coding-agent surfaces.
 - **Real or stub?** **REAL.** `client.listCodingAgentTaskThreads` (`:648`), `getCodingAgentTaskThread` (`:711`), 5s poll (`:689`), `archive`/`reopen` mutations (`:751,782`).
@@ -201,9 +209,11 @@ Three plugins, **8 ViewDeclarations**, **4 real web components** (the rest are X
 - **Minimization recommendations:** Collapse the 6 `DetailList` boxes into ONE chat-style timeline (they're already chronological) — borderless, icon-prefixed rows. Keep title + status medallion + acceptance criteria + a single live activity stream. List: keep `TaskCard` (already minimal); drop the text triple. Delete the placeholder tiles + watermark ("No tasks — dispatch one from chat"). Delete/Reopen→chat-context actions or overflow. Proactive: "1 task waiting on you" as a glanceable chat prompt.
 - **Even-simpler note:** **Overlaps heavily with `OrchestratorWorkbench`'s task list** (shared `TaskCard`/`TaskCardList` kit). This is read-only-lite; orchestrator is full read/write of the same data. **Strong merge candidate** — one task surface with progressive disclosure.
 
-**TUI** (`TaskCoordinatorTuiView`/`OrchestratorTuiView` are thin `TerminalPluginView` wrappers `:947,963`; real TUI = `OrchestratorSpatialView.tsx`).
+**Retired alternate renderer:** The old task-coordinator/orchestrator terminal
+wrappers were removed; the current orchestrator route mounts the rich DOM
+workbench directly.
 
-## VIEW 2 — `orchestrator` (default/xr) — `OrchestratorWorkbench` ⚠️ WORST OFFENDER — `plugins/plugin-task-coordinator/src/OrchestratorWorkbench.tsx` (4191 lines)
+## VIEW 2 — `orchestrator` (GUI) — `OrchestratorWorkbench` ⚠️ WORST OFFENDER — `plugins/plugin-task-coordinator/src/OrchestratorWorkbench.tsx` (4191 lines)
 
 - **Purpose:** Full multi-agent orchestration workbench — task list + per-task room (live conversation stream) + right-side inspector/operator-drawer + create/add-agent forms + full read/write control.
 - **Real or stub?** **REAL and fully wired.** `getOrchestratorStatus` + `listCodingAgentTaskThreads` (`:3336-3342`), detail+timeline (`:3377-3378`), **live SSE `streamOrchestratorTask`** (`:3470`), 1.5s active poll (`:3406`); 16+ real mutations (create/pause/resume/archive/reopen/delete/fork/restart/restartWithEditedPlan/validate/updatePriority/addAgent/stopAgent/retryTurn/rerunFromEvent); `useAgentElement` on nearly every control.
@@ -215,17 +225,18 @@ Three plugins, **8 ViewDeclarations**, **4 real web components** (the rest are X
 - **Minimization recommendations:** **The task ROOM (conversation stream `:3931`) is the keeper and IS a chat** — make it the whole view; the floating overlay chat and this room should be the SAME surface. Collapse the inspector toolbar to ONE primary action (Pause/Resume) + `…` overflow. Flatten the inspector (kill the 8 stacked `InspectorSection`s; borderless icon-prefixed blocks). De-duplicate `TaskInspector` vs `OperatorDetailDrawer`. Kill the `HeaderDivider` hairlines (2-3 colored numbers + whitespace). Stop button: icon + `Esc` only. Collapse the 3 banners. Cut all 9 prose paragraphs. Keep the "Agent working…" running-bar as the only persistent status chrome.
 - **Even-simpler note:** **Single largest, heaviest view in scope** and highest-impact target. (1) Merge with `CodingAgentTasksPanel`; (2) merge the task room with the floating chat. A candidate for a ground-up rewrite against the new direction, not a trim.
 
-## VIEW 3 — task-coordinator/orchestrator (tui) — `OrchestratorSpatialView.tsx` (the minimalist reference)
+## Retired Task-Coordinator Alternate Renderer
 
-- **Real or stub?** **REAL** — typed snapshot in, primitives out; same record types as web.
-- **Structure:** **This is the minimalist reference already.** Detail uses `Divider label="…"` section separators (not bordered cards) — `awaiting you`/`plan`/`sessions (n)`/`decisions (n)`/`artifacts (n)`/`events (n)`/`transcript (n)` (`:456-672`); status is a 1-char mark + tone color (`STATUS_MARK` `:84`), not a chip; lists sliced; text-only buttons; no nested cards/badges/prose.
+The old alternate orchestrator reference was removed with the renderer cleanup.
+Use the retained task-coordinator spatial GUI body as the density reference for
+future simplification.
 - **Recommendation:** Use this file as the **design template for the web redesign.** The web `OrchestratorWorkbench` should converge toward this density. The project already authored a minimalist orchestrator — the web view diverged into maximalism.
 
-## VIEW 4 — `screenshare` (default/xr) — `ScreenshareOperatorSurface` — `plugins/plugin-screenshare/src/ui/ScreenshareOperatorSurface.tsx`
+## VIEW 4 — `screenshare` (GUI) — `ScreenshareOperatorSurface` — `plugins/plugin-screenshare/src/ui/ScreenshareOperatorSurface.tsx`
 
 - **Purpose:** Operator surface to host a local desktop screen-share (start/rotate/stop/copy/open viewer) and connect to a remote one. Backed by real routes (`captureDesktopScreenshot`, `performDesktopClick/Keypress/Scroll`, viewer HTML `routes.ts:501`).
 - **Real or stub?** **REAL.** `fetchJson` to `/api/apps/screenshare/*` (`:181,225,252`), clipboard copy (`:282`), opens viewer.
-- **States:** `focus==="chat"`→empty (`:321-328`); host idle/active; capabilities loaded vs not (`:525`); busy start/stop (`:178`); error notices; TUI loading/ready/error (`:559`).
+- **States:** `focus==="chat"`→empty (`:321-328`); host idle/active; capabilities loaded vs not (`:525`); busy start/stop (`:178`); error notices.
 - **Structure:** 3 `SurfaceSection` titles (Host/Connect/Capabilities `:332,459,526`); **3 metric tiles in Host status row (`:333`) + 4 more when a session exists (Frames/Inputs/Last frame/Last input `:430-455`) + N capability tiles (`:528`)**, each bordered; 6 buttons; **3 inputs (remote URL/session/token `:461,471,481`)**; capability tile grid.
 
   **Heaviest offending JSX** — the metric tiles: up to 7 host tiles + N capability tiles, each a bordered dot+icon+value box (`:430-455`); plus the 3-field manual Connect form (`:461-490`).
@@ -233,9 +244,9 @@ Three plugins, **8 ViewDeclarations**, **4 real web components** (the rest are X
 - **Minimization recommendations:** Host→one status line (green=active/gray=idle) + Start/Stop toggle + one "Copy invite link." Drop the telemetry tiles. Connect→one "paste invite link" field. Capabilities→a single inline readiness dot, only when something is unavailable.
 - **Even-simpler note:** Strong **chat-replaceable** candidate — "share my screen"/"connect to <link>" as chat actions + one live status pill.
 
-**TUI** (`ScreenshareTuiView` `:559-752`): hardcoded dark terminal palette (`#020617` `:625-744`), 2 `minHeight:420` sections, same telemetry heaviness; a bespoke inline-styled outlier — fold into the `@elizaos/ui/spatial` pattern the other two plugins use.
+**Retired alternate renderer:** the old screenshare terminal clone was removed.
 
-## VIEW 6 — `model-tester` (default/xr) — `ModelTesterAppView` — `plugins/app-model-tester/src/ModelTesterAppView.tsx`
+## VIEW 6 — `model-tester` (GUI) — `ModelTesterAppView` — `plugins/app-model-tester/src/ModelTesterAppView.tsx`
 
 - **Purpose:** Developer surface to run live end-to-end probes against every Eliza model type (text/stream/embedding/tts/transcription/vad/vision/image-gen).
 - **Real or stub?** **REAL.** `GET /api/model-tester/status` (`:263`) + `POST /run` (`:277`); backend makes real `runtime.useModel(...)` calls per probe; renders real audio/image outputs.
@@ -247,7 +258,9 @@ Three plugins, **8 ViewDeclarations**, **4 real web components** (the rest are X
 - **Minimization recommendations:** Replace 8 bordered cards with a **borderless list** of probe rows (icon + name + colored status dot + ms/result inline), expand `<pre>` on demand. Drop the dashed-empty boxes. Drop the 3 `MetricBadge` tiles. The `ModelTesterSpatialView` already does exactly this.
 - **Even-simpler note:** A **developer diagnostic**, not an everyday surface — the most legitimately "tool-like," least in need of chat integration. Minimize chrome but it can stay standalone (invokable from chat: "test the voice model").
 
-**TUI** (`ModelTesterSpatialView.tsx`): the minimalist reference for model-tester — one `Card`, 3-count caption, `Divider label`d sections, borderless `List` of probe rows (single-char `probeMark` by color `:88`). Already the target density.
+**Future adapter reference:** `ModelTesterSpatialView.tsx` remains the minimalist
+shape for model-tester: one `Card`, 3-count caption, `Divider label`d sections,
+and a borderless `List` of probe rows.
 
 ### Part C summary
 
@@ -273,7 +286,7 @@ ViewDeclaration: `src/plugin.ts:16-30` (icon `ScatterChart`, `/vector-browser`, 
 
 ## 2. plugin-trajectory-logger — `trajectory-logger` (web) — `plugins/plugin-trajectory-logger/src/components/TrajectoryLoggerView.tsx`
 
-ViewDeclaration: `src/index.ts:7-70` (3 surfaces under one id: web `TrajectoryLoggerView`, xr same component, tui `TrajectoryLoggerTuiView`; icon `Activity`).
+ViewDeclaration: `src/index.ts:7-70` (GUI `TrajectoryLoggerView`; icon `Activity`).
 
 - **Purpose:** Realtime dev inspector of the agent's current ("Now") + last ("Last") turn, split into HANDLE/PLAN/ACTION/EVALUATE phases with drilldowns. Polls `/api/trajectories*` at 700ms.
 - **Real or stub?** **REAL.** Live polling, real phase classification, real drilldown bodies (LLM calls, provider accesses, tool events, evaluator decisions).
@@ -285,26 +298,23 @@ ViewDeclaration: `src/index.ts:7-70` (3 surfaces under one id: web `TrajectoryLo
 - **Minimization recommendations:** Drop the progress rail; let medallion color be the only progress signal. Demote "Last" to a collapsed line (4 tiny dots + "last turn 3s ago"), expand on tap. Shrink medallions to flat icon+color (no ring/glow/pulse). **Proactive chat:** when the agent is mid-turn the floating chat could surface "thinking… (PLAN)" and tapping opens this drilldown — the view becomes the *expansion* of the chat's own status.
 - **Even-simpler note:** Strong replaceable-by-chat candidate after vector-browser. The Now-strip is essentially a verbose chat typing/status indicator.
 
-**Spatial/TUI** (`TrajectoryLoggerSpatialView.tsx`, 468 lines): REAL, authored once in `@elizaos/ui/spatial`; ASCII status marks + ASCII progress bar (`:252-256`) — **already close to the lightest version** (borderless labeled sections, no medallions, no rail-vs-color duplication). The web view is the heavy outlier — converge toward this. Note: the 4 phase-body components (`HandleBody`/`PlanBody`/`ActionBody`/`EvaluateBody`) are duplicated in both `PhaseDrilldown.tsx` and this file — a consolidation opportunity.
+**Spatial summary** (`TrajectoryLoggerSpatialView.tsx`, 468 lines): REAL, authored once in `@elizaos/ui/spatial`; ASCII status marks + ASCII progress bar (`:252-256`) — **already close to the lightest version** (borderless labeled sections, no medallions, no rail-vs-color duplication). The web view is the heavy outlier — converge toward this. Note: the 4 phase-body components (`HandleBody`/`PlanBody`/`ActionBody`/`EvaluateBody`) are duplicated in both `PhaseDrilldown.tsx` and this file — a consolidation opportunity.
 
-## 3. plugin-xr — NO ViewDeclaration (server-side XR host chrome only)
+## 3. Retired Headset Host Chrome
 
-`plugins/plugin-xr/src/index.ts:27-53` registers services/actions/providers/routes + `config:{XR_WS_PORT:31338}` — **no `views` array** (no `plugin.ts`). The only UI is `src/routes/xr-view-host.ts` — `GET /xr/view-host/:id` returns a self-contained HTML page (`buildHostPage` `:63-360`) loading *other* plugins' view bundles in an XR-optimized iframe shell.
+The old standalone host route and its off-brand inline chrome were removed with
+the alternate-renderer cleanup. Future headset work should use shared tokens and
+ship behind explicit evidence instead of a parallel design system.
 
-- **Chrome states:** loader spinner (`:222-228`), load error + Retry (`:344-353`), mounted view, voice-listening indicator (`:135-153,290-293`), transcript toast (`:191-209,295-302`).
-- **Chrome structure:** 1 header bar (title + voice indicator + close ✕ `:213-221`) + voice pill + transcript toast + close + spinner. Minimal by count.
-- **Heaviness / slop critique:** **OFF-BRAND COLORS — the clearest violation in this part.** Inlined CSS hardcodes `--accent: #6366f1` (indigo/blue — forbidden) + `--bg:#0d0d0f` / `--surface:#18181b` (near-black) + `--border: rgba(255,255,255,0.08)` (`xr-view-host.ts:78-87`); voice indicator + transcript toast are indigo (`:139-145,196`). Self-contained inline `<style>` (~135 lines) doesn't inherit theme tokens — a parallel design system that will drift.
-- **Fix recommendations:** Swap `--accent` to orange `#ff8a24` (or the real token), lighten `--bg`/`--surface`, kill the blue — near-mechanical, highest-value XR change. Header could drop the text title (icon + close only). The voice pill + transcript toast overlap the floating chat overlay — defer to it.
-- **Even-simpler note:** Infrastructure, not a view to merge/remove — but its inline design system should be **deleted in favor of shared theme tokens**.
+## 4. plugin-facewear — device controls
 
-## 4. plugin-facewear — 2 real surfaces (+ XR variant)
-
-ViewDeclarations: `src/index.ts:64-207` — `facewear` (gui/tui/xr)→`FacewearView`/`FacewearTuiView`/`FacewearView`; `smartglasses` (gui/tui/xr)→`SmartglassesView`/`SmartglassesTuiView`/`SmartglassesView`; plus `app.navTabs` for both (`:209-226`).
+The old duplicate facewear/smartglasses view declarations were retired; device
+controls now live under the remaining settings/device flow.
 
 ### 4a. `facewear` (gui) — `src/ui/FacewearView.tsx`
 
 - **Purpose:** Device manager — list 4 headset/smartglasses profiles, show connected, launch connect/manage.
-- **Real or stub?** **REAL but thin.** Polls `/api/facewear/status` every 5s; `DEVICE_PROFILES` is a hardcoded catalog of 4 (`:20-60`); Connect opens `/api/xr/connect` or routes to `/apps/smartglasses` (`:187-193`).
+- **Real or stub?** **REAL but thin.** Polls `/api/facewear/status` every 5s; `DEVICE_PROFILES` is a hardcoded catalog of 4 (`:20-60`); the old headset connect route was retired.
 - **States:** loading (`:248-252`), error (`:254-258`), populated (summary card `:262-282` + 4 device cards + actions card).
 - **Structure:** 1 page header + 1 "Actions" h2 (`:297`); summary card + 4× `DeviceCard` + Actions card (~6 cards); every card bordered; per-card Connected/Disconnected badge (`:127-135`), connection-type label, active-device chips; per-card Connect/Manage ×4 + Actions Connect/Status/Refresh = 7 buttons.
 
@@ -313,9 +323,11 @@ ViewDeclarations: `src/index.ts:64-207` — `facewear` (gui/tui/xr)→`FacewearV
 - **Minimization recommendations:** DeviceCard→icon (color-coded by state) + name + one connect/manage affordance; delete manufacturer/description/connection-type/status badge. Delete the summary card + Actions card. Chat: connecting is a guided conversational flow ("connect my Quest"); the agent already has `FACEWEAR_CONNECT`.
 - **Even-simpler note:** Close to **replaceable by chat + a tiny status chip** — a 4-item static catalog + a status poll.
 
-### 4b. `facewear` (xr) — `src/ui/FacewearXrView.tsx`
+### 4b. Retired Facewear Alternate Renderer
 
-107 lines, REAL, thin. Polls status every 3s, lists connected devices (limit 6) or empty (`:95-103`). Light already (~3 rows + header). Minor: double-encoded again (`Active/Standby` pill + "Connected" text + green border `:53-62,74-85`). Keep as the lightest facewear surface; drop the redundant text. **Wiring inconsistency to flag owners:** the index.ts XR declaration wires `FacewearView` (heavy GUI) for `viewType:"xr"`, while this purpose-built lighter `FacewearXrView` exists unused.
+The old headset-specific facewear renderer was removed. Keep smartglasses
+hardware UX in the shipped GUI/settings surfaces until a future adapter is
+deliberately restored behind the retained view contract.
 
 ### 4c. `smartglasses` (gui) — `src/ui/SmartglassesView.tsx` (1369 lines) — WORST OFFENDER IN PART D
 
@@ -329,10 +341,16 @@ ViewDeclarations: `src/index.ts:64-207` — `facewear` (gui/tui/xr)→`FacewearV
 - **Minimization recommendations:** Collapse 6 panels→2 (Connect: lenses + Connect + ready/blocked hint; Diagnostics: Run Check + Copy/Download). Delete the Platform panel (pairing hint→inline helper or chat). Delete the Report table (keep only Copy/Download). Collapse 14 gates→one pass/fail meter ("11/14" + Details disclosure). Drop per-lens StatusPill text (color the icon). Chat: pairing/validation are guided/conversational (`guided-side-tap-audio-validation` already exists).
 - **Even-simpler note:** A **hardware bring-up / QA console**, not a daily surface — should be **demoted out of primary nav** (currently a top-level navTab `:217-224`) into a "device setup" flow reached from FacewearView or chat.
 
-### 4d. Smartglasses spatial/TUI — `src/components/SmartglassesSpatialView.tsx`
+### 4d. Smartglasses Spatial Summary
 
-Snapshot-driven terminal render (via `registerSpatialTerminalView("smartglasses", …)`). Same convergence recommendation — the spatial vocabulary is the lighter target the GUI view should move toward.
+The old snapshot-driven terminal registration was removed. Same convergence
+recommendation: the spatial vocabulary remains the lighter target the GUI view
+should move toward if future adapters return.
 
 ### Part D cross-cutting
 
-Spatial views are the lightest already (trajectory-logger, facewear both ship a flatter `@elizaos/ui/spatial` twin — converge the GUI toward them). Phase-body duplication is a real DRY target. Connection state over-encoded everywhere (pick one signal: color). XR host chrome off-brand (indigo + near-black, bypasses tokens) — mechanical high-value fix. Vector-browser, trajectory-logger, smartglasses are developer/hardware tools — demote out of the primary tab set.
+Spatial views are the lightest already; converge the GUI toward that density if
+future adapters return. Phase-body duplication is a real DRY target. Connection
+state over-encoded everywhere (pick one signal: color). Vector-browser,
+trajectory-logger, smartglasses are developer/hardware tools — demote out of the
+primary tab set.

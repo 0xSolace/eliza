@@ -307,11 +307,11 @@ function viewEntry(id: string, patch: Partial<ViewEntry> = {}): ViewEntry {
 }
 
 describe("collapseViewEntries", () => {
-  it("collapses same-id gui/xr/tui entries into one with the surface union", () => {
+  it("collapses same-id modality entries into one with the surface union", () => {
     const collapsed = collapseViewEntries([
       viewEntry("phone", { label: "Phone", modality: "gui" }),
-      viewEntry("phone", { label: "Phone XR", modality: "xr" }),
-      viewEntry("phone", { label: "Phone TUI", modality: "tui" }),
+      viewEntry("phone", { label: "Phone future spatial", modality: "xr" }),
+      viewEntry("phone", { label: "Phone future terminal", modality: "tui" }),
     ]);
     expect(collapsed).toHaveLength(1);
     expect(collapsed[0].label).toBe("Phone");
@@ -320,7 +320,7 @@ describe("collapseViewEntries", () => {
 
   it("prefers the gui entry as the base even when it arrives last", () => {
     const collapsed = collapseViewEntries([
-      viewEntry("phone", { label: "Phone TUI", modality: "tui" }),
+      viewEntry("phone", { label: "Phone future terminal", modality: "tui" }),
       viewEntry("phone", { label: "Phone", modality: "gui" }),
     ]);
     expect(collapsed).toHaveLength(1);

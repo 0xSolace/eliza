@@ -1,11 +1,10 @@
 /**
  * Screen gallery — representative archetypes covering the app's screen families,
  * each authored ONCE with the spatial vocabulary. The gallery is the verification
- * corpus: every screen here is rendered to the GUI DOM and to terminal lines in
- * tests (`__tests__/gallery.test.tsx`, `__tests__/framing.test.ts`).
+ * corpus for the shipped DOM runtime and future modality adapters.
  *
  * These are presentational (props baked in) so they render identically and
- * deterministically on every surface with no data fetching.
+ * deterministically with no data fetching.
  */
 
 import { AgentProfileView } from "./example.tsx";
@@ -25,10 +24,8 @@ export interface GalleryScreen {
   id: string;
   title: string;
   description: string;
-  /** Authored once; rendered to GUI/XR (DOM) and TUI (terminal) unchanged. */
+  /** Authored once with spatial primitives and rendered by the host surface. */
   view: () => React.ReactNode;
-  /** Suggested terminal width for the TUI rendering of this screen. */
-  tuiWidth?: number;
 }
 
 // 1 — Detail / profile card --------------------------------------------------
@@ -148,7 +145,6 @@ function DashboardScreen() {
 
 // 5 — Chat transcript --------------------------------------------------------
 function ChatScreen() {
-  // Speaker label + message, no bubble boxes — clean terminal chat rhythm.
   return (
     <Card title="Chat" gap={1} padding={1}>
       <VStack gap={0}>
@@ -208,9 +204,8 @@ function ErrorScreen() {
 }
 
 // 8 — Connect / login --------------------------------------------------------
-// Full-width stacked actions: `width="100%"` fills the container in every
-// modality, unlike a fixed cell width (which is 0.25rem in DOM but a whole
-// column in the terminal — they don't translate).
+// Full-width stacked actions: `width="100%"` fills the container without
+// coupling the screen to a renderer's physical cell size.
 function ConnectScreen() {
   return (
     <Card title="Connect" gap={1} padding={2}>
@@ -332,8 +327,6 @@ function ProgressScreen() {
       <List gap={0}>
         {steps.map((s) => (
           <HStack key={s.label} gap={1}>
-            {/* ●/○ are width-1 in every terminal; ✓ is East-Asian-ambiguous
-                (width 2 per the width table, 1 in many fonts) → misaligns. */}
             <Text tone={s.done ? "success" : "muted"}>
               {s.done ? "●" : "○"}
             </Text>

@@ -43,7 +43,6 @@ AGENT_MARKER_GROUPS = (
     ('"agentId"', "agentId="),
     ("full-agent", '"agent":"full"', '"mode":"full-agent"'),
     ("fallback_payload_used=false",),
-    ("elizaos-tui-ready",),
 )
 QEMU_REFERENCE_MARKERS = (
     "qemu_virt_boot_transcript_evidence_only_no_silicon_or_physical_board_claim",

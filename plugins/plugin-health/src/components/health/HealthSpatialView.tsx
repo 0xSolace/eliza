@@ -2,14 +2,12 @@
  * HealthSpatialView — the owner sleep summary authored once with the spatial
  * vocabulary, so it renders correctly wherever it is displayed:
  *
- *   - GUI / XR — mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      — the spatial primitives still render to terminal lines via
- *                `@elizaos/ui/spatial/tui`, but the plugin no longer ships a
- *                terminal registration (GUI-only view inventory).
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
  * out) and imports only the cross-modality primitives, so it is safe to render
- * in the Node agent process where the terminal lives (no browser/client import).
+ * without pulling browser-only runtime imports into the presentational layer.
  *
  * The numeric sleep summary (last-night, regularity, baseline, window summary)
  * is computed/formatted in the data wrapper ({@link ./HealthView.tsx}) and
@@ -17,7 +15,7 @@
  * or computes — it displays label/value rows and dispatches actions.
  */
 
-import { Button, Card, Escape, HStack, List, Text } from "@elizaos/ui/spatial";
+import { Button, Card, Escape, HStack, Text } from "@elizaos/ui/spatial";
 import type { CSSProperties } from "react";
 
 /** A single label/value summary row, already projected to display strings. */
@@ -155,7 +153,7 @@ function HealthEmptyBody() {
 
 function HealthReadyBody({ snapshot }: { snapshot: HealthSnapshot }) {
   return (
-    <Escape grow={1} tui={<SpatialReadyBody snapshot={snapshot} />}>
+    <Escape grow={1}>
       <div style={readyShellStyle}>
         {snapshot.proactive ? (
           <p style={proactiveLineStyle}>{snapshot.proactive}</p>
@@ -168,22 +166,6 @@ function HealthReadyBody({ snapshot }: { snapshot: HealthSnapshot }) {
         </div>
       </div>
     </Escape>
-  );
-}
-
-function SpatialReadyBody({ snapshot }: { snapshot: HealthSnapshot }) {
-  return (
-    <>
-      {snapshot.proactive ? (
-        <Text tone="warning" style="caption">
-          {snapshot.proactive}
-        </Text>
-      ) : null}
-      <Section label="Last sleep" rows={snapshot.lastSleep} />
-      <Section label="Regularity" rows={snapshot.regularity} />
-      <Section label="Baseline" rows={snapshot.baseline} />
-      <Section label="Window summary" rows={snapshot.windowSummary} />
-    </>
   );
 }
 
@@ -290,34 +272,5 @@ function DomSection({ label, rows }: { label: string; rows: StatRow[] }) {
         ))}
       </dl>
     </section>
-  );
-}
-
-function Section({ label, rows }: { label: string; rows: StatRow[] }) {
-  if (rows.length === 0) return null;
-
-  return (
-    <>
-      <Text style="caption" tone="muted">
-        {label}
-      </Text>
-      <List gap={0}>
-        {rows.map((row) => (
-          <HStack
-            key={row.label}
-            gap={1}
-            align="center"
-            agent={`row-${row.label}`}
-          >
-            <Text tone="muted" grow={1}>
-              {row.label}
-            </Text>
-            <Text bold wrap={false}>
-              {row.value}
-            </Text>
-          </HStack>
-        ))}
-      </List>
-    </>
   );
 }

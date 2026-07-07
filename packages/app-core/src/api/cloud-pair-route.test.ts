@@ -19,14 +19,18 @@ import {
 } from "vitest";
 import { _resetSensitiveLimiters } from "./auth/sensitive-rate-limit";
 
-vi.mock("@elizaos/core", () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
+vi.mock("@elizaos/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@elizaos/core")>();
+  return {
+    ...actual,
+    logger: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    },
+  };
+});
 
 let handleCloudPairRoute: typeof import("./cloud-pair-route").handleCloudPairRoute;
 

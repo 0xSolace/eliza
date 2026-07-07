@@ -135,6 +135,21 @@ describe("HomeLauncherSurface", () => {
     ).toBe("launcher");
   });
 
+  it("shows Home immediately when /chat mounts after the shared store was on Launcher", () => {
+    act(() => goLauncher());
+    render(
+      <HomeLauncherSurface
+        home={<div>home</div>}
+        launcher={<LauncherProbe />}
+        initialPage="home"
+      />,
+    );
+
+    expect(
+      screen.getByTestId("home-launcher-surface").getAttribute("data-page"),
+    ).toBe("home");
+  });
+
   it("moves focus out of the half that becomes inert on a rail flip (#12179)", () => {
     act(() => goHome());
     render(

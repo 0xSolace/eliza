@@ -1,10 +1,11 @@
 /**
- * ScreenshareView — the GUI data wrapper for the Screen Share surface.
+ * ScreenshareView — the single GUI data wrapper for the Screen Share surface.
  *
  * It owns the live operator data (capability fetch + poll, launched-session
  * load, host start/stop/rotate, copy/open-viewer, remote connect, refresh) and
  * renders the one presentational {@link ScreenshareSpatialView} inside a
- * {@link SpatialSurface}.
+ * {@link SpatialSurface}. The spatial child is presentational only, which keeps
+ * host lifecycle and remote control calls isolated in this wrapper.
  */
 
 import { client, selectLatestRunForApp, useAppSelector } from "@elizaos/ui";

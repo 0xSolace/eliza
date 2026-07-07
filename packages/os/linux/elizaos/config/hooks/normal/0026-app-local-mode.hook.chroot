@@ -3,12 +3,12 @@
 #
 # In the kiosk, the Electrobun app runs its OWN self-contained embedded runtime
 # (Resources/app/eliza-dist with full node_modules) and serves :31337 itself.
-# The separate elizaos-agent.service — and its elizaos-first-boot /
-# elizaos-terminal-tui-smoke companions — run the bare agent-bundle.js, which
-# is NOT self-contained (it tries to install node_modules at runtime → ENOSPC)
-# and would also compete for :31337. Mask the trio here so the app owns the
-# runtime cleanly. riscv64 has no Electrobun prebuild and keeps the separate
-# agent (its epiphany kiosk renders that agent's web UI).
+# The separate elizaos-agent.service and elizaos-first-boot companion run the
+# bare agent-bundle.js, which is NOT self-contained (it tries to install
+# node_modules at runtime → ENOSPC) and would also compete for :31337. Remove
+# the pair here so the app owns the runtime cleanly. riscv64 has no Electrobun
+# prebuild and keeps the separate agent (its epiphany kiosk renders that agent's
+# web UI).
 set -eu
 
 if [ ! -x /opt/elizaos/app/elizaos ]; then
@@ -21,7 +21,7 @@ echo "[0026-app-local] Electrobun app present; removing separate agent services 
 # /etc/systemd/system (it refuses with "file exists"), so disable and delete
 # the units outright. They came from config/includes.chroot and are enabled by
 # the 0010 hook; remove both the unit files and their enable symlinks.
-for unit in elizaos-agent.service elizaos-first-boot.service elizaos-terminal-tui-smoke.service; do
+for unit in elizaos-agent.service elizaos-first-boot.service; do
     systemctl disable "${unit}" 2>/dev/null || true
     rm -f "/etc/systemd/system/${unit}"
     rm -f "/etc/systemd/system/multi-user.target.wants/${unit}"

@@ -199,27 +199,28 @@ const EMPTY_SLASH_CONTROLLER: SlashCommandController = {
  */
 
 // The chat floats over arbitrary app surfaces, including theme-app where
-// `--card` is brand orange. Keep the sheet's local tokens dark and self-owned so
-// open/maximized chat never turns into a transparent-looking orange overlay.
+// `--card` is brand orange. Keep the sheet's local tokens dark, neutral, and
+// self-owned so open/maximized chat never turns into a transparent-looking
+// orange overlay.
 const CHAT_PANEL_THEME = {
-  "--bg": "#120c08",
+  "--bg": "#101114",
   "--bg-hover": "rgba(255, 255, 255, 0.08)",
   "--bg-muted": "rgba(255, 255, 255, 0.06)",
-  "--card": "#1d130c",
-  "--card-foreground": "#fff7f0",
-  "--surface": "rgba(255, 255, 255, 0.06)",
-  "--txt": "#fff7f0",
-  "--text": "#fff7f0",
+  "--card": "#181a20",
+  "--card-foreground": "#f4f5f7",
+  "--surface": "rgba(255, 255, 255, 0.07)",
+  "--txt": "#f4f5f7",
+  "--text": "#f4f5f7",
   "--text-strong": "#ffffff",
-  "--foreground": "#fff7f0",
-  "--muted": "rgba(255, 247, 240, 0.68)",
-  "--muted-strong": "rgba(255, 247, 240, 0.86)",
-  "--muted-foreground": "rgba(255, 247, 240, 0.68)",
+  "--foreground": "#f4f5f7",
+  "--muted": "rgba(244, 245, 247, 0.68)",
+  "--muted-strong": "rgba(244, 245, 247, 0.86)",
+  "--muted-foreground": "rgba(244, 245, 247, 0.68)",
   "--border": "rgba(255, 255, 255, 0.18)",
   "--border-strong": "rgba(255, 255, 255, 0.34)",
-  "--ring": "rgba(255, 247, 240, 0.8)",
+  "--ring": "rgba(244, 245, 247, 0.8)",
   "--accent": "#ff7a3d",
-  "--accent-foreground": "#120c08",
+  "--accent-foreground": "#101114",
 } as React.CSSProperties;
 
 // The drag-handle bar color. Set EXPLICITLY (not `bg-muted-strong`) because the
@@ -503,7 +504,12 @@ function SoftButton({
         // Pulse the accent glyph while capture is hot; reduced-motion falls back
         // to the static accent without adding background or border chrome.
         pulse && "animate-pulse motion-reduce:animate-none",
-        disabled && "opacity-40",
+        // Blocked controls (e.g. voice/transcript during sign-in-first
+        // onboarding) read as inert: dimmed AND non-interactive to the pointer
+        // (no hover color shift, no cursor) — matching the attachment "+".
+        // Keyboard focus is unaffected, so the aria-disabled label still
+        // announces.
+        disabled && "pointer-events-none opacity-40",
       )}
     >
       {Icon ? (
@@ -890,6 +896,52 @@ function shellToChatMessageData(m: ShellMessage): ChatMessageData {
   return data;
 }
 
+const FIRST_RUN_SIGN_IN_FALLBACK_MESSAGE: ShellMessage = {
+  id: "first-run:cloud-signin-fallback",
+  role: "assistant",
+  source: "first_run",
+  createdAt: 0,
+  content: [
+    "Sign in to Eliza Cloud to start chatting.",
+    "",
+    "[CHOICE:first-run id=runtime]",
+    "__first_run__:runtime:cloud=Sign in to Eliza Cloud",
+    "[/CHOICE]",
+  ].join("\n"),
+};
+const FIRST_RUN_SIGN_IN_FALLBACK_DELAY_MS = 600;
+
+function isFirstRunShellMessage(m: ShellMessage): boolean {
+  return (
+    m.id.startsWith("first-run:") ||
+    m.source === "first_run" ||
+    m.source === "first-run"
+  );
+}
+
+function selectFirstRunDisplayMessages(
+  messages: readonly ShellMessage[],
+  showFallback: boolean,
+): ShellMessage[] {
+  const firstRunMessages = messages.filter(isFirstRunShellMessage);
+  if (firstRunMessages.length === 0) {
+    return showFallback ? [FIRST_RUN_SIGN_IN_FALLBACK_MESSAGE] : [];
+  }
+
+  const latest = firstRunMessages.at(-1);
+  if (!latest) return [];
+
+  const previous = firstRunMessages.at(-2);
+  if (
+    previous?.id === "first-run:appearance" &&
+    latest.id === "first-run:tutorial"
+  ) {
+    return [previous, latest];
+  }
+
+  return [latest];
+}
+
 /**
  * Render a settled transcript row exactly as the overlay does (glass chrome,
  * settled body). Test-only seam for the component-tree render-parity contract
@@ -927,6 +979,7 @@ export function ContinuousChatOverlay({
   agentName = "Eliza",
   slash: slashProp,
   firstRunOpen = false,
+  dockPinned = false,
 }: {
   controller: ShellController;
   /** Name shown in the composer placeholder ("Ask {agentName}"). Defaults to Eliza. */
@@ -935,17 +988,24 @@ export function ContinuousChatOverlay({
   slash?: SlashCommandController;
   /**
    * True while in-chat first-run onboarding is active (`firstRunComplete ===
-   * false` upstream). The overlay opens to FULL and pins there: every collapse
-   * path (Escape, outside tap, grabber pull-down/close) is a no-op, and the
-   * backdrop is OPAQUE (`bg-bg`) so the launcher/home behind is
-   * hidden. The composer TEXT + SEND are unlocked (#12178) — typed text is
-   * answered locally by the in-chat conductor and never reaches the server —
-   * while attach + mic stay disabled (no agent to take media yet); the seeded
-   * choice/OAuth widgets remain the primary input. On the falling edge —
-   * onboarding just completed — the sheet auto-collapses to the input bar and
-   * the opaque backdrop fades to the normal scrim, revealing the home screen.
+   * false` upstream). The overlay opens as the normal full-screen chat and pins
+   * there: every collapse path (Escape, outside tap, drag/close) is a no-op,
+   * the drag handle is hidden, and the backdrop is OPAQUE (`bg-bg`) so the
+   * launcher/home behind is hidden. The composer is sign-in-first and locked;
+   * the seeded transcript choice/OAuth widget is the only input until setup
+   * completes. On the falling edge — onboarding just completed — the sheet
+   * settles to half and the opaque backdrop fades to the normal scrim,
+   * revealing the home screen.
    */
   firstRunOpen?: boolean;
+  /**
+   * True while the desktop/web docked-chat idiom hosts this overlay inside the
+   * left dock pane (CHAT_DOCK_UX.md). Pins the sheet open FULL + edge-to-edge
+   * exactly like the onboarding pin: vertical sheet gestures, Escape, back
+   * intents, and every collapse path are no-ops — the vertical divider pill
+   * owns open/close on that idiom.
+   */
+  dockPinned?: boolean;
 }): React.JSX.Element {
   const {
     messages,
@@ -982,18 +1042,15 @@ export function ContinuousChatOverlay({
   // cancel/switch controls; the placeholder tells the user they can keep typing.
   const modelStatus = controller.modelStatus;
   const modelBlocksSend = modelStatus?.blocksSend ?? false;
-  // The shared action funnel — the SAME seam the transcript's CHOICE widgets
-  // use. During onboarding the unlocked composer routes free text through it so
-  // it reaches the in-chat conductor (and never the server); post-onboarding it
-  // is unused here (the composer sends via `controller.send`). In stories/tests
-  // with no AppContext the store returns an inert no-op.
+  // App-level chat handlers shared with the desktop chat surface. The first-run
+  // transcript's CHOICE widgets still use the action funnel inside their own
+  // renderer; this overlay-level selection only needs message-management
+  // handlers.
   const {
-    sendActionMessage,
     handleChatDelete,
     handleSelectConversation,
     loadConversationMessagesAround,
   } = useAppSelectorShallow((s) => ({
-    sendActionMessage: s.sendActionMessage,
     // Persistent per-message delete (#13533): server DELETE + optimistic
     // removal with rollback. Inert no-op in stories/tests with no AppContext.
     handleChatDelete: s.handleChatDelete,
@@ -1193,21 +1250,23 @@ export function ContinuousChatOverlay({
   // detent are all DERIVED from it — so the impossible "open but not open" or
   // pilled-and-full combos can't exist and no transition has to hand-sync two
   // separate states (which is what bred the old stuck states).
+  // Openness pin shared by onboarding and the docked-chat idiom: while true
+  // the sheet is structurally FULL and undismissable (see firstRunOpen /
+  // dockPinned docs above).
+  const pinnedOpen = firstRunOpen || dockPinned;
   const [mode, setMode] = React.useState<ChatMode>(
-    firstRunOpen ? "full" : "input",
+    pinnedOpen ? "full" : "input",
   );
   // The pin-at-full + auto-collapse edge effect lives below `goToDetent` (it
   // needs the detent animator); the mount state above still opens FULL first.
   //
-  // During onboarding the sheet MUST stay open — the seeded greeting + choices
-  // are the only way forward and the composer is frozen behind them. Deriving
-  // openness from the effect alone proved raceable on a home-view boot (the
-  // sheet could settle collapsed with the options hidden behind the grabber and
-  // only a misleading "tap an option above" hint showing). Pin it STRUCTURALLY:
-  // while firstRunOpen, the derived openness is always FULL regardless of the
-  // underlying `mode` transition state. The effect still drives the real `mode`
-  // so the falling edge (onboarding done) collapses correctly.
-  const effectiveMode: ChatMode = firstRunOpen ? "full" : mode;
+  // During onboarding and docked chat the sheet MUST stay open. Deriving
+  // openness from the effect alone proved raceable on a home-view boot, and the
+  // dock idiom delegates close/open to the divider pill. Pin it STRUCTURALLY:
+  // while pinned, the derived openness is always FULL regardless of the
+  // underlying `mode` transition state. The effects still drive the real `mode`
+  // so the first-run falling edge collapses correctly.
+  const effectiveMode: ChatMode = pinnedOpen ? "full" : mode;
   const pilled = effectiveMode === "pill";
   const sheetOpen = effectiveMode === "half" || effectiveMode === "full";
   const expanded = effectiveMode === "full";
@@ -1219,10 +1278,10 @@ export function ContinuousChatOverlay({
   // FULL-SCREEN (maximized): at the FULL detent the user can drop the inset
   // (max-width, side padding, top margin, rounding) so the chat is edge-to-edge.
   // Invariant: only true while at FULL (sheetOpen && expanded && !pilled); every
-  // leave-full transition resets it. Onboarding (firstRunOpen) starts here — the
-  // login/first-run chat opens edge-to-edge full-screen (kept in sync by the
-  // first-run pin effect below), then the falling edge collapses it to half.
-  const [maximized, setMaximized] = React.useState(firstRunOpen);
+  // leave-full transition resets it. Pinned sessions start here: first-run opens
+  // edge-to-edge full-screen, then its falling edge collapses to half; the dock
+  // pin stays edge-to-edge while the dock idiom owns close/open.
+  const [maximized, setMaximized] = React.useState(pinnedOpen);
   // A restore drag is in flight (pull-down out of full-bleed). Declared up here
   // (not by the restore binding) because `fullBleedFrame` below reads it to keep
   // the panel MAX-HEIGHT full-screen-sized for the drag (so the height can track
@@ -1584,13 +1643,37 @@ export function ContinuousChatOverlay({
     conversationKey: activeConversationId,
     fetchOlder,
   });
-  const visibleMessages = React.useMemo(
-    () =>
-      renderableMessages.length > renderWindow.windowSize
-        ? renderableMessages.slice(-renderWindow.windowSize)
-        : renderableMessages,
-    [renderableMessages, renderWindow.windowSize],
+  const hasFirstRunMessages = React.useMemo(
+    () => renderableMessages.some(isFirstRunShellMessage),
+    [renderableMessages],
   );
+  const [firstRunFallbackReady, setFirstRunFallbackReady] =
+    React.useState(false);
+  React.useEffect(() => {
+    if (!firstRunOpen || hasFirstRunMessages) {
+      setFirstRunFallbackReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setFirstRunFallbackReady(true);
+    }, FIRST_RUN_SIGN_IN_FALLBACK_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [firstRunOpen, hasFirstRunMessages]);
+  const visibleMessages = React.useMemo(() => {
+    if (firstRunOpen)
+      return selectFirstRunDisplayMessages(
+        renderableMessages,
+        firstRunFallbackReady,
+      );
+    return renderableMessages.length > renderWindow.windowSize
+      ? renderableMessages.slice(-renderWindow.windowSize)
+      : renderableMessages;
+  }, [
+    firstRunFallbackReady,
+    firstRunOpen,
+    renderableMessages,
+    renderWindow.windowSize,
+  ]);
   const lastId = visibleMessages.at(-1)?.id ?? null;
   const lastContent = visibleMessages.at(-1)?.content ?? "";
   // The thread body is mounted while the sheet is open OR during an upward
@@ -1856,7 +1939,13 @@ export function ContinuousChatOverlay({
       return (
         <ChatMessage
           key={m.id}
-          appearance={firstRunOpen ? "panel" : "glass"}
+          // Always the app's canonical glass chrome — onboarding included. The
+          // first-run greeting used to force "panel" (a bordered card), a
+          // different, duplicate-looking bubble from the real in-app chat; glass
+          // is the chromeless bubble with the same rise/fade entrance, matching
+          // the app and the documented first-run intent (agent prose floats as
+          // plain wallpaper text with its CTA beneath).
+          appearance="glass"
           agentName={agentName}
           message={shellToChatMessageData(m)}
           reduceMotion={reduce}
@@ -1877,7 +1966,6 @@ export function ContinuousChatOverlay({
     },
     [
       visibleMessages.length,
-      firstRunOpen,
       agentName,
       reduce,
       handleCopyMessage,
@@ -1945,16 +2033,10 @@ export function ContinuousChatOverlay({
       const trimmed = text.trim();
       // An image-only turn is valid; only bail when there's nothing to send.
       if (!trimmed && images.length === 0) return;
-      // During onboarding the composer is unlocked (#12178). Route free text
-      // through the shared action funnel: before a runtime is chosen it is
-      // answered locally by the in-chat conductor (classify → "conductor") and
-      // does not reach the server; once a Cloud agent is provisioning behind a
-      // ready bootstrap bridge the funnel classifies it as "send" so the first
-      // real message reaches the bootstrap-bridge agent (#14103). Either way
-      // `controller.send` is never called here — the funnel owns the decision.
-      // Attach is disabled during onboarding, so any images are dropped.
+      // During onboarding the composer is sign-in-first and locked. Ignore any
+      // synthetic draft entry point that reaches submit, and keep setup choice
+      // handling inside the transcript widgets.
       if (firstRunOpen) {
-        if (trimmed) void sendActionMessage(trimmed);
         setDraft("");
         setSlashDismissed(false);
         setPendingImages([]);
@@ -2024,15 +2106,7 @@ export function ContinuousChatOverlay({
       detentHaptic();
       inputRef.current?.focus();
     },
-    [
-      canSend,
-      firstRunOpen,
-      sendActionMessage,
-      send,
-      setDraft,
-      setPendingImages,
-      viewChatBinding,
-    ],
+    [canSend, firstRunOpen, send, setDraft, setPendingImages, viewChatBinding],
   );
 
   const addImageFiles = React.useCallback(
@@ -2369,7 +2443,7 @@ export function ContinuousChatOverlay({
     !hasImages &&
     !recording &&
     !responding &&
-    !firstRunOpen;
+    !pinnedOpen;
 
   // In short landscape the resting composer moves to the bottom inline-end
   // corner. Publish that footprint separately from bottom clearance so hosted
@@ -2550,7 +2624,9 @@ export function ContinuousChatOverlay({
   // shape instead of popping/snapping. Only the SHAPE eases (side inset, corner
   // radius, composer bottom-inset); the height is still the finger/detent spring,
   // so the two read as one motion. Reduced-motion sets it instantly.
-  const fullBleedT = useMotionValue(firstRunOpen ? 1 : 0);
+  // Start at the committed shape so pinned first paint does not flash the inset
+  // panel before the full-screen morph effect catches up.
+  const fullBleedT = useMotionValue(fullBleed ? 1 : 0);
   // Mirror the settled full-bleed flag so release handlers can settle the morph
   // toward the committed shape without waiting for a re-render.
   const fullBleedRef = React.useRef(fullBleed);
@@ -3047,14 +3123,23 @@ export function ContinuousChatOverlay({
     const was = wasFirstRunOpenRef.current;
     wasFirstRunOpenRef.current = firstRunOpen;
     if (firstRunOpen) {
-      // Pin FULL + edge-to-edge full-bleed: the login/first-run chat owns the
-      // whole screen (see the `maximized` initial state above).
+      setFreeH(null);
       setMode("full");
       setMaximized(true);
       return;
     }
-    if (was) goToDetent("half");
-  }, [firstRunOpen, goToDetent]);
+    if (was && !dockPinned) goToDetent("half");
+  }, [firstRunOpen, dockPinned, goToDetent]);
+
+  // Dock pin: when the dock idiom mounts (or flips on at a live resize), snap
+  // the sheet to its pinned FULL + edge-to-edge shape immediately — the dock
+  // pane's geometry owns the chat's footprint from here.
+  React.useEffect(() => {
+    if (!dockPinned) return;
+    setMode("full");
+    setMaximized(true);
+    fullBleedT.set(1);
+  }, [dockPinned, fullBleedT]);
 
   // First-run opaque backdrop (#12178). While onboarding pins the sheet FULL,
   // the backdrop is an OPAQUE `bg-bg` layer that hides the launcher/home behind
@@ -3095,7 +3180,7 @@ export function ContinuousChatOverlay({
     // Undismissable during onboarding: Escape (document, thread, composer),
     // outside taps, the grabber close, and the sheet-open grabber tap all
     // funnel here — every one is a no-op until first-run completes.
-    if (firstRunOpen) return;
+    if (pinnedOpen) return;
     // If focus is sitting inside the thread log, pull it out before the log
     // becomes aria-hidden / tabIndex=-1 — never park focus on a hidden element.
     if (
@@ -3108,7 +3193,7 @@ export function ContinuousChatOverlay({
     }
     closeSheet();
     inputRef.current?.blur();
-  }, [closeSheet, firstRunOpen]);
+  }, [closeSheet, pinnedOpen]);
 
   // Dismiss the keyboard and return to the resting state from BEFORE the composer
   // was focused — the single restore path shared by every "drop the keyboard"
@@ -3195,6 +3280,7 @@ export function ContinuousChatOverlay({
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onPrefill = (event: Event) => {
+      if (firstRunOpen) return;
       const detail = (event as CustomEvent<ChatPrefillEventDetail>).detail;
       const text = typeof detail?.text === "string" ? detail.text : "";
       if (!text.trim()) return;
@@ -3219,7 +3305,7 @@ export function ContinuousChatOverlay({
     };
     window.addEventListener(CHAT_PREFILL_EVENT, onPrefill);
     return () => window.removeEventListener(CHAT_PREFILL_EVENT, onPrefill);
-  }, [clearPrefillFocusSchedule, setDraft]);
+  }, [clearPrefillFocusSchedule, firstRunOpen, setDraft]);
 
   // "Open chat" intent (the launcher's Messages tile). Land the user IN an open
   // conversation instead of the wordless home with a collapsed pill: un-pill to
@@ -3228,14 +3314,14 @@ export function ContinuousChatOverlay({
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onOpen = () => {
-      if (firstRunOpen) return;
+      if (pinnedOpen) return;
       setMode((m) => (m === "pill" ? "input" : m));
       expand();
       requestAnimationFrame(() => inputRef.current?.focus());
     };
     window.addEventListener(CHAT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(CHAT_OPEN_EVENT, onOpen);
-  }, [firstRunOpen, expand]);
+  }, [pinnedOpen, expand]);
 
   // OS assistant / deep-link entry (Siri, Shortcuts, App Actions, the assistant
   // entry point) routes into `#chat?text=…&source=…&voice=1`. On desktop the
@@ -3248,6 +3334,7 @@ export function ContinuousChatOverlay({
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const consumeFromHash = () => {
+      if (firstRunOpen) return;
       const hash = window.location.hash;
       // Read the voice flag off the ORIGINAL hash first — claiming clears the
       // launch params (text/source/action/launchId) but leaves `voice`, and we
@@ -3286,6 +3373,7 @@ export function ContinuousChatOverlay({
   }, [
     clearPrefillFocusSchedule,
     expand,
+    firstRunOpen,
     handsFree,
     recording,
     setDraft,
@@ -3461,11 +3549,8 @@ export function ContinuousChatOverlay({
   );
 
   const submit = React.useCallback(() => {
-    // Onboarding: skip slash/shortcut resolution entirely — every submit is
-    // answered by the in-chat conductor, so nothing runs a command or reaches
-    // the server (submitText routes free text to the conductor).
+    // Onboarding is sign-in-first; transcript choice widgets are the only input.
     if (firstRunOpen) {
-      submitText(draft, pendingImages);
       return;
     }
     const shortcut =
@@ -3613,10 +3698,10 @@ export function ContinuousChatOverlay({
   // detector preserves the old "tap outside to collapse" behavior without
   // stealing horizontal swipes or vertical scroll from the background.
   React.useEffect(() => {
-    // While pinned open by onboarding the chat is undismissable, so the
-    // outside-tap swallower must not install: it capture-eats pointerup on
-    // everything outside the sheet.
-    if (typeof document === "undefined" || !sheetOpen || firstRunOpen) {
+    // While pinned (onboarding / docked idiom) the chat is undismissable, so
+    // the outside-tap swallower must not install: it capture-eats pointerup on
+    // everything outside the sheet — including the dock's divider pill.
+    if (typeof document === "undefined" || !sheetOpen || pinnedOpen) {
       outsideSheetPointerRef.current = null;
       suppressNextOutsideClickRef.current = false;
       return undefined;
@@ -3715,7 +3800,7 @@ export function ContinuousChatOverlay({
       document.removeEventListener("pointerup", onPointerEnd, true);
       document.removeEventListener("pointercancel", onPointerCancel, true);
     };
-  }, [sheetOpen, firstRunOpen, collapse, isOverlayControlTarget]);
+  }, [sheetOpen, pinnedOpen, collapse, isOverlayControlTarget]);
 
   // Escape collapses the chat from ANY open state, even a free-drag open with no
   // focused element (the element-level handlers on the textarea/thread only fire
@@ -3765,14 +3850,14 @@ export function ContinuousChatOverlay({
     const onBackIntent = (event: Event) => {
       const detail = (event as CustomEvent<BackIntentEventDetail>).detail;
       if (!detail || detail.handled) return;
-      if (!sheetOpen || firstRunOpen) return;
+      if (!sheetOpen || pinnedOpen) return;
       detail.handled = true;
       collapse();
     };
     window.addEventListener(ELIZA_BACK_INTENT_EVENT, onBackIntent);
     return () =>
       window.removeEventListener(ELIZA_BACK_INTENT_EVENT, onBackIntent);
-  }, [sheetOpen, firstRunOpen, collapse]);
+  }, [sheetOpen, pinnedOpen, collapse]);
 
   // Auto-grow the composer with multi-line input: snap to the content height
   // (capped by `max-h` in CSS, which then scrolls). Runs on every draft change
@@ -3886,7 +3971,7 @@ export function ContinuousChatOverlay({
   const onDragOffset = React.useCallback(
     (offset: number) => {
       // Onboarding pins the sheet at FULL: the live drag must not move it.
-      if (firstRunOpen) return;
+      if (pinnedOpen) return;
       if (!draggingRef.current) {
         stopThreadAnimation();
         stopOpenProgressAnimation();
@@ -4229,7 +4314,7 @@ export function ContinuousChatOverlay({
       }
     },
     [
-      firstRunOpen,
+      pinnedOpen,
       pilled,
       sheetOpen,
       baseH,
@@ -4265,7 +4350,7 @@ export function ContinuousChatOverlay({
   // detent. Returns true when it took over the release so the caller skips its
   // normal detent settle. Onboarding never re-triggers this (pinned full-bleed).
   const maybeMaximizeOnRelease = React.useCallback((): boolean => {
-    if (firstRunOpen) return false;
+    if (pinnedOpen) return false;
     // Two distinct maximize intents, both read from the gesture itself:
     //  - OVER-PULL: the peak raw pull carried at least half the maximize morph
     //    PAST the FULL detent (the finger visibly squared the corners) — the
@@ -4294,7 +4379,7 @@ export function ContinuousChatOverlay({
     }
     return false;
   }, [
-    firstRunOpen,
+    pinnedOpen,
     viewportH,
     viewport.innerHeight,
     insetPanelMaxH,
@@ -4382,7 +4467,7 @@ export function ContinuousChatOverlay({
       }
       setDragPreviewMounted(false);
       // Onboarding: a pull-down must not step the pinned-FULL sheet down.
-      if (firstRunOpen) return settleDrag();
+      if (pinnedOpen) return settleDrag();
       if (pilled) return settleDrag(); // already the lowest detent
       if (sheetOpen) {
         // Step down from the LIVE height, so a flick and a held-drag-then-flick
@@ -4436,7 +4521,7 @@ export function ContinuousChatOverlay({
       draggingRef.current = false;
       setDragPreviewMounted(false);
       // Onboarding: a released drag always springs back to the pinned FULL.
-      if (firstRunOpen) return settleDrag();
+      if (pinnedOpen) return settleDrag();
       if (pilled) {
         // From the pill: a slow drag under the halfway-open mark (openProgress
         // < 0.5) springs back to the capsule; past it we commit to LEAVING the
@@ -4510,9 +4595,9 @@ export function ContinuousChatOverlay({
   // ArrowDown) does the discrete restore. Onboarding pins the sheet, so the zone
   // is never rendered during first-run (guarded anyway for safety).
   const restoreFromMaximizedGuarded = React.useCallback(() => {
-    if (firstRunOpen) return;
+    if (pinnedOpen) return;
     restoreFromMaximized();
-  }, [firstRunOpen, restoreFromMaximized]);
+  }, [pinnedOpen, restoreFromMaximized]);
   // Live drag: reuse the shared drag math (onDragOffset) so the panel tracks
   // the finger identically to a grabber drag — the height AND the edge-to-edge
   // ↔ inset shape morph (a pure function of the height in onDragOffset) both
@@ -4522,7 +4607,7 @@ export function ContinuousChatOverlay({
   // full-bleed ceiling.
   const onRestoreDrag = React.useCallback(
     (offset: number) => {
-      if (firstRunOpen) return;
+      if (pinnedOpen) return;
       // Fresh gesture (onDragOffset flips draggingRef on its first frame). Seed
       // the peak at 0 — the maximized sheet sits at the ceiling, which is
       // gesture-start offset 0 — NOT the first sampled offset (a fast/coalesced
@@ -4549,7 +4634,7 @@ export function ContinuousChatOverlay({
       }
       onDragOffset(offset);
     },
-    [firstRunOpen, maximized, onDragOffset],
+    [pinnedOpen, maximized, onDragOffset],
   );
   // Release from a restore drag: if it never un-maximized (an upward/stationary
   // gesture) keep it pinned full-bleed; otherwise settle at the released height —
@@ -4565,7 +4650,7 @@ export function ContinuousChatOverlay({
       dragCommitRef.current = null;
       return settleDrag();
     }
-    if (firstRunOpen || !restoreDidUnmaximizeRef.current) return settleDrag();
+    if (pinnedOpen || !restoreDidUnmaximizeRef.current) return settleDrag();
     // A restore that un-maximized always lands on the inset shape; drive the
     // morph home (0) so a release mid-return finishes un-morphing the edges.
     animateFullBleedTo(0);
@@ -4586,7 +4671,7 @@ export function ContinuousChatOverlay({
       setMode("half");
     }
   }, [
-    firstRunOpen,
+    pinnedOpen,
     settleDrag,
     threadHeight,
     panelMaxH,
@@ -4838,17 +4923,15 @@ export function ContinuousChatOverlay({
         style={{ maxWidth: wrapperMaxW }}
         className="pointer-events-none relative flex w-full flex-col items-center"
       >
-        {(!fullBleed && !restoreDragging) ||
-        draggingRef.current ||
-        firstRunOpen ? (
+        {!firstRunOpen &&
+        ((!fullBleed && !restoreDragging) || draggingRef.current) ? (
           // Suppressed while full-bleed (the restore strip owns the top) and
           // while a restore drag is in flight (so the strip keeps the pointer
           // capture through the un-maximize) — EXCEPT while a grabber drag is
           // live: a MID-DRAG commit (pill or maximize) must not unmount or
-          // disable the element holding the pointer capture, or the gesture
-          // dies at the exact moment it commits. Onboarding keeps the inert
-          // grabber even at full-bleed — the restore gesture is a no-op there,
-          // so the "drag to exit full screen" strip would lie.
+          // disable the element holding the pointer capture, or the gesture dies
+          // at the exact moment it commits. Onboarding hides the grabber
+          // entirely: it is pinned, undismissable, and sign-in-first.
           <SheetGrabber
             open={sheetOpen}
             onOpen={openFromGrabber}
@@ -5091,7 +5174,7 @@ export function ContinuousChatOverlay({
                 over the top bar fall THROUGH to this strip (only the button
                 clusters keep their taps). Keyboard-operable (Enter/Space/ArrowDown
                 restore) so the gesture-only affordance stays WCAG 2.1.1 operable. */}
-            {(fullBleed || restoreDragging) && !firstRunOpen ? (
+            {(fullBleed || restoreDragging) && !pinnedOpen ? (
               <button
                 {...maximizeRestoreBinding}
                 type="button"
@@ -5298,7 +5381,7 @@ export function ContinuousChatOverlay({
                   // horizontal scrollbar strip across the sheet on iOS — the
                   // "weird side scroll thingy." This transcript only ever scrolls
                   // vertically; pin the horizontal axis closed.
-                  className="scrollbar-hide relative flex min-h-0 w-full flex-1 touch-pan-y flex-col overflow-y-auto overflow-x-hidden overscroll-contain px-5 outline-none [-webkit-overflow-scrolling:touch]"
+                  className="scrollbar-hide relative flex min-h-0 w-full flex-1 touch-pan-y flex-col overflow-y-auto overflow-x-hidden overscroll-contain px-5 outline-none [scrollbar-width:none] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[rgba(255,247,240,0.22)] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
                   style={{ opacity: threadContentOpacity }}
                 >
                   {/* Empty-thread loading: a fresh/cleared chat awaiting its
@@ -5326,18 +5409,16 @@ export function ContinuousChatOverlay({
                   ) : null}
                   {/* `mt-auto` keeps the latest line at the bottom (nearest the
                   input) until the thread overflows, then it scrolls. During
-                  onboarding the transcript is TOP-aligned instead: the sheet is
-                  pinned full-screen, and bottom-anchoring would shift every
-                  existing choice button UP each time the conductor seeds a new
-                  turn — the second tap of a fast double-tap would land on a
-                  button that just slid under the finger (a mis-pick straight
-                  into the wrong flow). Top-aligned, turns append BELOW what's
-                  already on screen and nothing moves under a pointer. */}
+                  onboarding only the current first-run turn is displayed, so
+                  center that setup card in the available full-screen chat space
+                  and bias it above the locked composer. */}
                   <div
                     ref={threadContentRef}
                     className={cn(
                       "flex flex-col pb-3 pt-1",
                       !firstRunOpen && "mt-auto",
+                      firstRunOpen &&
+                        "min-h-full justify-center pb-[18vh] pt-0",
                     )}
                   >
                     {/* Top sentinel for infinite upward scroll (#13532, #14279):
@@ -5667,6 +5748,9 @@ export function ContinuousChatOverlay({
                 ref={inputRef}
                 rows={1}
                 value={draft}
+                // Onboarding is sign-in-first: lock the composer until the user
+                // signs in, so they can't type into a chat that isn't ready yet.
+                disabled={firstRunOpen}
                 onChange={(e) => {
                   const nextDraft = e.target.value;
                   if (
@@ -5701,14 +5785,14 @@ export function ContinuousChatOverlay({
                 onBlur={() => setComposerFocused(false)}
                 onPaste={handleComposerPaste}
                 onKeyDown={handleComposerKeyDown}
-                // The composer is unlocked during onboarding (#12178): typing is
-                // always allowed. Free text is answered locally by the in-chat
-                // conductor and never reaches the server (submitText routes it).
+                // The composer is LOCKED during onboarding: first-run is
+                // sign-in-first, so the input is disabled (see `disabled` above)
+                // until the user signs in.
                 // (This surface's strings are plain literals by design — see
                 // the imageError note above.)
                 placeholder={
                   firstRunOpen
-                    ? `Ask ${agentName} anything, or sign in above`
+                    ? "Sign in to start chatting"
                     : noProviderConfigured
                       ? "Connect a model provider in Settings to chat"
                       : modelBlocksSend
@@ -5722,7 +5806,7 @@ export function ContinuousChatOverlay({
                 aria-label="message"
                 data-testid="chat-composer-textarea"
                 aria-describedby={
-                  booting && !noProviderConfigured
+                  booting && !noProviderConfigured && !firstRunOpen
                     ? "cc-booting-hint"
                     : undefined
                 }
@@ -5730,16 +5814,19 @@ export function ContinuousChatOverlay({
                 // and only when a slash catalog is wired in — a plain message
                 // box otherwise.
                 {...comboboxAria}
-                // During onboarding the placeholder invites the unlocked
-                // composer ("Ask … anything, or sign in above"), so brighten it
-                // from the resting 45% to 70% to read clearly beside the choices.
-                className={`scrollbar-hide max-h-[8.5rem] min-h-8 min-w-0 flex-1 resize-none self-center border-none bg-transparent px-1.5 py-1 text-left text-sm leading-relaxed text-txt outline-none ${
+                // During onboarding the composer is locked (sign-in-first); the
+                // placeholder points at the sign-in above, brightened from the
+                // resting 45% to 70% to read clearly. `disabled:pointer-events-none`
+                // blocks it cleanly like the attachment "+" (no "not-allowed"
+                // cursor on hover), and `disabled:opacity-100` keeps the
+                // placeholder legible rather than dimming it.
+                className={`scrollbar-hide max-h-[8.5rem] min-h-8 min-w-0 flex-1 resize-none self-center border-none bg-transparent px-1.5 py-1 text-left text-sm leading-relaxed text-txt outline-none disabled:pointer-events-none disabled:opacity-100 ${
                   firstRunOpen
                     ? "placeholder:text-muted-strong"
                     : "placeholder:text-muted"
                 }`}
               />
-              {booting && !noProviderConfigured ? (
+              {booting && !noProviderConfigured && !firstRunOpen ? (
                 <span id="cc-booting-hint" className="sr-only">
                   {agentName} is waking up — you can type now; your message
                   sends and the reply arrives in a moment.
@@ -5792,11 +5879,9 @@ export function ContinuousChatOverlay({
                             ? "send another"
                             : "send"
                       }
-                      // During onboarding the send button stays live regardless
-                      // of agent readiness — a typed message reaches the in-chat
-                      // conductor, not the (absent) agent. Post-onboarding a
-                      // stopped agent disables it as before.
-                      disabled={!firstRunOpen && !canSend}
+                      // Onboarding is sign-in-first; if a synthetic draft exists
+                      // anyway, send stays locked with the rest of the composer.
+                      disabled={firstRunOpen || !canSend}
                       // Keep focus in the textarea on tap: without this the
                       // button steals focus, the textarea blurs, the keyboard
                       // retracts and the composer relayouts between pointerdown

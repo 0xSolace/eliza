@@ -215,13 +215,6 @@ export const appControlPlugin: Plugin = {
 			?.stop();
 	},
 	views: [
-		// GUI-only shipping, drawn from the single ViewManagerView
-		// spatial-catalog source (the rich deduped manager: collapse-by-id +
-		// modality chips + per-view open/available state). "tui"/"xr" remain
-		// valid compatibility modality values but are no longer declared.
-		// `modalities` is a plain literal here (index.ts is not in the view
-		// bundle), so no brand-new `@elizaos/core` runtime export reaches the
-		// bundle build.
 		{
 			id: "views-manager",
 			label: "Views",
@@ -239,8 +232,8 @@ export const appControlPlugin: Plugin = {
 			desktopTabEnabled: true,
 			capabilities: [
 				{
-					id: "terminal-open-view",
-					description: "Open a listed view from the terminal view manager",
+					id: "open-view",
+					description: "Open a listed view from the view manager",
 					params: {
 						viewId: {
 							type: "string",
@@ -250,21 +243,16 @@ export const appControlPlugin: Plugin = {
 					},
 				},
 				{
-					id: "terminal-list-views",
-					description: "Return the TUI-mode view list as structured data",
+					id: "list-views",
+					description: "Return the available view list as structured data",
 				},
 			],
-			// Headless capability handler (#8798): both capabilities are answerable
-			// server-side over loopback, so the agent can list/open views even when
-			// no terminal frontend is actively responding to a `view:interact`
-			// round-trip. This is the reference implementation that keeps
-			// `serverInteract` a live extension point rather than dead type surface.
 			serverInteract: async (capability, params) => {
 				const client = createViewsClient();
-				if (capability === "terminal-list-views") {
+				if (capability === "list-views") {
 					return { views: await client.listViews() };
 				}
-				if (capability === "terminal-open-view") {
+				if (capability === "open-view") {
 					const viewId =
 						params && typeof params.viewId === "string"
 							? params.viewId

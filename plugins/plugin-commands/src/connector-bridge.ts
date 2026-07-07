@@ -143,7 +143,7 @@ export function gateConnectorCommandByName(
  *                  pipeline and surface the agent reply.
  *   - `navigate` → reply with a description of the in-app destination (a deep
  *                  link); the connector cannot open the Eliza app itself.
- *   - `client`   → a GUI/TUI-only behavior with no remote surface; the catalog
+ *   - `client`   → a local-client behavior with no remote surface; the catalog
  *                  filters these off connector surfaces, so this is defensive.
  */
 export interface ConnectorCommandBridge<TCommand, TContext> {

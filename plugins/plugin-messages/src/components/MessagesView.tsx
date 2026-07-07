@@ -1,12 +1,11 @@
 /**
- * MessagesView — the single GUI/XR data wrapper for the Messages surface.
+ * MessagesView — the single GUI data wrapper for the Messages surface.
  *
  * It owns the live Android SMS data (inbox fetch, default-SMS role status,
  * compose state, pending-recipient handoff, send / request-role actions) and
  * renders the one presentational {@link MessagesSpatialView} inside a
- * {@link SpatialSurface}. Omitting the `modality` prop lets `SpatialSurface`
- * auto-detect the host surface, so the SAME component serves them all. The
- * view ships GUI-only.
+ * {@link SpatialSurface}. The spatial child is presentational only, which keeps
+ * Android SMS role checks and native bridge calls isolated in this wrapper.
  */
 
 import type { SmsMessageSummary } from "@elizaos/capacitor-messages";
@@ -182,7 +181,7 @@ export function MessagesView() {
   // Expose the inbox refresh and the compose-send to the agent surface. Both
   // reuse the handlers this wrapper already owns (the same ones the spatial
   // Refresh / Send buttons dispatch through `onAction`), so the agent can drive
-  // them directly on the GUI/XR surface; Send stays disabled until the composer
+  // them directly on the GUI surface; Send stays disabled until the composer
   // has a recipient and a body, matching the `send()` guard.
   const canSend =
     composeAddress.trim().length > 0 &&

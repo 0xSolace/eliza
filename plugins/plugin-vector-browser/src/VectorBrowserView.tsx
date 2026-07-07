@@ -41,10 +41,6 @@ import {
   useState,
 } from "react";
 import type * as Three from "three";
-import {
-  type VectorBrowserSnapshot,
-  VectorBrowserSpatialView,
-} from "./VectorBrowserSpatialView.tsx";
 
 type VectorBrowserRuntime = {
   THREE: typeof Three;
@@ -60,6 +56,11 @@ type AppBootConfig = ReturnType<typeof getBootConfig>;
 
 type VectorBrowserBootConfig = AppBootConfig & {
   companionVectorBrowser?: VectorBrowserRuntime;
+};
+
+type ColumnMetadataRow = {
+  column_name?: unknown;
+  data_type?: unknown;
 };
 
 function resolveConfiguredVectorBrowserRuntime(): VectorBrowserRuntime | null {
@@ -939,7 +940,7 @@ export function VectorGraph3D({
   );
 }
 
-// ── Rich GUI/XR surface (the Escape child) ─────────────────────────────
+// ── Rich GUI surface (the Escape child) ─────────────────────────────
 
 export function VectorBrowserRichView({
   leftNav,
@@ -1032,7 +1033,9 @@ export function VectorBrowserRichView({
       const colResult: QueryResult = await client.executeDatabaseQuery(
         `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${table.replace(/'/g, "''")}' AND table_schema NOT IN ('pg_catalog','information_schema') ORDER BY ordinal_position`,
       );
-      const rows = Array.isArray(colResult.rows) ? colResult.rows : [];
+      const rows: ColumnMetadataRow[] = Array.isArray(colResult.rows)
+        ? colResult.rows
+        : [];
       const cols = rows.map((r) => {
         const name = String(r.column_name);
         const dtype = String(r.data_type).toLowerCase();
@@ -1692,33 +1695,20 @@ export function VectorBrowserRichView({
 // ── Adaptive view (the single componentExport) ─────────────────────────
 
 /**
- * Summary snapshot used as the wrapper's `Escape` fallback when the rich
- * three.js/canvas surface cannot render; carries the zeroed default + the
- * "renders in GUI/XR" note.
- */
-const TUI_FALLBACK_SNAPSHOT: VectorBrowserSnapshot = {
-  vectorCount: 0,
-  withEmbeddings: 0,
-  dimension: 0,
-  typeCount: 0,
-  points: [],
-};
-
-/**
  * The single adaptive vector-browser view (`componentExport`).
  *
- * GUI/XR render the full rich {@link VectorBrowserRichView} (three.js 3D point
- * cloud + 2D canvas projection + list/detail) as the {@link Escape} DOM child;
- * TUI renders the spatial {@link VectorBrowserSpatialView} summary fallback. One
- * registered component, no separate rich-DOM app — `SpatialSurface` auto-detects
- * GUI vs XR.
+ * The shipped surface renders the full rich {@link VectorBrowserRichView}
+ * (three.js 3D point cloud + 2D canvas projection + list/detail) as the
+ * {@link Escape} DOM child. The spatial summary export remains a presentational
+ * seam for future adapters, but this bundle no longer mounts a concrete terminal
+ * fallback.
  */
 export function VectorBrowserView(props: {
   leftNav?: ReactNode;
   contentHeader?: ReactNode;
 }) {
   return (
-    <Escape tui={<VectorBrowserSpatialView snapshot={TUI_FALLBACK_SNAPSHOT} />}>
+    <Escape>
       <VectorBrowserRichView {...props} />
     </Escape>
   );

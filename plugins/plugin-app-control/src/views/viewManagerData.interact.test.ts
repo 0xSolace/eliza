@@ -1,27 +1,25 @@
 /**
- * TUI interact capability tests for listing and opening terminal views.
- *
- * These cover happy paths plus missing, unknown, and unsupported capability inputs.
+ * Interact capability tests for listing and opening view-manager entries.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { interact } from "./viewManagerData";
 
-const tuiViews = {
+const viewList = {
 	views: [
 		{
 			id: "wallet",
 			label: "Wallet",
-			viewType: "tui",
-			path: "/wallet/tui",
+			viewType: "gui",
+			path: "/wallet",
 			available: true,
 			pluginName: "@elizaos/plugin-wallet-ui",
 		},
 		{
 			id: "messages",
 			label: "Messages",
-			viewType: "tui",
-			path: "/messages/tui",
+			viewType: "gui",
+			path: "/messages",
 			available: true,
 			pluginName: "@elizaos/plugin-messages",
 		},
@@ -41,75 +39,71 @@ afterEach(() => {
 });
 
 describe("interact() happy paths", () => {
-	it("terminal-list-views returns the tui-scoped view list", async () => {
+	it("list-views returns the available view list", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-			expect(String(input)).toBe("/api/views?viewType=tui");
-			return jsonResponse(tuiViews);
+			expect(String(input)).toBe("/api/views");
+			return jsonResponse(viewList);
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(interact("terminal-list-views")).resolves.toEqual(tuiViews);
+		await expect(interact("list-views")).resolves.toEqual(viewList);
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
-	it("terminal-open-view navigates the matched view and reports its viewType", async () => {
+	it("open-view navigates the matched view and reports its viewType", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
-			if (url === "/api/views?viewType=tui") return jsonResponse(tuiViews);
-			if (url === "/api/views/messages/navigate?viewType=tui")
+			if (url === "/api/views") return jsonResponse(viewList);
+			if (url === "/api/views/messages/navigate?viewType=gui")
 				return jsonResponse({ ok: true });
 			throw new Error(`Unexpected request: ${url}`);
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(
-			interact("terminal-open-view", { viewId: "messages" }),
+			interact("open-view", { viewId: "messages" }),
 		).resolves.toEqual({
 			opened: true,
 			viewId: "messages",
-			viewType: "tui",
+			viewType: "gui",
 		});
 		expect(fetchMock).toHaveBeenCalledWith(
-			"/api/views/messages/navigate?viewType=tui",
+			"/api/views/messages/navigate?viewType=gui",
 			expect.objectContaining({
 				method: "POST",
-				body: JSON.stringify({ path: "/messages/tui", viewType: "tui" }),
+				body: JSON.stringify({ path: "/messages", viewType: "gui" }),
 			}),
 		);
 	});
 });
 
 describe("interact() error paths", () => {
-	it("terminal-open-view rejects with 'viewId is required' when viewId is missing", async () => {
+	it("open-view rejects with 'viewId is required' when viewId is missing", async () => {
 		// No fetch should be needed before the guard fires; stub defensively.
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => jsonResponse(tuiViews)),
+			vi.fn(async () => jsonResponse(viewList)),
 		);
-		await expect(interact("terminal-open-view")).rejects.toThrow(
+		await expect(interact("open-view")).rejects.toThrow("viewId is required");
+		await expect(interact("open-view", { viewId: "" })).rejects.toThrow(
 			"viewId is required",
 		);
 		await expect(
-			interact("terminal-open-view", { viewId: "" }),
-		).rejects.toThrow("viewId is required");
-		await expect(
-			interact("terminal-open-view", { viewId: 42 as unknown as string }),
+			interact("open-view", { viewId: 42 as unknown as string }),
 		).rejects.toThrow("viewId is required");
 	});
 
-	it("terminal-open-view rejects with 'View \"x\" not found' for an unknown viewId", async () => {
+	it("open-view rejects with 'View \"x\" not found' for an unknown viewId", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-			if (String(input) === "/api/views?viewType=tui")
-				return jsonResponse(tuiViews);
+			if (String(input) === "/api/views") return jsonResponse(viewList);
 			throw new Error(`Unexpected request: ${String(input)}`);
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(
-			interact("terminal-open-view", { viewId: "ghost" }),
-		).rejects.toThrow('View "ghost" not found');
-		// It fetched the tui list to attempt the lookup, but never navigated.
-		expect(fetchMock).toHaveBeenCalledWith("/api/views?viewType=tui");
+		await expect(interact("open-view", { viewId: "ghost" })).rejects.toThrow(
+			'View "ghost" not found',
+		);
+		expect(fetchMock).toHaveBeenCalledWith("/api/views");
 		expect(
 			fetchMock.mock.calls.some((c) => String(c[0]).includes("/navigate")),
 		).toBe(false);

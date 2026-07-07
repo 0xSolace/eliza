@@ -28,19 +28,23 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@elizaos/core", () => ({
-  roleRank: (role: string | undefined) =>
-    (
-      ({
-        NONE: 0,
-        GUEST: 1,
-        USER: 2,
-        MEMBER: 2,
-        ADMIN: 3,
-        OWNER: 4,
-      }) as Record<string, number>
-    )[role ?? "NONE"] ?? 0,
-}));
+vi.mock("@elizaos/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@elizaos/core")>();
+  return {
+    ...actual,
+    roleRank: (role: string | undefined) =>
+      (
+        ({
+          NONE: 0,
+          GUEST: 1,
+          USER: 2,
+          MEMBER: 2,
+          ADMIN: 3,
+          OWNER: 4,
+        }) as Record<string, number>
+      )[role ?? "NONE"] ?? 0,
+  };
+});
 
 vi.mock("@elizaos/shared", () => ({
   resolveApiToken: (env: NodeJS.ProcessEnv) =>

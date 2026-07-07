@@ -7,10 +7,8 @@
  * fetches.
  *
  * It is no longer registered as a separate app/nav tab. The unified
- * {@link InventoryView} renders it as the real-DOM child of its `Escape` hatch,
- * so GUI / XR get this full dashboard while TUI falls back to the spatial
- * `InventorySpatialView`. This is the DOM-only dashboard reached only through
- * that wrapper.
+ * {@link InventoryView} renders it as the real-DOM child of its `Escape` hatch.
+ * This is the DOM-only dashboard reached only through that wrapper.
  */
 import type {
   WalletConfigStatus,

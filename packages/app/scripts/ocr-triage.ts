@@ -37,13 +37,12 @@ import {
  * Slugs whose healthy render legitimately OCRs to little or no text: the wallpaper
  * background, and native/canvas overlay surfaces that paint their own pixels. They
  * are waived from the blank-pixel floor, mirroring the aesthetic audit's
- * `OVERLAY_NATIVE_OR_CANVAS_SLUGS`. TUI views are waived structurally via the
- * `viewType` the report already carries.
+ * `OVERLAY_NATIVE_OR_CANVAS_SLUGS`. Future non-DOM modalities can be waived via
+ * the `viewType` the report already carries when a renderer is restored.
  */
 const BLANK_EXEMPT_SLUGS = new Set<string>([
   "builtin-background",
   "plugin-focus-gui",
-  "plugin-focus-tui",
 ]);
 
 interface ReportEntry {

@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 
 /**
- * GoalsView is the single GUI/XR data wrapper over the read-only goals endpoint
+ * GoalsView is the GUI data wrapper over the read-only goals endpoint
  * served by the personal-assistant routes:
  *   GET {base}/api/lifeops/goals  ->  { goals: LifeOpsGoalRecord[] }
  *
  * It owns the fetch state machine (loading / error / ready), the status-filter
  * selection, and the quiet background poll, then renders the unified
  * {@link GoalsSpatialView} inside a SpatialSurface. These tests drive the
- * rendered spatial DOM — the same surface the bundle exports for the "gui" and
- * "xr" modalities — asserting the populated grouped list, the status-filter
+ * rendered spatial DOM, asserting the populated grouped list, the status-filter
  * toggle, the error -> Retry refetch, the empty set-a-goal chat affordance, and
  * the quiet 20s poll. The fetcher seam is injected so the suite stays offline;
  * `@elizaos/ui` is mocked so the wrapper renders outside a provider.
@@ -126,7 +125,7 @@ afterEach(() => {
   sendChatMessage.mockClear();
 });
 
-describe("GoalsView — spatial GUI/XR wrapper", () => {
+describe("GoalsView — spatial GUI wrapper", () => {
   it("shows the loading line while the first fetch is in flight", () => {
     const never = new Promise<never>(() => {});
     render(<GoalsView fetchers={makeFetchers({ fetchGoals: () => never })} />);

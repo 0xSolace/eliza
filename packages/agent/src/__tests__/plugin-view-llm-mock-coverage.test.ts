@@ -1,11 +1,7 @@
 /**
- * Keeps the deterministic mock-eval plugin-view journeys in lockstep with the
- * two source-of-truth matrices: the app visual smoke matrix (`VIEW_CASES`) and
- * the XR route-coverage ratchet (`KNOWN_XR_VIEW_CASES`), both parsed from their
- * source files. Asserts one journey per case and that a deterministic mock view
- * planner routes each journey's user message to the expected view / viewType /
- * path. Harness realism: no live LLM — the planner is a keyword heuristic and
- * all case data is read from repo source, so this is a pure lockstep guard.
+ * Keeps deterministic mock-eval plugin-view journeys in lockstep with the app
+ * GUI visual smoke matrix. The viewType union still includes future modalities,
+ * but this guard only tracks shipped GUI views.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -26,10 +22,6 @@ function caseKey(view: Pick<PluginViewMockCase, "id" | "viewType" | "path">) {
   return `${view.id}:${view.viewType}:${view.path}`;
 }
 
-function isGuiOrTui(view: PluginViewMockCase) {
-  return view.viewType === "gui" || view.viewType === "tui";
-}
-
 function readVisualMatrixCases(): PluginViewMockCase[] {
   const source = readFileSync(
     resolve(repoRoot, "packages/app/test/ui-smoke/plugin-view-cases.ts"),
@@ -43,103 +35,47 @@ function readVisualMatrixCases(): PluginViewMockCase[] {
 
   return Array.from(
     viewCasesSource.matchAll(
-      /\["([^"]+)",\s*"(gui|tui)",\s*"([^"]+)"(?:,\s*\{[^}]*\})?\]/g,
-    ),
-  ).flatMap((caseMatch) => {
-    const id = caseMatch[1];
-    const viewType = caseMatch[2];
-    const path = caseMatch[3];
-    if (!id || (viewType !== "gui" && viewType !== "tui") || !path) {
-      return [];
-    }
-    return [{ id, viewType, path }];
-  });
-}
-
-function readXrRatchetCases(): PluginViewMockCase[] {
-  const source = readFileSync(
-    resolve(repoRoot, "packages/app/test/route-coverage.test.ts"),
-    "utf8",
-  );
-  const match = source.match(
-    /const KNOWN_XR_VIEW_CASES: readonly PluginViewCase\[] = \[([\s\S]*?)\];/,
-  );
-  // The captured group is the empty string while the shipped XR inventory is
-  // empty (#15269), so assert on the match itself, not on group truthiness.
-  expect(match, "KNOWN_XR_VIEW_CASES declaration was not found").toBeTruthy();
-  const xrCasesSource = match?.[1] ?? "";
-
-  return Array.from(
-    xrCasesSource.matchAll(
-      /id:\s*"([^"]+)",\s*viewType:\s*"xr",\s*path:\s*"([^"]+)"/g,
+      /\["([^"]+)",\s*"gui",\s*"([^"]+)"(?:,\s*\{[^}]*\})?\]/g,
     ),
   ).flatMap((caseMatch) => {
     const id = caseMatch[1];
     const path = caseMatch[2];
     if (!id || !path) return [];
-    return [{ id, viewType: "xr", path }];
+    return [{ id, viewType: "gui", path }];
   });
 }
 
 function mockLlmViewPlanner(message: string): {
   action: "show";
   view: string;
-  viewType: "gui" | "tui" | "xr";
+  viewType: "gui";
   path: string;
 } | null {
   const lower = message.toLowerCase();
-  const requestedViewType = lower.includes("spatial xr")
-    ? "xr"
-    : lower.includes("terminal tui")
-      ? "tui"
-      : lower.includes("visual gui")
-        ? "gui"
-        : null;
   const exactPath = [...PLUGIN_VIEW_LLM_MOCK_CASES]
-    .filter((view) => !requestedViewType || view.viewType === requestedViewType)
     .sort((left, right) => right.path.length - left.path.length)
     .find((view) => lower.includes(view.path.toLowerCase()));
-  if (exactPath) {
-    return {
-      action: "show",
-      view: exactPath.id,
-      viewType: exactPath.viewType,
-      path: exactPath.path,
-    };
-  }
+  if (!exactPath || exactPath.viewType !== "gui") return null;
 
-  return null;
+  return {
+    action: "show",
+    view: exactPath.id,
+    viewType: exactPath.viewType,
+    path: exactPath.path,
+  };
 }
 
 describe("plugin view LLM mock coverage", () => {
-  it("keeps mock LLM journeys in lockstep with the visual smoke matrix", () => {
+  it("keeps mock LLM journeys in lockstep with the GUI visual smoke matrix", () => {
     const visualCases = readVisualMatrixCases();
-    const visualMockCases = PLUGIN_VIEW_LLM_MOCK_CASES.filter(isGuiOrTui);
 
-    expect(visualCases.length).toBe(28);
     expect(new Set(visualCases.map(caseKey))).toEqual(
-      new Set(visualMockCases.map(caseKey)),
+      new Set(PLUGIN_VIEW_LLM_MOCK_CASES.map(caseKey)),
     );
   });
 
-  it("keeps XR mock LLM journeys in lockstep with the XR manifest ratchet", () => {
-    const xrCases = readXrRatchetCases();
-    const xrMockCases = PLUGIN_VIEW_LLM_MOCK_CASES.filter(
-      (view) => view.viewType === "xr",
-    );
-
-    // The shipped XR inventory is empty (#15269); the lockstep guard keeps the
-    // mock journey list at zero XR cases until an XR view ships again.
-    expect(xrCases.length).toBe(0);
-    expect(new Set(xrCases.map(caseKey))).toEqual(
-      new Set(xrMockCases.map(caseKey)),
-    );
-  });
-
-  it("has one deterministic mock-eval journey for every plugin view case", () => {
+  it("has one deterministic mock-eval journey for every shipped GUI view case", () => {
     const visualCases = readVisualMatrixCases();
-    const xrCases = readXrRatchetCases();
-    const expectedCases = [...visualCases, ...xrCases];
     const journeyByKey = new Map(
       PLUGIN_VIEW_LLM_MOCK_JOURNEYS.map((journey) => [
         journey.id.replace(/^plugin-view-/, ""),
@@ -147,12 +83,11 @@ describe("plugin view LLM mock coverage", () => {
       ]),
     );
 
-    expect(PLUGIN_VIEW_LLM_MOCK_CASES.length).toBe(28);
     expect(PLUGIN_VIEW_LLM_MOCK_JOURNEYS).toHaveLength(
       PLUGIN_VIEW_LLM_MOCK_CASES.length,
     );
 
-    for (const view of expectedCases) {
+    for (const view of visualCases) {
       const journey = journeyByKey.get(`${view.id}-${view.viewType}`);
 
       expect(journey, `missing mock journey for ${caseKey(view)}`).toBeTruthy();

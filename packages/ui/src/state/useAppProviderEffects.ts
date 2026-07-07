@@ -37,8 +37,7 @@ export function useNavigationPathSync({
   tab: Tab;
   setTabRaw: (tab: Tab) => void;
 }) {
-  // App-shell pages (e.g. `@elizaos/plugin-facewear/register` →
-  // `/apps/smartglasses/tui`) register from idle-loaded side-effect modules, so
+  // App-shell pages register from idle-loaded side-effect modules, so
   // a deep link / refresh can boot before the matching registration exists.
   // `tabFromPath` then falls through to the `apps` catalog, and that
   // misresolution is otherwise sticky because this effect only re-runs on

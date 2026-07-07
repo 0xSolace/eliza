@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
 /**
  * WebSocket client that connects to the elizaOS agent and bridges commands to G1BleService.
  *
- * Inbound text frames from the agent are parsed as elizaOS XR protocol messages:
+ * Inbound text frames from the agent are parsed as smartglasses bridge messages:
  *   { type: "agent_text", text: "..." }  → display on G1 via G1BleService.displayText()
  *   { type: "transcript", text: "...", final: true } → show transcription on G1
  *   { type: "ready", sessionId: "..." }  → connection confirmed
@@ -99,7 +99,7 @@ class AgentBridgeService : Service() {
 
             override fun onMessage(ws: WebSocket, bytes: ByteString) {
                 // TTS audio binary frame — G1 has no speaker, ignore audio payload.
-                // The 4-byte prefix + JSON header follows the plugin-xr binary protocol.
+                // The bridge frame prefix keeps binary audio metadata separate from payload bytes.
                 Log.d(TAG, "Binary frame received (${bytes.size} bytes) — skipping audio on G1")
             }
 

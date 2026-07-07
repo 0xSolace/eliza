@@ -131,7 +131,7 @@ describe("bindReadyPhase view interaction bridge", () => {
     expect(clientMock.disconnectWs).toHaveBeenCalled();
   }, 60_000);
 
-  it("routes XR view:interact websocket events through the view dispatcher", async () => {
+  it("routes future headset view:interact websocket events through the view dispatcher", async () => {
     const cleanup = bindReadyPhase({ current: makeDeps() });
 
     clientMock.handlers.get("view:interact")?.({

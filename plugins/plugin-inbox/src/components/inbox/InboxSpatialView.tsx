@@ -2,10 +2,8 @@
  * InboxSpatialView — the cross-channel inbox authored once with the spatial
  * vocabulary so it renders correctly wherever it is displayed:
  *
- *   - GUI / XR — mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      — the spatial primitives still render to terminal lines via
- *                `@elizaos/ui/spatial/tui`, but the plugin no longer ships a
- *                terminal registration (GUI-only view inventory).
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
  * out) and imports ONLY the cross-modality primitives plus the view's local

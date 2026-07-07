@@ -85,7 +85,6 @@
       "@elizaos/import-conversations/browser": [
         "../import-conversations/src/browser.ts"
       ],
-      "@elizaos/tui": ["../tui/src/index.ts"],
       "@elizaos/ui/api/client-types-cloud": [
         "../ui/src/api/client-types-cloud.ts"
       ],

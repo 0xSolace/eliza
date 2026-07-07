@@ -1,10 +1,7 @@
 /**
- * ContactsSpatialView - the contacts address book authored with the spatial
- * vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
- *
- * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports only the cross-modality primitives plus a type-only view of
- * the native contact record (no Capacitor runtime import).
+ * Contacts address-book presentation built from spatial primitives for the
+ * shipped GUI view. It consumes a resolved snapshot plus an action callback;
+ * native permission and data loading stay in ContactsView.
  */
 
 import type { ContactSummary } from "@elizaos/capacitor-contacts";

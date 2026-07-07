@@ -1,11 +1,11 @@
 /**
- * PhoneView — the single GUI/XR data wrapper for the Phone surface.
+ * PhoneView — the single GUI data wrapper for the Phone surface.
  *
  * It owns the live Android data (call-log fetch, dialer state, pending-number
  * handoff, place-call / open-dialer / Contacts-link actions) and renders the
  * one presentational {@link PhoneSpatialView} inside a {@link SpatialSurface}.
- * Omitting the `modality` prop lets `SpatialSurface` auto-detect the host
- * surface, so the SAME component serves them all. The view ships GUI-only.
+ * The spatial child is presentational only, which keeps native call loading and
+ * dialer dispatch isolated in this wrapper.
  */
 
 import { Phone } from "@elizaos/capacitor-phone";
@@ -202,7 +202,7 @@ export function PhoneView() {
   // Expose the recent-call refresh and the dialer call action to the agent
   // surface. Both reuse the handlers this wrapper already owns (the same ones
   // the spatial Refresh / Call buttons dispatch through `onAction`), so the
-  // agent can drive them directly on the GUI/XR surface; Call stays disabled
+  // agent can drive them directly on the GUI surface; Call stays disabled
   // until the dialer holds a callable number, matching the `placeCall()` guard.
   const canCall = Boolean(normalizeNumber(dialed));
   const refreshControl = useAgentElement<HTMLButtonElement>({

@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
-// Drives the unified FocusView (the single GUI/XR data wrapper) through the
-// rendered DOM: the same component the bundle exports for both the "gui" and
-// "xr" modalities. Asserts each SelfControlStatus phase (loading, error,
+// Drives the FocusView GUI data wrapper through the rendered DOM. Asserts each
+// SelfControlStatus phase (loading, error,
 // unavailable, permission, active, empty), the clickable Retry / Release
 // agent-instrumented controls, the early-release mutation + refetch, and the
 // release-gating when a block can't be unblocked early.

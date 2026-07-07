@@ -22,7 +22,7 @@
  *                  an explicit slash command is an explicit request for a response.
  *   - `navigate` → replies describing the in-app destination, resolving the
  *                  `/settings <section>` argument when present.
- *   - `client`   → GUI/TUI-only behaviors have no Telegram surface; handled
+ *   - `client`   → local-client behaviors have no Telegram surface; handled
  *                  defensively with a short reply rather than crashing.
  *
  * Auth gating: `requiresAuth` / `requiresElevated` commands are gated at the
@@ -334,7 +334,7 @@ function buildCommandHandler(
     }
 
     if (target.kind === "client") {
-      // GUI/TUI-only behaviors have no Telegram surface; the catalog should not
+      // Local-client behaviors have no Telegram surface; the catalog should not
       // emit them for remote connectors, so this branch is defensive only.
       await ctx.reply(
         `/${descriptor.name} is only available in the Eliza app.`,

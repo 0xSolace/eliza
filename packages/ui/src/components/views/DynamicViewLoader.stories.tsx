@@ -1,6 +1,6 @@
 /**
  * Storybook states for the dynamic view bundle loader, covering loading,
- * rejected imports, view-type variants, and forwarded props.
+ * rejected imports, and forwarded props.
  */
 import type { Meta, StoryObj } from "@storybook/react";
 import { withMockApp } from "../../storybook/mock-providers.helpers";
@@ -47,15 +47,6 @@ type Story = StoryObj<typeof meta>;
  * skeleton while the (never-resolving) import is in flight.
  */
 export const Loading: Story = {};
-
-/** A different view id flowing through the loading state. */
-export const LoadingTuiView: Story = {
-  args: {
-    bundleUrl: "/api/views/terminal.console/bundle.js",
-    viewId: "terminal.console",
-    viewType: "tui",
-  },
-};
 
 /**
  * An unresolvable bundle URL makes the dynamic import reject, so the loader

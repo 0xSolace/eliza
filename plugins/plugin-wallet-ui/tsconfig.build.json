@@ -18,9 +18,6 @@
       "@elizaos/ui/hooks": ["../../packages/ui/dist/hooks/index.d.ts"],
       "@elizaos/ui/hooks/*": ["../../packages/ui/dist/hooks/*"],
       "@elizaos/ui/spatial": ["../../packages/ui/dist/spatial/index.d.ts"],
-      "@elizaos/ui/spatial/tui": [
-        "../../packages/ui/dist/spatial/tui/index.d.ts"
-      ],
       "@elizaos/ui/state": ["../../packages/ui/dist/state/index.d.ts"],
       "@elizaos/ui/state/*": ["../../packages/ui/dist/state/*"],
       "@elizaos/ui/utils": ["../../packages/ui/dist/utils/index.d.ts"],

@@ -1,11 +1,10 @@
 /**
- * DOM renderer for the GUI and XR modalities.
+ * DOM renderer for the shipped browser modality.
  *
- * GUI and XR share one React tree — the only difference is the cell sizing and
- * touch-target scale the primitives read from {@link useSpatialContext}. So the
- * "renderer" for these two modalities is just a context provider: the spatial
- * primitives render their own DOM. This is intentional — it keeps GUI/XR in
- * exact structural parity with each other and with the TUI IR.
+ * The public modality contract keeps future surface names, but this package
+ * currently renders spatial primitives as DOM. The provider owns cell sizing and
+ * touch-target scale so a future adapter can opt into a modality without every
+ * primitive re-detecting the host.
  */
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -14,14 +13,11 @@ import type { SpatialModality } from "./ir.ts";
 
 declare global {
   interface Window {
-    /** Set by the XR view-host (plugin-facewear / plugin-xr) inside a headset. */
-    __elizaXRContext?: unknown;
     /**
      * The single shell-level modality owner (#9946). A shell sets this once
      * (`setShellModality`) to declare which surface it presents; every leaf's
      * `detectDomModality()` then reads it instead of each re-guessing, so the
-     * GUI/TUI/XR contract has one authoritative source. A headset (`__elizaXRContext`)
-     * still wins so the XR host is never overridden.
+     * modality contract has one authoritative source.
      */
     __elizaShellModality?: SpatialModality;
   }
@@ -46,18 +42,15 @@ export function setShellModality(modality: SpatialModality): () => void {
 }
 
 /**
- * Detect the active DOM modality (`gui` / `tui` / `xr`).
+ * Detect the active DOM modality.
  *
- * Order of authority: a headset (`__elizaXRContext`, set by plugin-facewear /
- * plugin-xr) always wins; otherwise the shell-level owner (`__elizaShellModality`)
- * decides; otherwise default to `gui`. This keeps the spatial barrel Capacitor-
- * free while giving the modality contract a single shell-level source.
+ * The shell-level owner (`__elizaShellModality`) decides when present;
+ * otherwise the shipped browser renderer defaults to `gui`. This keeps the
+ * spatial barrel Capacitor-free while giving the modality contract a single
+ * shell-level source.
  */
 export function detectDomModality(): SpatialModality {
   if (typeof window === "undefined") return "gui";
-  if (window.__elizaXRContext) {
-    return "xr";
-  }
   if (isSpatialModality(window.__elizaShellModality)) {
     return window.__elizaShellModality;
   }
@@ -108,7 +101,7 @@ function useRootPxVarActive(name: string): boolean {
 /**
  * True while the app shell's continuous chat composer publishes an inline-end
  * clearance. GUI wrappers can use this to switch dense spatial views into a
- * short-landscape layout; terminal/SSR callers get `false`.
+ * short-landscape layout; non-browser/SSR callers get `false`.
  */
 export function useContinuousChatSideClearanceActive(): boolean {
   return useRootPxVarActive(CONTINUOUS_CHAT_SIDE_CLEARANCE_VAR);
@@ -156,7 +149,7 @@ export function useContinuousChatCompactClearanceActive(): boolean {
 }
 
 export interface SpatialSurfaceProps {
-  /** Presentation modality. Omit to auto-detect (`xr` inside a headset host, else `gui`). */
+  /** Presentation modality. Omit to use the shell-owned modality, defaulting to `gui`. */
   modality?: SpatialModality;
   /** Receives primitive actions (button presses, field changes). */
   onAction?: (action: SpatialAction) => void;
@@ -169,10 +162,10 @@ export interface SpatialSurfaceProps {
 }
 
 /**
- * Host for a spatial view on a DOM surface (GUI or XR).
+ * Host for a spatial view on the shipped DOM surface.
  *
- * Omit `modality` and it auto-detects the headset — so a plugin mounts the same
- * view with `<SpatialSurface>` on both surfaces with zero modality knowledge.
+ * Omit `modality` and the shell-owned modality is used, defaulting to `gui`, so
+ * plugins do not need to thread host details through every primitive tree.
  *
  * ```tsx
  * <SpatialSurface>

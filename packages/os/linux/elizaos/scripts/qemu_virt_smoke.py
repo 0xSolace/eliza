@@ -83,7 +83,6 @@ REQUIRED_MARKERS = (
     "elizaos-firstboot-ready",
     "elizaos-curl-health-ready",
     "elizaos-agent-ready",
-    "elizaos-tui-ready",
 )
 REQUIRED_ISO_BOOT_ARTIFACTS = (
     "riscv64_removable_uefi_loader",

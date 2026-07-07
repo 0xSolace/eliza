@@ -4,7 +4,7 @@ Native Hyperliquid perpetual-market integration for elizaOS agents: status, mark
 
 ## Purpose / role
 
-Adds Hyperliquid perpetual-market capabilities to an Eliza agent. Registers an action (`PERPETUAL_MARKET`), a service (`PerpetualMarketService`), eleven HTTP routes under `/api/hyperliquid/`, and one GUI view. Shipped view inventory is GUI-only; `xr`/`tui` remain compatibility modality values but are not declared. Loaded opt-in via `registerAppRoutePluginLoader`; see `src/register-routes.ts`. Execution (order placement) is intentionally disabled — only read operations are implemented.
+Adds Hyperliquid perpetual-market capabilities to an Eliza agent. Registers an action (`PERPETUAL_MARKET`), a service (`PerpetualMarketService`), eleven HTTP routes under `/api/hyperliquid/`, and one GUI view. Loaded opt-in via `registerAppRoutePluginLoader`; see `src/register-routes.ts`. Execution (order placement) is intentionally disabled — only read operations are implemented.
 
 ## Plugin surface
 
@@ -36,7 +36,7 @@ All routes are `rawPath: true`. POST routes always return 501 (execution disable
 | POST | `/api/hyperliquid/tpsl` | Disabled — returns 501 |
 
 ### Views (registered in `src/plugin.ts`)
-| id | modalities | Component |
+| id | viewType | Component |
 |---|---|---|
 | `hyperliquid` | `gui` | `HyperliquidView` |
 
@@ -59,9 +59,11 @@ src/
   ui.ts                     Public re-export barrel (HyperliquidAppView, interact, useHyperliquidState, hyperliquidApp)
   useHyperliquidState.ts    React hook; calls all four read endpoints, manages loading/error state
   useHyperliquidState.test.ts  Tests for the hook
+  HyperliquidView.tsx       GUI data wrapper for the Hyperliquid view
+  HyperliquidView.interact.ts  Interaction helpers for HyperliquidView
   HyperliquidVisualCopy.test.ts  Visual copy tests
   components/
-    HyperliquidSpatialView.tsx   Spatial/XR view component; exports HyperliquidSpatialView, HyperliquidSnapshot, HyperliquidStatusSnapshot
+    HyperliquidSpatialView.tsx   Spatial-primitives GUI presentation; exports HyperliquidSpatialView, HyperliquidSnapshot, HyperliquidStatusSnapshot
     HyperliquidSpatialView.test.tsx  Tests for spatial view
     contract.ts              Component contract definitions
   __fixtures__/              Test fixtures

@@ -9,7 +9,7 @@ import {
 } from "@elizaos/ui/api";
 import { elizaOneActionBenchmarkPairs } from "../core/eliza1-benchmark-recipe.js";
 import {
-  loadTrainingTuiState,
+  loadTrainingViewState,
   parseCollectionTierList,
 } from "./FineTuningView.helpers";
 
@@ -17,25 +17,23 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-training-state") {
-    return { viewType: "tui", ...(await loadTrainingTuiState()) };
+  if (capability === "training-state") {
+    return { ...(await loadTrainingViewState()) };
   }
 
-  if (capability === "terminal-training-trajectory") {
+  if (capability === "training-trajectory") {
     const trajectoryId =
       typeof params?.trajectoryId === "string"
         ? params.trajectoryId.trim()
         : "";
     if (!trajectoryId) throw new Error("trajectoryId is required");
     return {
-      viewType: "tui",
       ...(await client.getTrainingTrajectory(trajectoryId)),
     };
   }
 
-  if (capability === "terminal-training-build-dataset") {
+  if (capability === "training-build-dataset") {
     return {
-      viewType: "tui",
       ...(await client.buildTrainingDataset({
         limit: typeof params?.limit === "number" ? params.limit : undefined,
         minLlmCallsPerTrajectory:
@@ -46,7 +44,7 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-start-job") {
+  if (capability === "training-start-job") {
     const options: StartTrainingOptions = {};
     if (typeof params?.datasetId === "string")
       options.datasetId = params.datasetId;
@@ -66,23 +64,21 @@ export async function interact(
       options.learningRate = params.learningRate;
     }
     return {
-      viewType: "tui",
       ...(await client.startTrainingJob(options)),
     };
   }
 
-  if (capability === "terminal-training-cancel-job") {
+  if (capability === "training-cancel-job") {
     const jobId = typeof params?.jobId === "string" ? params.jobId.trim() : "";
     if (!jobId) throw new Error("jobId is required");
-    return { viewType: "tui", ...(await client.cancelTrainingJob(jobId)) };
+    return { ...(await client.cancelTrainingJob(jobId)) };
   }
 
-  if (capability === "terminal-training-import-model") {
+  if (capability === "training-import-model") {
     const modelId =
       typeof params?.modelId === "string" ? params.modelId.trim() : "";
     if (!modelId) throw new Error("modelId is required");
     return {
-      viewType: "tui",
       ...(await client.importTrainingModelToOllama(modelId, {
         modelName:
           typeof params?.modelName === "string" ? params.modelName : undefined,
@@ -94,12 +90,11 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-activate-model") {
+  if (capability === "training-activate-model") {
     const modelId =
       typeof params?.modelId === "string" ? params.modelId.trim() : "";
     if (!modelId) throw new Error("modelId is required");
     return {
-      viewType: "tui",
       ...(await client.activateTrainingModel(
         modelId,
         typeof params?.providerModel === "string"
@@ -109,19 +104,17 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-benchmark-model") {
+  if (capability === "training-benchmark-model") {
     const modelId =
       typeof params?.modelId === "string" ? params.modelId.trim() : "";
     if (!modelId) throw new Error("modelId is required");
     return {
-      viewType: "tui",
       ...(await client.benchmarkTrainingModel(modelId)),
     };
   }
 
-  if (capability === "terminal-training-build-analysis-index") {
+  if (capability === "training-build-analysis-index") {
     return {
-      viewType: "tui",
       ...(await client.buildTrainingAnalysisIndex({
         roots: Array.isArray(params?.roots)
           ? params.roots.filter(
@@ -136,9 +129,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-build-readiness-report") {
+  if (capability === "training-build-readiness-report") {
     return {
-      viewType: "tui",
       ...(await client.buildTrainingReadinessReport({
         roots: Array.isArray(params?.roots)
           ? params.roots.filter(
@@ -161,9 +153,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-ingest-hf-dataset") {
+  if (capability === "training-ingest-hf-dataset") {
     return {
-      viewType: "tui",
       ...(await client.ingestHuggingFaceTrainingDataset({
         repoId: typeof params?.repoId === "string" ? params.repoId : undefined,
         revision:
@@ -181,9 +172,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-feed-generate") {
+  if (capability === "training-feed-generate") {
     return {
-      viewType: "tui",
       ...(await client.runFeedTrainingGeneration({
         workspaceRoot:
           typeof params?.workspaceRoot === "string"
@@ -209,9 +199,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-run-scenarios") {
+  if (capability === "training-run-scenarios") {
     return {
-      viewType: "tui",
       ...(await client.runTrainingScenarios({
         workspaceRoot:
           typeof params?.workspaceRoot === "string"
@@ -245,7 +234,7 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-run-eval-comparison") {
+  if (capability === "training-run-eval-comparison") {
     const backend =
       params?.backend === "cpu" ||
       params?.backend === "mlx" ||
@@ -253,7 +242,6 @@ export async function interact(
         ? params.backend
         : undefined;
     return {
-      viewType: "tui",
       ...(await client.runTrainingLocalEvalComparison({
         trainingRoot:
           typeof params?.trainingRoot === "string"
@@ -291,9 +279,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-run-collection") {
+  if (capability === "training-run-collection") {
     return {
-      viewType: "tui",
       ...(await client.runTrainingCollection({
         outputDir:
           typeof params?.outputDir === "string" ? params.outputDir : undefined,
@@ -435,10 +422,9 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-write-benchmark-matrix") {
+  if (capability === "training-write-benchmark-matrix") {
     const rows = Array.isArray(params?.rows) ? params.rows : [];
     return {
-      viewType: "tui",
       ...(await client.writeTrainingBenchmarkMatrix({
         rows: rows.filter(
           (
@@ -469,7 +455,7 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-run-benchmark-vs-cerebras") {
+  if (capability === "training-run-benchmark-vs-cerebras") {
     const benchmark =
       params?.benchmark === "clawbench" ||
       params?.benchmark === "eliza_harness_action_selection" ||
@@ -484,7 +470,6 @@ export async function interact(
         ? params.variants
         : undefined;
     return {
-      viewType: "tui",
       ...(await client.runTrainingBenchmarkVsCerebras({
         tiers: typeof params?.tiers === "string" ? params.tiers : undefined,
         benchmark,
@@ -518,9 +503,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-stage-eliza1-bundle") {
+  if (capability === "training-stage-eliza1-bundle") {
     return {
-      viewType: "tui",
       ...(await client.stageEliza1Bundle({
         trainingRoot:
           typeof params?.trainingRoot === "string"
@@ -540,9 +524,8 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-training-run-action-benchmark") {
+  if (capability === "training-run-action-benchmark") {
     return {
-      viewType: "tui",
       ...(await client.runTrainingActionBenchmark({
         workspaceRoot:
           typeof params?.workspaceRoot === "string"

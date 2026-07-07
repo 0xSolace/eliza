@@ -17,7 +17,8 @@ const rawScreensharePlugin: Plugin = {
   description:
     "Streams the local desktop and accepts authenticated mouse and keyboard control from the Screen Share app.",
   views: [
-    // Single GUI declaration drawn from the ScreenshareView spatial source.
+    // One shipped GUI declaration drawn from ScreenshareView. The modality enum
+    // is retained in the contract for future alternate view entries.
     {
       id: "screenshare",
       label: "Screen Share",

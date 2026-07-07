@@ -18,9 +18,9 @@
  * round-trip that a live shell client would complete.
  */
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import type http from "node:http";
-import { dirname, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin, ViewDeclaration } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
@@ -42,33 +42,53 @@ const repoRoot = resolve(
   "../../../..",
 );
 
-const VIEW_MANIFESTS = [
-  "plugins/plugin-contacts/src/plugin.ts",
-  "plugins/plugin-hyperliquid/src/plugin.ts",
-  "plugins/plugin-messages/src/plugin.ts",
-  "plugins/app-model-tester/src/plugin.ts",
-  "plugins/plugin-phone/src/plugin.ts",
-  "plugins/plugin-polymarket/src/plugin.ts",
-  "plugins/plugin-wallet-ui/src/plugin.ts",
-  "plugins/plugin-feed/src/index.ts",
-  "plugins/plugin-app-control/src/index.ts",
-  "plugins/plugin-screenshare/src/index.ts",
-  "plugins/plugin-task-coordinator/src/index.ts",
-  "plugins/plugin-trajectory-logger/src/index.ts",
-  "plugins/plugin-training/src/setup-routes.ts",
-  "plugins/plugin-facewear/src/index.ts",
-] as const;
-
-// Reintroduction contract (#15269): if a plugin ever ships a tui view again,
-// each declared TUI component must register its terminal parity capabilities
-// here, and the parity + capability-dispatch assertions that previously
-// consumed this map (see git history of this file) must be restored alongside
-// it. The shipped inventory is GUI-only today, so the map is intentionally
-// empty — the GUI-only ratchet below fails first when a tui view reappears.
-const TUI_PARITY_CAPABILITIES: Record<string, readonly string[]> = {};
+const VIEW_MANIFESTS = discoverPluginViewManifestPaths();
 
 function readManifest(path: string): string {
   return readFileSync(resolve(repoRoot, path), "utf8");
+}
+
+function discoverPluginViewManifestPaths(): string[] {
+  const pluginRoot = resolve(repoRoot, "plugins");
+  const discovered: string[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = join(directory, entry.name);
+      const relativePath = relative(repoRoot, fullPath);
+      if (entry.isDirectory()) {
+        if (
+          ["dist", "node_modules", "coverage"].includes(entry.name) ||
+          relativePath.includes(`${sep}test${sep}`) ||
+          relativePath.includes(`${sep}__tests__${sep}`)
+        ) {
+          continue;
+        }
+        visit(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile()) continue;
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      if (
+        entry.name.endsWith(".d.ts") ||
+        entry.name.includes(".test.") ||
+        entry.name.includes(".spec.") ||
+        entry.name === "vite.config.views.ts"
+      ) {
+        continue;
+      }
+
+      const source = readFileSync(fullPath, "utf8");
+      if (!source.includes("views:") || !source.includes("componentExport:")) {
+        continue;
+      }
+      if (viewObjects(source).length === 0) continue;
+      discovered.push(relativePath.split(sep).join("/"));
+    }
+  };
+
+  visit(pluginRoot);
+  return [...new Set(discovered)].sort();
 }
 
 function viewObjects(source: string): string[] {
@@ -114,7 +134,7 @@ function viewObjects(source: string): string[] {
 }
 
 function stringField(source: string, field: string): string | null {
-  const match = source.match(new RegExp(`${field}:\\s*"([^"]+)"`));
+  const match = source.match(new RegExp(`${field}:\\s*["']([^"']+)["']`));
   return match?.[1] ?? null;
 }
 
@@ -125,9 +145,9 @@ function stringField(source: string, field: string): string | null {
 function viewObjectModalities(object: string): RoutedViewType[] {
   const modalitiesMatch = object.match(/modalities:\s*\[([^\]]*)\]/);
   if (modalitiesMatch) {
-    const mods = [...modalitiesMatch[1].matchAll(/"(gui|tui|xr)"/g)].map(
-      (m) => m[1] as RoutedViewType,
-    );
+    const mods = [
+      ...modalitiesMatch[1].matchAll(/["'](gui|tui|xr)["']/g),
+    ].map((m) => m[1] as RoutedViewType);
     if (mods.length > 0) return mods;
   }
   return [(stringField(object, "viewType") ?? "gui") as RoutedViewType];
@@ -247,10 +267,6 @@ describe("plugin view coverage", () => {
       }
     }
     expect(nonGui).toEqual([]);
-  });
-
-  it("keeps the terminal parity reintroduction contract empty while no tui view ships", () => {
-    expect(Object.keys(TUI_PARITY_CAPABILITIES)).toEqual([]);
   });
 
   it("can route-switch every bundled plugin view in gui mode", async () => {

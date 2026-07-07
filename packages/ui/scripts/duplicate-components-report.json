@@ -3131,22 +3131,6 @@
       ]
     },
     {
-      "token": "x",
-      "count": 2,
-      "entries": [
-        {
-          "file": "src/components/connectors/XRPairingPanel.tsx",
-          "name": "XRPairingPanel",
-          "tokens": ["x", "r", "pairing", "panel"]
-        },
-        {
-          "file": "src/spatial/xr-scene.tsx",
-          "name": "XRSpatialScene",
-          "tokens": ["x", "r", "spatial", "scene"]
-        }
-      ]
-    },
-    {
       "token": "save",
       "count": 2,
       "entries": [
@@ -3543,22 +3527,6 @@
           "file": "src/hooks/useRole.tsx",
           "name": "RoleProvider",
           "tokens": ["role", "provider"]
-        }
-      ]
-    },
-    {
-      "token": "terminal",
-      "count": 2,
-      "entries": [
-        {
-          "file": "src/components/views/TerminalPluginView.tsx",
-          "name": "TerminalPluginView",
-          "tokens": ["terminal", "plugin", "view"]
-        },
-        {
-          "file": "src/components/pages/ChatView.tsx",
-          "name": "TerminalChannelPanel",
-          "tokens": ["terminal", "channel", "panel"]
         }
       ]
     },

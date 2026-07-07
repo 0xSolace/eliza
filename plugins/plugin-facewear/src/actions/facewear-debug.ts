@@ -1,6 +1,6 @@
 /**
- * Facewear debug action reports XR, smartglasses, and coordinator service
- * diagnostics for connected wearable devices.
+ * Facewear debug action reports smartglasses and coordinator diagnostics for
+ * connected wearable devices.
  */
 import type {
 	Action,
@@ -14,10 +14,6 @@ import {
 	type FacewearService,
 } from "../services/facewear-service.ts";
 import { SMARTGLASSES_SERVICE_NAME } from "../services/smartglasses-service.ts";
-import {
-	XR_SERVICE_TYPE,
-	type XRSessionService,
-} from "../services/xr-session-service.ts";
 
 export const facewearDebugAction: Action = {
 	name: "FACEWEAR_DEBUG",
@@ -26,15 +22,15 @@ export const facewearDebugAction: Action = {
 		"DEBUG_GLASSES",
 		"DIAGNOSE_HEADSET",
 		"FACEWEAR_DIAGNOSTICS",
-		"CHECK_XR",
+		"CHECK_SMARTGLASSES",
 	],
 	examples: [
 		[
-			{ name: "{{user1}}", content: { text: "Debug my XR connection" } },
+			{ name: "{{user1}}", content: { text: "Debug my smartglasses" } },
 			{
 				name: "{{user2}}",
 				content: {
-					text: "XR session service is running. No active connections.",
+					text: "Smartglasses service is running. No active connection.",
 				},
 			},
 		],
@@ -48,20 +44,6 @@ export const facewearDebugAction: Action = {
 		callback?: HandlerCallback,
 	) => {
 		const lines: string[] = ["**Facewear Diagnostics**\n"];
-
-		const xrSvc = runtime.getService<XRSessionService>(XR_SERVICE_TYPE);
-		if (xrSvc) {
-			const conns = xrSvc.getConnections();
-			lines.push(`**XR Session Service:** running`);
-			lines.push(`**XR Connections:** ${conns.length}`);
-			for (const c of conns) {
-				lines.push(
-					`  - ${c.id}: ${c.deviceType} (connected ${c.connectedAt.toISOString()})`,
-				);
-			}
-		} else {
-			lines.push("**XR Session Service:** not running");
-		}
 
 		const sgSvc = runtime.getService(SMARTGLASSES_SERVICE_NAME);
 		if (sgSvc) {

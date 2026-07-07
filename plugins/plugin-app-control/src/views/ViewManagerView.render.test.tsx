@@ -73,7 +73,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe("ViewManagerView (gui/xr) wrapper", () => {
+describe("ViewManagerView GUI wrapper", () => {
 	it("fetches GET /api/views (no viewType qs) and renders the populated list", async () => {
 		const { calls } = stubFetch(({ url }) => {
 			if (url === "/api/views") return jsonResponse(guiViews);
@@ -123,7 +123,7 @@ describe("ViewManagerView (gui/xr) wrapper", () => {
 		});
 
 		const navCall = calls.find((c) => c.url.includes("/navigate"));
-		// Crucial gui-vs-tui distinction: no ?viewType query string.
+		// Crucial default-modality distinction: no ?viewType query string.
 		expect(navCall?.url).toBe("/api/views/wallet/navigate");
 		expect(navCall?.url).not.toContain("?viewType");
 		expect(navCall?.init?.method).toBe("POST");
@@ -206,35 +206,35 @@ describe("ViewManagerView (gui/xr) wrapper", () => {
 		expect(calls.filter((c) => c.url === "/api/views")).toHaveLength(2);
 	});
 
-	it("collapses duplicate gui/xr/tui declarations of one id into a single row with modality chips", async () => {
+	it("collapses duplicate future-modality declarations of one id into a single row with modality chips", async () => {
 		// /api/views can return the same logical view once per surface. The list
-		// must show it ONCE, with one chip per surface (no "Phone / Phone XR /
-		// Phone TUI" duplicates).
+		// must show it once, with one chip per surface, so a future modality does
+		// not duplicate the base GUI row.
 		const dupViews = {
 			views: [
 				{
-					id: "phone",
-					label: "Phone",
+					id: "future-surface",
+					label: "Future Surface",
 					viewType: "gui",
-					path: "/phone",
+					path: "/future-surface",
 					available: true,
-					pluginName: "@elizaos/plugin-phone",
+					pluginName: "@elizaos/plugin-future-surface",
 				},
 				{
-					id: "phone",
-					label: "Phone XR",
+					id: "future-surface",
+					label: "Future Surface Spatial",
 					viewType: "xr",
-					path: "/phone",
+					path: "/future-surface",
 					available: true,
-					pluginName: "@elizaos/plugin-phone",
+					pluginName: "@elizaos/plugin-future-surface",
 				},
 				{
-					id: "phone",
-					label: "Phone TUI",
+					id: "future-surface",
+					label: "Future Surface Terminal",
 					viewType: "tui",
-					path: "/phone",
+					path: "/future-surface",
 					available: true,
-					pluginName: "@elizaos/plugin-phone",
+					pluginName: "@elizaos/plugin-future-surface",
 				},
 			],
 		};
@@ -244,16 +244,16 @@ describe("ViewManagerView (gui/xr) wrapper", () => {
 		});
 
 		const { container } = render(<ViewManagerView />);
-		await screen.findByText("Phone");
+		await screen.findByText("Future Surface");
 
 		// Exactly one open control for the collapsed id, labelled from the gui base.
 		const openButtons = container.querySelectorAll('[data-agent-id^="open:"]');
 		expect(openButtons).toHaveLength(1);
 		expect(
-			container.querySelector('[data-agent-id="open:phone"]'),
+			container.querySelector('[data-agent-id="open:future-surface"]'),
 		).toBeTruthy();
-		expect(screen.queryByText("Phone XR")).toBeNull();
-		expect(screen.queryByText("Phone TUI")).toBeNull();
+		expect(screen.queryByText("Future Surface Spatial")).toBeNull();
+		expect(screen.queryByText("Future Surface Terminal")).toBeNull();
 
 		// One modality chip per surface, ordered gui · xr · tui.
 		expect(screen.getByText("gui")).toBeTruthy();
@@ -261,10 +261,10 @@ describe("ViewManagerView (gui/xr) wrapper", () => {
 		expect(screen.getByText("tui")).toBeTruthy();
 	});
 
-	it("XR reuses the same export and fetches the gui list (no viewType qs)", async () => {
-		// The xr entry in src/index.ts uses componentExport "ViewManagerView" — the
-		// exact export rendered here — and fetchViewEntries() is called with no
-		// viewType, so the xr mount hits GET /api/views with no query string.
+	it("uses the same export and fetches the gui list (no viewType qs)", async () => {
+		// The manifest uses componentExport "ViewManagerView" — the exact export
+		// rendered here — and fetchViewEntries() is called with no viewType, so the
+		// default mount hits GET /api/views with no query string.
 		const { calls } = stubFetch(({ url }) => {
 			if (url === "/api/views") return jsonResponse(guiViews);
 			throw new Error(`Unexpected request: ${url}`);

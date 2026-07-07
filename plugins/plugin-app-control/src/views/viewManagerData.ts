@@ -28,7 +28,7 @@ export interface ViewEntry {
 	/**
 	 * Every surface this logical view renders on. A raw `/api/views` entry has
 	 * `[viewType]`; after {@link collapseViewEntries} it carries the union of all
-	 * same-id declarations (e.g. `["gui", "xr", "tui"]`) so the manager lists the
+	 * same-id declarations so the manager lists the
 	 * view ONCE with modality badges instead of one duplicate row per surface.
 	 */
 	modalities?: ViewModality[];
@@ -44,10 +44,10 @@ export interface ViewEntry {
 
 /**
  * Collapse `/api/views` entries that share an `id` into one logical row carrying
- * the union of every surface (`gui`/`xr`/`tui`) they render on. The GUI entry is
+ * the union of every surface they render on. The GUI entry is
  * preferred as the base (clean label, no surface suffix); first-seen order is
  * preserved. This is what makes a view appear ONCE with modality badges instead
- * of duplicate "Phone" / "Phone XR" / "Phone TUI" rows.
+ * of duplicate rows for future alternate modalities.
  */
 export function collapseViewEntries(entries: ViewEntry[]): ViewEntry[] {
 	const order: string[] = [];
@@ -101,13 +101,13 @@ export async function interact(
 	capability: string,
 	params?: Record<string, unknown>,
 ): Promise<unknown> {
-	if (capability === "terminal-list-views") {
-		return { views: await fetchViewEntries("tui") };
+	if (capability === "list-views") {
+		return { views: await fetchViewEntries() };
 	}
-	if (capability === "terminal-open-view") {
+	if (capability === "open-view") {
 		const viewId = typeof params?.viewId === "string" ? params.viewId : null;
 		if (!viewId) throw new Error("viewId is required");
-		const views = await fetchViewEntries("tui");
+		const views = await fetchViewEntries();
 		const view = views.find((entry) => entry.id === viewId);
 		if (!view) throw new Error(`View "${viewId}" not found`);
 		await requestViewNavigation(view);

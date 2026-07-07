@@ -1777,7 +1777,7 @@ describe("training analysis index", () => {
             label: "All Eliza-1 tier benchmark coverage",
             status: "partial",
             note: "Benchmark coverage is missing some Eliza-1 tiers.",
-            recommendedCapability: "terminal-training-run-collection",
+            recommendedCapability: "training-run-collection",
             recommendedParams: { actionBenchmarkPairs: "all" },
           },
         ],
@@ -2030,7 +2030,7 @@ describe("training analysis index", () => {
     expect(html).toContain("Collection Readiness Gaps");
     expect(html).toContain("Recommended Params");
     expect(html).toContain("all_eliza1_tiers_benchmark");
-    expect(html).toContain("terminal-training-run-collection");
+    expect(html).toContain("training-run-collection");
     expect(html).toContain('"actionBenchmarkPairs":"all"');
     expect(html).toContain("selectedSourceCategory");
     expect(html).toContain("run-filter");

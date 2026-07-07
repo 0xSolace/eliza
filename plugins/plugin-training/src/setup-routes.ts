@@ -337,8 +337,8 @@ export const trainingPlugin: Plugin = {
     "Training jobs, datasets, models, blueprints, and trajectory routes",
   routes: trainingRoutes,
   views: [
-    // Single GUI declaration. `FineTuningView` renders the rich
-    // `FineTuningDashboard` through the spatial `Escape` hatch.
+    // One shipped GUI declaration drawn from FineTuningView. The modality enum
+    // is retained in the contract for future alternate view entries.
     {
       id: "training",
       label: "Training",

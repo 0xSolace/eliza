@@ -27,6 +27,7 @@ import { requireServiceKey } from "@/lib/auth/service-key-hono-worker";
 import { elizaSandboxService } from "@/lib/services/eliza-sandbox";
 import { provisioningJobService } from "@/lib/services/provisioning-jobs";
 import { logger } from "@/lib/utils/logger";
+import { notifyAgentReply } from "@/lib/web-push";
 import type { AppContext, AppEnv } from "@/types/cloud-worker-env";
 
 const messageRequestSchema = z.object({
@@ -42,11 +43,27 @@ const POLL_INTERVAL_MS = 1_500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function getWaitUntil(
+  c: AppContext,
+): ((promise: Promise<unknown>) => void) | undefined {
+  try {
+    const executionCtx = c.executionCtx;
+    if (typeof executionCtx?.waitUntil !== "function") return undefined;
+    return executionCtx.waitUntil.bind(executionCtx);
+  } catch {
+    // error-policy:J4 Hono local/test contexts omit ExecutionContext; push remains a non-fatal side effect.
+    return undefined;
+  }
+}
+
 async function __hono_POST(c: AppContext) {
   try {
     await requireServiceKey(c);
     const agentId = c.req.param("agentId") ?? "";
-    const body = await c.req.json().catch(() => null);
+    const body = await c.req.json().catch(() => {
+      // error-policy:J3 malformed JSON is invalid input for this request body.
+      return null;
+    });
 
     const parsed = messageRequestSchema.safeParse(body);
     if (!parsed.success) {
@@ -95,6 +112,36 @@ async function __hono_POST(c: AppContext) {
       if (current.status === "completed") {
         const result = (current.result ?? {}) as Record<string, unknown>;
         const replyText = typeof result.text === "string" ? result.text : "";
+
+        // Agent-reply → Web Push: if the patron has installed the PWA and has
+        // no live foreground client, surface the reply as a push. Never throws —
+        // a push failure must not break the reply; the notify service no-ops
+        // when VAPID isn't configured. Keyed to the sending user (subscription
+        // owner) + this agent. Registered with `executionCtx.waitUntil` so the
+        // Cloudflare Worker keeps the send + dead-subscription prune alive AFTER
+        // the chat response returns (a bare fire-and-forget can be dropped when
+        // the Worker finishes the request — the exact path this feature needs).
+        if (userId && replyText) {
+          const pushWork = notifyAgentReply(
+            {
+              userId,
+              agentId,
+              replyText,
+              title: agent.agent_name ?? "New message",
+              ...(sessionId ? { conversationId: sessionId } : {}),
+            },
+            { env: c.env },
+          ).catch(() => {
+            // error-policy:J5 non-fatal; notify-service already logs internally.
+          });
+          const waitUntil = getWaitUntil(c);
+          if (waitUntil) {
+            waitUntil(pushWork);
+          } else {
+            void pushWork;
+          }
+        }
+
         const reason =
           typeof result.reason === "string" ? result.reason : undefined;
         // Flatten so callers reading top-level `text` work directly.

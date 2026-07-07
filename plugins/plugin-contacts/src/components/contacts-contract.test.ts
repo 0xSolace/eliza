@@ -90,25 +90,25 @@ describe("real ContactsWeb parser contract", () => {
   describe("interact() write capabilities run through the real ContactsWeb", () => {
     it("rejects a blank displayName before any native write (real validation)", async () => {
       await expect(
-        interact("terminal-create-contact", { displayName: "  \t " }),
+        interact("create-contact", { displayName: "  \t " }),
       ).rejects.toThrow("displayName is required");
     });
 
     it("a valid create reaches the real web fallback and throws Android-only", async () => {
       await expect(
-        interact("terminal-create-contact", { displayName: "Ada Lovelace" }),
+        interact("create-contact", { displayName: "Ada Lovelace" }),
       ).rejects.toThrow("Contacts are only available on Android.");
     });
 
     it("rejects an empty vcardText before any native write (real validation)", async () => {
-      await expect(
-        interact("terminal-import-vcard", { vcardText: "" }),
-      ).rejects.toThrow("vcardText is required");
+      await expect(interact("import-vcard", { vcardText: "" })).rejects.toThrow(
+        "vcardText is required",
+      );
     });
 
     it("a valid import reaches the real web fallback and throws Android-only", async () => {
       await expect(
-        interact("terminal-import-vcard", {
+        interact("import-vcard", {
           vcardText: "BEGIN:VCARD\nFN:Ada\nEND:VCARD",
         }),
       ).rejects.toThrow("Contact imports are only available on Android.");

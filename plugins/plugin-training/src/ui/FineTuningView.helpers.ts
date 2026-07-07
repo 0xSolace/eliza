@@ -20,7 +20,7 @@ export function parseCollectionTierList(value: string): string[] {
   return parseElizaOneBenchmarkTiers(value, []);
 }
 
-export async function loadTrainingTuiState(): Promise<{
+export async function loadTrainingViewState(): Promise<{
   status: TrainingStatus;
   trajectories: TrainingTrajectoryList;
   datasets: { datasets: TrainingDatasetRecord[] };

@@ -17,7 +17,7 @@ import {
 
 /**
  * The navigation half of the catalog must point at real app routes and expose
- * the in-app destinations on every surface, while keeping GUI/TUI-only client
+ * the in-app destinations on every surface, while keeping local-client-only client
  * commands off the chat connectors.
  */
 describe("connector catalog — navigation surface", () => {
@@ -91,12 +91,16 @@ describe("connector catalog — navigation surface", () => {
 });
 
 describe("connector catalog — client command surface filtering", () => {
-	it("emits client commands to the in-app surfaces (gui/tui)", () => {
-		for (const surface of ["gui", "tui"]) {
-			const names = new Set(getConnectorCommands(surface).map((c) => c.name));
-			expect(names.has("clear")).toBe(true);
-			expect(names.has("fullscreen")).toBe(true);
-		}
+	it("emits client commands to the shipped in-app surface", () => {
+		const names = new Set(getConnectorCommands("gui").map((c) => c.name));
+		expect(names.has("clear")).toBe(true);
+		expect(names.has("fullscreen")).toBe(true);
+	});
+
+	it("does not emit client commands to the reserved terminal surface", () => {
+		const names = new Set(getConnectorCommands("tui").map((c) => c.name));
+		expect(names.has("clear")).toBe(false);
+		expect(names.has("fullscreen")).toBe(false);
 	});
 
 	it("filters client commands off chat connectors (discord/telegram)", () => {

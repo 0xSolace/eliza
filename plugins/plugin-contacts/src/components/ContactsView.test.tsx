@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-// Drives the unified ContactsView (the single GUI/XR data wrapper) through the
-// rendered DOM: the same component the bundle exports for both the "gui" and
-// "xr" modalities. Asserts the populated address-book list, the clickable
+// Drives ContactsView through the rendered DOM for the shipped GUI surface.
+// Asserts the populated address-book list, the clickable
 // contact rows, list -> detail navigation, the per-phone Call / Text handoffs
 // to the Phone / Messages views, the search filter, the new-contact form
 // (create through the native bridge), the refresh control, and the error /
-// permission path — functional parity with the retired ContactsTuiView surface.
+// permission path.
 
 import {
   cleanup,

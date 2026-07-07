@@ -38,10 +38,6 @@ vi.mock("@elizaos/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@elizaos/shared")>();
   return {
     ...actual,
-    isLoopbackBindHost: () => true,
-    normalizeFirstRunProviderId: () => null,
-    resolveDeploymentTargetInConfig: () => ({}),
-    resolveServiceRoutingInConfig: () => ({}),
     resolveDesktopApiPort: () => 31337,
     resolveDesktopUiPort: () => null,
   };

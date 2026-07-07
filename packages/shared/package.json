@@ -203,6 +203,16 @@
       "import": "./dist/contracts/index.js",
       "default": "./dist/contracts/index.js"
     },
+    "./utils/asset-url": {
+      "types": "./dist/utils/asset-url.d.ts",
+      "eliza-source": {
+        "types": "./src/utils/asset-url.ts",
+        "import": "./src/utils/asset-url.ts",
+        "default": "./src/utils/asset-url.ts"
+      },
+      "import": "./dist/utils/asset-url.js",
+      "default": "./dist/utils/asset-url.js"
+    },
     "./utils/permission-deep-links": {
       "types": "./dist/utils/permission-deep-links.d.ts",
       "eliza-source": {

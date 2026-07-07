@@ -1,9 +1,12 @@
 /**
- * ModelTesterView — the GUI data wrapper for the Model Tester surface.
+ * ModelTesterView — the single GUI data wrapper for the Model Tester
+ * surface.
  *
  * It owns the live probe data (status fetch, per-probe run dispatch, run-all,
  * prompt presets, image/audio asset pickers) and renders the one presentational
- * {@link ModelTesterSpatialView} inside a {@link SpatialSurface}.
+ * {@link ModelTesterSpatialView} inside a {@link SpatialSurface}. The spatial
+ * child is presentational only, while file picking and probe execution stay in
+ * this wrapper.
  *
  * The spatial vocabulary has no `<input type="file">`; the asset-pick action
  * signals (`pick-image` / `pick-audio`) drive a real hidden file input created

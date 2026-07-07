@@ -94,17 +94,6 @@ export default defineConfig({
 				replacement: path.join(repoRoot, "packages/shared/src/index.ts"),
 			},
 			{
-				find: /^@elizaos\/tui$/,
-				replacement: path.join(repoRoot, "packages/tui/src/index.ts"),
-			},
-			{
-				find: /^@elizaos\/ui\/spatial\/tui$/,
-				replacement: path.join(
-					repoRoot,
-					"packages/ui/src/spatial/tui/index.ts",
-				),
-			},
-			{
 				find: /^@elizaos\/ui\/spatial$/,
 				replacement: path.join(repoRoot, "packages/ui/src/spatial/index.ts"),
 			},

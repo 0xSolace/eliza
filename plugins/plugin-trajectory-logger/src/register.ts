@@ -1,6 +1,6 @@
 /**
- * Side-effect entry — registers, on native, the Trajectory Logger in-process
- * app-shell page.
+ * Side-effect entry — registers the Trajectory Logger in-process app-shell page
+ * on native.
  *
  * Load once during app startup.
  */

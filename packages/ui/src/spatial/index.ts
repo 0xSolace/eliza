@@ -1,19 +1,10 @@
 /**
- * `@elizaos/ui/spatial` — modality-agnostic view authoring.
+ * `@elizaos/ui/spatial` — shared spatial authoring primitives for plugin views.
  *
- * Author a view ONCE with the primitives below. GUI is the shipped surface
- * (`<SpatialSurface modality="gui">{view}</SpatialSurface>` → DOM). The
- * `SpatialModality` contract keeps "xr" and "tui" as valid values so views stay
- * authored modality-agnostically; the terminal registry/renderer lives at
- * `@elizaos/ui/spatial/tui` (consumed by `@elizaos/tui` and used as a test
- * harness). The shipped XR renderer and TUI review surfaces were removed
- * (#15269) — reintroduce them deliberately against this contract.
- *
- * This barrel is browser-safe: it never imports the terminal engine (which pulls
- * in `@elizaos/tui`).
- *
- * State that must work on every surface uses the `useSpatial*` hooks; plain
- * presentational components (props → primitives) need no hooks and work as-is.
+ * The public modality contracts still include `gui`, `xr`, and `tui`, but this
+ * package currently ships only the DOM authoring/runtime path. XR and terminal
+ * renderers can be reintroduced behind the same contracts without changing
+ * plugin view declarations.
  */
 
 export {
@@ -22,7 +13,7 @@ export {
   type SpatialContextValue,
   useSpatialContext,
 } from "./context.ts";
-// DOM (GUI/XR) host + render context.
+// DOM host + render context.
 export {
   detectDomModality,
   SpatialSurface,

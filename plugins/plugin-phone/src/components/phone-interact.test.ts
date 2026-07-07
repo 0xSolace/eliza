@@ -1,7 +1,5 @@
-// Agent-facing terminal capability bridge (interact). The terminal SURFACE
-// itself is the unified PhoneSpatialView (covered in PhoneSpatialView.test.tsx);
-// this file guards the capability handler the agent terminal calls — its DTO
-// projection, native-bridge dispatch, and hostile-param sanitization.
+// Phone view capability bridge contract: DTO projection, native-bridge dispatch,
+// and hostile-param sanitization.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -77,14 +75,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("phone terminal capability bridge", () => {
-  it("supports terminal capabilities for state, dialing, dialer, and transcripts", async () => {
+describe("phone view capability bridge", () => {
+  it("supports capabilities for state, dialing, dialer, and transcripts", async () => {
     mockBridge();
 
-    await expect(
-      interact("terminal-phone-state", { limit: 2 }),
-    ).resolves.toMatchObject({
-      viewType: "tui",
+    await expect(interact("phone-state", { limit: 2 })).resolves.toMatchObject({
       status: sampleStatus,
       calls: [
         {
@@ -105,26 +100,24 @@ describe("phone terminal capability bridge", () => {
     expect(phoneBridge.listRecentCalls).toHaveBeenCalledWith({ limit: 2 });
 
     await expect(
-      interact("terminal-place-call", { number: "+1 (555) 333-4444" }),
+      interact("place-call", { number: "+1 (555) 333-4444" }),
     ).resolves.toEqual({
       placed: true,
       number: "+15553334444",
-      viewType: "tui",
     });
 
     await expect(
-      interact("terminal-open-dialer", { number: "555 999 0000" }),
+      interact("open-dialer", { number: "555 999 0000" }),
     ).resolves.toEqual({
       opened: true,
       number: "5559990000",
-      viewType: "tui",
     });
     expect(phoneBridge.openDialer).toHaveBeenCalledWith({
       number: "5559990000",
     });
 
     await expect(
-      interact("terminal-save-call-transcript", {
+      interact("save-call-transcript", {
         callId: "call-1",
         transcript: "Call transcript",
         summary: "Short summary",
@@ -132,7 +125,6 @@ describe("phone terminal capability bridge", () => {
     ).resolves.toEqual({
       saved: true,
       updatedAt: 1_700_000_300_000,
-      viewType: "tui",
     });
     expect(phoneBridge.saveCallTranscript).toHaveBeenCalledWith({
       callId: "call-1",
@@ -141,20 +133,20 @@ describe("phone terminal capability bridge", () => {
     });
   });
 
-  it("sanitizes hostile terminal state params before calling the native bridge", async () => {
+  it("sanitizes hostile state params before calling the native bridge", async () => {
     mockBridge();
 
     await expect(
-      interact("terminal-phone-state", {
+      interact("phone-state", {
         limit: Number.POSITIVE_INFINITY,
         number: "../../etc/passwd",
       }),
-    ).resolves.toMatchObject({ viewType: "tui" });
+    ).resolves.toMatchObject({ status: sampleStatus });
     expect(phoneBridge.listRecentCalls).toHaveBeenLastCalledWith({
       limit: 50,
     });
 
-    await interact("terminal-phone-state", {
+    await interact("phone-state", {
       limit: -10,
       number: "+1 (555) 123-4567?x=<script>",
     });
@@ -163,15 +155,15 @@ describe("phone terminal capability bridge", () => {
       number: "+15551234567",
     });
 
-    await interact("terminal-phone-state", { limit: 10_000 });
+    await interact("phone-state", { limit: 10_000 });
     expect(phoneBridge.listRecentCalls).toHaveBeenLastCalledWith({
       limit: 200,
     });
   });
 
   it("rejects an unsupported capability", async () => {
-    await expect(interact("terminal-not-a-thing")).rejects.toThrow(
-      'Unsupported capability "terminal-not-a-thing"',
+    await expect(interact("not-a-thing")).rejects.toThrow(
+      'Unsupported capability "not-a-thing"',
     );
   });
 });

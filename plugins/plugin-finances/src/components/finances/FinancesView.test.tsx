@@ -1,9 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * Drives the unified FinancesView (the single GUI/XR data wrapper) through the
- * rendered DOM: the same component the bundle exports for both the "gui" and
- * "xr" modalities. It reads the four read-only money endpoints PA serves:
+ * Drives the FinancesView GUI data wrapper through the rendered DOM. It reads
+ * the four read-only money endpoints PA serves:
  *   GET {base}/api/lifeops/money/dashboard | sources | transactions | recurring
  *
  * The default fetchers build URLs via `client.getBaseUrl()`; every test injects

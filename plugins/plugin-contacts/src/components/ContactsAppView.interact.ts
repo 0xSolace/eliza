@@ -13,13 +13,12 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-list-contacts") {
+  if (capability === "list-contacts") {
     const state = await loadContactsState({
       query: typeof params?.query === "string" ? params.query : undefined,
       limit: typeof params?.limit === "number" ? params.limit : undefined,
     });
     return {
-      viewType: "tui",
       query: state.query,
       count: state.count,
       contacts: state.contacts.map((contact) => ({
@@ -33,7 +32,7 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-create-contact") {
+  if (capability === "create-contact") {
     const displayName =
       typeof params?.displayName === "string" ? params.displayName.trim() : "";
     if (!displayName) throw new Error("displayName is required");
@@ -47,10 +46,10 @@ export async function interact(
     if (phoneNumber) payload.phoneNumber = phoneNumber;
     if (emailAddress) payload.emailAddress = emailAddress;
     const result = await Contacts.createContact(payload);
-    return { created: true, id: result.id, viewType: "tui" };
+    return { created: true, id: result.id };
   }
 
-  if (capability === "terminal-import-vcard") {
+  if (capability === "import-vcard") {
     const vcardText =
       typeof params?.vcardText === "string" ? params.vcardText.trim() : "";
     if (!vcardText) throw new Error("vcardText is required");
@@ -66,7 +65,6 @@ export async function interact(
         starred: contact.starred,
         sourceName: contact.sourceName,
       })),
-      viewType: "tui",
     };
   }
 

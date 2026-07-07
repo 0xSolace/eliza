@@ -21,8 +21,7 @@ const MIN_VISIBLE_TEXT_LENGTH_BY_VIEW_ID = new Map<string, number>([
 ]);
 const DEFAULT_MIN_VISIBLE_TEXT_LENGTH = 21;
 
-// Interaction coverage ratchet signals: redundantHeadingParagraphs,
-// visualSignals, terminalCommands.
+// Interaction coverage ratchet signals: rendered text, controls, screenshots.
 type ViewAudit = {
   id: string;
   viewType: "gui" | "tui";
@@ -35,8 +34,6 @@ type ViewAudit = {
     text: string;
     ariaLabel: string | null;
     disabled: boolean;
-    inTuiRoot: boolean;
-    terminalCommand: string | null;
   }>;
   focusedAfterTabs: string[];
 };
@@ -160,8 +157,6 @@ test.describe("registered plugin views visual coverage", () => {
               disabled:
                 element.hasAttribute("disabled") ||
                 element.getAttribute("aria-disabled") === "true",
-              inTuiRoot: Boolean(element.closest("[data-view-state]")),
-              terminalCommand: element.getAttribute("data-terminal-command"),
             }));
           return {
             id,
@@ -189,36 +184,6 @@ test.describe("registered plugin views visual coverage", () => {
           `${view.id} ${view.viewType} should not fall through to the View Manager`,
         ).not.toMatch(/^View Manager \d+ views\b/);
       }
-      let hasVisibleLegacyTuiRoot = false;
-      if (view.viewType === "tui") {
-        const tuiRoot = viewRoot.locator("[data-view-state]").first();
-        hasVisibleLegacyTuiRoot = await tuiRoot.isVisible().catch(() => false);
-        // Collapsed plugin routes render the shared browser surface; keep the
-        // terminal-wrapper contract for legacy `/tui` surfaces when present.
-        if (hasVisibleLegacyTuiRoot) {
-          await expect(
-            tuiRoot,
-            `${view.id} ${view.viewType} should render a terminal view root`,
-          ).toBeVisible();
-          await expect(
-            viewRoot.getByText(`elizaos://${view.id} --type=tui`).first(),
-            `${view.id} ${view.viewType} should render its own terminal header`,
-          ).toBeVisible();
-          const terminalCommandCount = await page
-            .locator("[data-terminal-command]")
-            .count();
-          if (terminalCommandCount > 0) {
-            for (let index = 0; index < terminalCommandCount; index += 1) {
-              await page.locator("[data-terminal-command]").nth(index).click();
-            }
-            await expect(
-              page.locator("[data-terminal-output]"),
-              `${view.id} ${view.viewType} should render output for every terminal command`,
-            ).toHaveCount(terminalCommandCount);
-          }
-        }
-      }
-
       await captureScreenshotWithQualityRetry(
         page,
         `${view.id} ${view.viewType}`,
@@ -312,8 +277,6 @@ test.describe("registered plugin views visual coverage", () => {
               disabled:
                 element.hasAttribute("disabled") ||
                 element.getAttribute("aria-disabled") === "true",
-              inTuiRoot: Boolean(element.closest("[data-view-state]")),
-              terminalCommand: element.getAttribute("data-terminal-command"),
             }));
           return {
             id,
@@ -336,24 +299,6 @@ test.describe("registered plugin views visual coverage", () => {
         audit.visibleText.length,
         `${view.id} ${view.viewType} should expose readable text`,
       ).toBeGreaterThanOrEqual(minVisibleTextLength);
-      if (view.viewType === "tui" && hasVisibleLegacyTuiRoot) {
-        expect(
-          audit.controls.length,
-          `${view.id} ${view.viewType} should expose terminal controls inside the view, not only assistant overlay controls`,
-        ).toBeGreaterThan(0);
-      }
-      if (view.viewType === "tui" && hasVisibleLegacyTuiRoot) {
-        expect(
-          focusedAfterTabs.some(
-            (entry) =>
-              entry.includes("button") ||
-              entry.includes("input") ||
-              entry.includes("textarea"),
-          ),
-          `${view.id} ${view.viewType} keyboard tab order should reach an actionable control`,
-        ).toBe(true);
-      }
-
       await writeFile(
         path.join(screenshotDir, `${view.id}-${view.viewType}.audit.json`),
         `${JSON.stringify(audit, null, 2)}\n`,

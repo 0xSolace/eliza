@@ -197,16 +197,6 @@
     "reason": "facewear software-readiness gate; also asserts the removed plugin-smartglasses is gone"
   },
   {
-    "file": "scripts/e2e-recordings/audit-ui-coverage.mjs",
-    "tokens": ["plugins/plugin-facewear"],
-    "reason": "the facewear app-xr suite is a required standalone UI package in the recording manifest"
-  },
-  {
-    "file": "scripts/e2e-recordings/suites.mjs",
-    "tokens": ["plugins/plugin-facewear"],
-    "reason": "declarative UI e2e recording catalog; the facewear app-xr suite is listed with its config dir"
-  },
-  {
     "file": "scripts/generate-view-heroes.mjs",
     "tokens": [
       "plugins/plugin-app-control",

@@ -38,8 +38,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BuiltinTab } from "./navigation";
 import type { BackgroundConfig } from "./state/ui-preferences";
 import {
-  SurfaceRealmDeniedError,
   getActiveSurfaceRealmScope,
+  SurfaceRealmDeniedError,
   surfaceViewStoragePrefix,
 } from "./surface-realm-broker";
 import { shellHistory, shellLocalStorage } from "./surface-realm-channel";

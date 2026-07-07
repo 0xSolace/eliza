@@ -88,10 +88,6 @@ const deterministicStreamingActionsScenarioPath = resolve(
   import.meta.dirname,
   "../test/scenarios/deterministic-streaming-actions.scenario.ts",
 );
-const deterministicXrViewActionsScenarioPath = resolve(
-  import.meta.dirname,
-  "../test/scenarios/deterministic-xr-view-actions.scenario.ts",
-);
 const deterministicMcpActionsRoutesScenarioPath = resolve(
   import.meta.dirname,
   "../test/scenarios/deterministic-mcp-actions-routes.scenario.ts",
@@ -164,10 +160,6 @@ describe("scenario PR workflow contract", () => {
     );
     const deterministicStreamingActionsScenario = readFileSync(
       deterministicStreamingActionsScenarioPath,
-      "utf8",
-    );
-    const deterministicXrViewActionsScenario = readFileSync(
-      deterministicXrViewActionsScenarioPath,
       "utf8",
     );
     const deterministicMcpActionsRoutesScenario = readFileSync(
@@ -422,14 +414,6 @@ describe("scenario PR workflow contract", () => {
     expect(deterministicStreamingActionsScenario).toContain(
       'actionName: "STREAM"',
     );
-    expect(deterministicXrViewActionsScenario).toContain(
-      "Deterministic XR view actions with real WebSocket service",
-    );
-    expect(deterministicXrViewActionsScenario).toContain("XRSessionService");
-    expect(deterministicXrViewActionsScenario).toContain("encodeBinaryFrame");
-    expect(deterministicXrViewActionsScenario).toContain(
-      'actionName: "XR_QUERY_VISION"',
-    );
     expect(deterministicMcpActionsRoutesScenario).toContain(
       "Deterministic MCP action and route coverage",
     );
@@ -579,9 +563,6 @@ describe("scenario PR workflow contract", () => {
     expect(deterministicScenarioReadme).toContain("real `STREAM` action");
     expect(deterministicScenarioReadme).toContain("route handler");
     expect(deterministicScenarioReadme).toContain(
-      "real XRSessionService WebSocket",
-    );
-    expect(deterministicScenarioReadme).toContain(
       "committed stdio MCP fixture",
     );
     expect(deterministicScenarioReadme).toContain("MCP_CALL_TOOL");
@@ -606,7 +587,7 @@ describe("scenario PR workflow contract", () => {
       "owner-gates mutating view management modes but allows window navigation validation",
     );
     expect(appControlViewsManagement).toContain(
-      "includes explicit TUI view type and always-on-top false in window navigation payloads",
+      "preserves explicit future terminal viewType and always-on-top false in window navigation payloads",
     );
     expect(appControlViewsManagement).toContain(
       "http://127.0.0.1:3456/api/views/remote-ledger/navigate?viewType=tui",

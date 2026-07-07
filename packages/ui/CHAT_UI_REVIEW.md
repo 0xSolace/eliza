@@ -130,7 +130,7 @@ covered. Full path:
   (the wiring test mocks the bridge).
 - No scenario test that drives view switching *from a chat message/agent action*
   (the user-facing path implied by these notes).
-- Mobile/TUI view switching only covered indirectly.
+- Mobile view switching only covered indirectly.
 
 **Recommendation.** Add (a) a scenario where an agent turn triggers a view
 switch and asserts the active tab changed, and (b) one integration test that

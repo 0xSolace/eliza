@@ -2159,7 +2159,7 @@ export function createViewsAction(deps: ViewsActionDeps = {}): Action {
 			{
 				name: "viewType",
 				description:
-					'Presentation type to use for view discovery and switching. Defaults to "gui"; use "tui" for terminal views and "xr" for spatial views.',
+					'Presentation type to use for view discovery and switching. Defaults to "gui"; "tui" and "xr" are reserved for future alternate view entries.',
 				required: false,
 				schema: { type: "string", enum: ["gui", "tui", "xr"] },
 			},

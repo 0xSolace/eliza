@@ -663,7 +663,7 @@ export type ViewType = "gui" | "tui" | "xr";
 /**
  * A surface a view renders on. Same set as {@link ViewType}; named separately
  * because a single view declaration can render on several modalities at once
- * (one component, drawn to GUI/XR DOM and TUI lines by `@elizaos/ui/spatial`).
+ * while the shipped view bundle can remain focused on the GUI renderer.
  */
 export type ViewModality = ViewType;
 
@@ -700,9 +700,8 @@ export interface CollapsedView extends ViewDeclaration {
  * Collapse view declarations to one entry per `id`, unioning the surfaces each
  * declaration supports. The "gui" declaration (clean label, no surface suffix)
  * is preferred as the canonical base. This is the single source the view
- * catalog and the modality hosts use so a view appears ONCE with modality
- * badges instead of one duplicate row per surface ("Phone" / "Phone XR" /
- * "Phone TUI").
+ * catalog and modality hosts use so a view appears once with modality badges
+ * instead of one duplicate row per future surface variant.
  */
 export function collapseViewDeclarations(
 	views: readonly ViewDeclaration[],
@@ -727,8 +726,8 @@ export function collapseViewDeclarations(
 }
 
 /**
- * XR-specific panel options for a view rendered in a WebXR overlay.
- * All fields are optional and have sensible defaults for headset use.
+ * Retained panel options for a future spatial overlay adapter.
+ * All fields are optional and should be interpreted by that adapter.
  */
 export interface XRViewOptions {
 	/**
@@ -759,7 +758,7 @@ export interface XRViewOptions {
 	defaultOffset?: [number, number, number];
 	/**
 	 * Whether this view supports voice input to its form fields.
-	 * Defaults to true — app-xr will pipe Whisper transcripts to focused inputs.
+	 * Defaults to true so host adapters can pipe transcripts to focused inputs.
 	 */
 	voiceInputEnabled?: boolean;
 	/**
@@ -875,17 +874,14 @@ export interface ViewDeclaration {
 	/**
 	 * View presentation type. Defaults to `"gui"`.
 	 *
-	 * Plugins may register a `"tui"` declaration with the same `id` as a GUI
-	 * declaration to override that view when the shell or agent requests TUI
-	 * mode.
+	 * The union retains non-GUI values so future adapters can be restored without
+	 * reshaping the registry contract.
 	 */
 	viewType?: ViewType;
 	/**
-	 * Surfaces this single declaration renders on. Prefer one declaration with
-	 * `modalities: ["gui", "xr", "tui"]` over duplicate per-`viewType`
-	 * declarations sharing an `id`: the spatial renderer draws the one component
-	 * to each surface (GUI/XR DOM, TUI lines) and the catalog lists the view
-	 * once. When omitted, falls back to `[viewType ?? "gui"]`.
+	 * Surfaces this single declaration can represent. When omitted, falls back to
+	 * `[viewType ?? "gui"]`; current first-party plugins ship GUI declarations
+	 * and keep this contract for future adapters.
 	 */
 	modalities?: ViewModality[];
 	/** One-line description used for semantic view search. */
@@ -1037,8 +1033,8 @@ export interface ViewDeclaration {
 	 */
 	pinnable?: boolean;
 	/**
-	 * XR-specific panel behaviour. Only meaningful when viewType === "xr".
-	 * Omit to accept all defaults (1m-wide billboard panel at 1.5 m distance).
+	 * Future spatial panel behaviour. Only meaningful for a restored adapter that
+	 * understands spatial placement.
 	 */
 	xrOptions?: XRViewOptions;
 }

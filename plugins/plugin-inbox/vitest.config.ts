@@ -13,7 +13,6 @@ import baseConfig from "../../packages/test/vitest/default.config";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const tuiSrc = path.resolve(here, "../../packages/tui/src");
 const baseAliases = Array.isArray(baseConfig.resolve?.alias)
   ? baseConfig.resolve.alias
   : [];
@@ -59,10 +58,6 @@ export default defineConfig({
       {
         find: /^react-dom\/client$/,
         replacement: require.resolve("react-dom/client"),
-      },
-      {
-        find: "@elizaos/tui",
-        replacement: path.join(tuiSrc, "index.ts"),
       },
       ...baseAliases,
     ],

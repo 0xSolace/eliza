@@ -1,4 +1,4 @@
-// View-bundle `interact` capability handler plus the TUI state loaders for the
+// View-bundle `interact` capability handler plus the GUI state loaders for the
 // Hyperliquid view. Kept separate from HyperliquidView.tsx so that file exports
 // only React components and stays Fast-Refresh-compatible (Vite would full-reload
 // a component file that also exports a plain function). The view bundle
@@ -15,7 +15,7 @@ import type {
 	HyperliquidStatusResponse,
 } from "./hyperliquid-contracts";
 
-export async function loadHyperliquidTuiState(): Promise<{
+export async function loadHyperliquidViewState(): Promise<{
 	status: HyperliquidStatusResponse;
 	markets: HyperliquidMarketsResponse | null;
 	positions: HyperliquidPositionsResponse | null;
@@ -38,10 +38,9 @@ export async function interact(
 	capability: string,
 	params?: Record<string, unknown>,
 ): Promise<unknown> {
-	if (capability === "terminal-hyperliquid-state") {
-		const state = await loadHyperliquidTuiState();
+	if (capability === "hyperliquid-state") {
+		const state = await loadHyperliquidViewState();
 		return {
-			viewType: "tui",
 			status: state.status,
 			markets:
 				state.markets?.markets.slice(
@@ -53,13 +52,12 @@ export async function interact(
 		};
 	}
 
-	if (capability === "terminal-hyperliquid-market") {
+	if (capability === "hyperliquid-market") {
 		const coin =
 			typeof params?.coin === "string" ? params.coin.trim().toUpperCase() : "";
 		if (!coin) throw new Error("coin is required");
-		const state = await loadHyperliquidTuiState();
+		const state = await loadHyperliquidViewState();
 		return {
-			viewType: "tui",
 			market:
 				state.markets?.markets.find(
 					(market) => market.name.toUpperCase() === coin,
@@ -67,9 +65,8 @@ export async function interact(
 		};
 	}
 
-	if (capability === "terminal-hyperliquid-execution-check") {
+	if (capability === "hyperliquid-execution-check") {
 		return {
-			viewType: "tui",
 			result: await postHyperliquidCommand("/api/hyperliquid/orders/open", {
 				coin: typeof params?.coin === "string" ? params.coin : "BTC",
 				side: typeof params?.side === "string" ? params.side : "buy",

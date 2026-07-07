@@ -1,16 +1,7 @@
 /**
- * MessagesSpatialView - the SMS messaging surface authored once with the
- * spatial vocabulary, so it renders correctly wherever it is displayed:
- *
- *   - GUI / XR - mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      - the spatial primitives still render to terminal lines via
- *                `@elizaos/ui/spatial/tui`, but the plugin no longer ships a
- *                terminal registration (GUI-only view inventory).
- *
- * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports only the cross-modality primitives plus a type-only view of
- * the native SMS summary, so it is safe to render in the Node agent process
- * where the terminal lives (no Capacitor runtime import).
+ * SMS thread presentation built from spatial primitives for the shipped GUI
+ * view. It consumes a resolved snapshot plus an action callback; Android SMS
+ * role checks and bridge calls stay in MessagesView.
  */
 
 import type { SmsMessageSummary } from "@elizaos/capacitor-messages";

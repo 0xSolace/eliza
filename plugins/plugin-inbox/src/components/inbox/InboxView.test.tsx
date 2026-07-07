@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 
-// Drives the unified InboxView (the single GUI/XR data wrapper) through the
-// rendered DOM: the same component the bundle exports for both the "gui" and
-// "xr" modalities. Asserts the loading/error/empty/populated states, the
+// Drives the InboxView GUI data wrapper through the rendered DOM. Asserts the
+// loading/error/empty/populated states, the
 // channel-filter toggle (re-fetches with a server-side channel scope), the
 // connect affordance routing through chat, and the per-item Open handoff —
-// functional parity with the retired GUI-only InboxView surface.
+// functional parity with the owner inbox surface.
 
 import {
   cleanup,

@@ -13,7 +13,6 @@ const cloudRoutingSrc = path.resolve(
 	"../../packages/cloud/routing/src",
 );
 const loggerSrc = path.resolve(__dirname, "../../packages/logger/src");
-const tuiSrc = path.resolve(__dirname, "../../packages/tui/src");
 const uiSrc = path.resolve(__dirname, "../../packages/ui/src");
 const require = createRequire(import.meta.url);
 // react-dom is not a direct dependency of this plugin; resolve it through the
@@ -78,15 +77,9 @@ export default defineConfig({
 				find: "@elizaos/ui/events",
 				replacement: path.join(uiSrc, "events/index.ts"),
 			},
-			// The spatial view + terminal renderer import the spatial primitives
-			// and the TUI engine. Resolve both to source so their internal React
-			// hooks share the same singleton as the test renderer (otherwise the
-			// prebuilt dist bundle pulls in a second React copy). Order matters:
-			// the `/tui` subpath must match before the bare `/spatial` barrel.
-			{
-				find: "@elizaos/ui/spatial/tui",
-				replacement: path.join(uiSrc, "spatial/tui/index.ts"),
-			},
+			// The spatial view imports the shared spatial primitives. Resolve it to
+			// source so its internal React hooks share the same singleton as the test
+			// renderer instead of pulling in a second React copy from dist.
 			{
 				find: "@elizaos/ui/spatial",
 				replacement: path.join(uiSrc, "spatial/index.ts"),
@@ -115,10 +108,6 @@ export default defineConfig({
 			{
 				find: "@elizaos/ui/voice/local-asr-capture",
 				replacement: path.join(uiSrc, "voice/local-asr-capture.ts"),
-			},
-			{
-				find: "@elizaos/tui",
-				replacement: path.join(tuiSrc, "index.ts"),
 			},
 			// Use workspace source for @elizaos/shared and @elizaos/core so
 			// recently-added exports resolve at test time without requiring

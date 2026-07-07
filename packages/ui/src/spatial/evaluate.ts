@@ -1,24 +1,22 @@
 /**
- * React → IR evaluator.
+ * React-to-spatial-IR evaluator.
  *
- * GUI and XR render the authored React tree directly to DOM. The terminal can't
- * — there is no DOM in a terminal. This module is the bridge: it evaluates a
- * React element tree composed of the spatial primitives (plus plain function
- * components, fragments, arrays and conditionals) into the modality-agnostic
- * {@link SpatialNode} tree that the TUI layout engine consumes.
+ * The shipped DOM runtime renders the authored React tree directly. This module
+ * keeps the pure IR bridge available for tests and future adapters: it evaluates
+ * spatial primitives (plus function components, fragments, arrays and
+ * conditionals) into a modality-agnostic {@link SpatialNode} tree.
  *
- * It is a *snapshot* evaluator: it renders one frame. Effects don't run; that's
- * exactly right for producing a terminal frame. Interactive state works through
- * the framework hooks ({@link useSpatialState}, {@link useSpatialMemo},
- * {@link useSpatialRef}), which are backed here by a persistent {@link SpatialStateStore}
- * the terminal host holds across frames — and which delegate to React's own
- * hooks when the same component renders on a DOM surface. One component, both
- * paths, no branching in the view.
+ * It is a snapshot evaluator: it renders one frame. Effects don't run.
+ * Interactive state works through the framework hooks ({@link useSpatialState},
+ * {@link useSpatialMemo}, {@link useSpatialRef}), which are backed here by a
+ * persistent {@link SpatialStateStore} an adapter can hold across frames and
+ * delegate to React's own hooks when the same component renders on a DOM
+ * surface. One component, both paths, no branching in the view.
  *
- * Authoring constraint for cross-terminal views: use the `useSpatial*` hooks for
- * state, not React's `useState`/`useEffect`/`useContext` — the latter only run on
- * the DOM surface. Presentational components (props in, primitives out) need no
- * hooks at all and always work everywhere.
+ * Authoring constraint for portable spatial views: use the `useSpatial*` hooks
+ * for state, not React's `useState`/`useEffect`/`useContext`; the latter only
+ * run on the DOM surface. Presentational components (props in, primitives out)
+ * need no hooks at all and always work anywhere this evaluator is used.
  */
 
 import {
@@ -79,9 +77,8 @@ export interface EvaluateOptions {
   requestRender?: () => void;
   /**
    * When provided, button `onPress` handlers are recorded here keyed by the
-   * button's agent id — so a terminal host can activate a focused button by
-   * firing its handler (the IR itself carries no handlers). Cleared/owned by
-   * the caller.
+   * button's agent id so an adapter can activate a focused button by firing its
+   * handler (the IR itself carries no handlers). Cleared/owned by the caller.
    */
   handlers?: Map<string, () => void>;
 }
@@ -220,7 +217,7 @@ function evalNode(
   }
 
   // Unknown host element (a raw <div> etc.): degrade to its children so text
-  // still flows. Raw DOM has no terminal layout; views should use primitives.
+  // still flows. Portable layouts should use primitives.
   return evalChildren(props.children as ReactNode, ctx);
 }
 
@@ -262,17 +259,13 @@ function buildPrimitiveNode(
     case "image":
       return buildImageSpec(props as never);
     case "escape": {
-      // The DOM-escape hatch: its `children` are real DOM (canvas/WebGL/chart)
-      // that can't render in a terminal, so we never recurse into them. Emit the
-      // authored `tui` spatial fallback instead, or a placeholder when absent —
-      // both wrapped in the same box so the agent/width/height box metadata
-      // survives either way.
-      const tui = (props as { tui?: ReactNode }).tui;
+      // The DOM escape hatch marks content that is intentionally not portable.
+      // Future adapters get a visible placeholder while preserving the wrapper's
+      // agent/width/height metadata.
       const spec = buildBoxSpec(props as never);
-      const children: SpatialNode[] =
-        tui == null
-          ? [{ type: "text", value: "[interactive view — open in app]" }]
-          : evalChildren(tui, ctx);
+      const children: SpatialNode[] = [
+        { type: "text", value: "[interactive view - open in app]" },
+      ];
       return { ...spec, direction: "column", gap: 0, children };
     }
   }
@@ -337,7 +330,7 @@ export function useSpatialRef<T>(initial: T): { current: T } {
   );
 }
 
-/** True while the current call stack is inside an IR (terminal) evaluation. */
+/** True while the current call stack is inside an IR evaluation. */
 export function isEvaluatingToIR(): boolean {
   return currentFrame !== null;
 }

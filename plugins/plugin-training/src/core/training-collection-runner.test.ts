@@ -855,12 +855,12 @@ describe("training collection runner", () => {
         expect.objectContaining({
           id: "feed_generation",
           status: "missing",
-          recommendedCapability: "terminal-training-feed-generate",
+          recommendedCapability: "training-feed-generate",
         }),
         expect.objectContaining({
           id: "all_eliza1_tier_improvements",
           status: "partial",
-          recommendedCapability: "terminal-training-run-collection",
+          recommendedCapability: "training-run-collection",
         }),
       ]),
     );
@@ -1020,7 +1020,7 @@ describe("training collection runner", () => {
           readinessGaps: expect.arrayContaining([
             expect.objectContaining({
               id: "feed_generation",
-              recommendedCapability: "terminal-training-feed-generate",
+              recommendedCapability: "training-feed-generate",
             }),
           ]),
           artifactCount: result.analysis.manifest.counts.artifacts,
@@ -1141,7 +1141,7 @@ describe("training collection runner", () => {
     expect(collectionIndexHtml).toContain("benchmark:");
     expect(collectionIndexHtml).toContain("model:");
     expect(collectionIndexHtml).toContain(
-      "feed_generation:missing-&gt;terminal-training-feed-generate",
+      "feed_generation:missing-&gt;training-feed-generate",
     );
     expect(collectionIndexHtml).toContain("params={&quot;dryRun&quot;:false}");
     expect(collectionIndexHtml).toContain("viewer");
@@ -1391,12 +1391,12 @@ describe("training collection runner", () => {
         expect.objectContaining({
           id: "all_eliza1_tiers_benchmark",
           status: "partial",
-          recommendedCapability: "terminal-training-run-collection",
+          recommendedCapability: "training-run-collection",
         }),
         expect.objectContaining({
           id: "all_eliza1_tier_improvements",
           status: "partial",
-          recommendedCapability: "terminal-training-run-collection",
+          recommendedCapability: "training-run-collection",
         }),
       ]),
     );
@@ -1515,7 +1515,7 @@ describe("training collection runner", () => {
             label: "All Eliza-1 tier benchmark coverage",
             status: "missing",
             note: "Run benchmark matrix coverage for every Eliza-1 tier.",
-            recommendedCapability: "terminal-training-run-collection",
+            recommendedCapability: "training-run-collection",
             recommendedParams: { actionBenchmarkPairs: "all" },
           },
         ],
@@ -1634,7 +1634,7 @@ describe("training collection runner", () => {
         label: "All Eliza-1 tier benchmark coverage",
         status: "missing",
         note: "Run benchmark matrix coverage for every Eliza-1 tier.",
-        recommendedCapability: "terminal-training-run-collection",
+        recommendedCapability: "training-run-collection",
         recommendedParams: { actionBenchmarkPairs: "all" },
       },
     ]);
@@ -1665,7 +1665,7 @@ describe("training collection runner", () => {
     expect(html).toContain("model:eliza-1-2b-trained");
     expect(html).toContain("improvement:25%");
     expect(html).toContain(
-      "all_eliza1_tiers_benchmark:missing-&gt;terminal-training-run-collection",
+      "all_eliza1_tiers_benchmark:missing-&gt;training-run-collection",
     );
   });
 

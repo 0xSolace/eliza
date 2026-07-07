@@ -12,7 +12,7 @@ Expected screen contract:
 - Timeline: shows the selected task title, user/orchestrator/sub-agent messages, structured tool cards from events, older-message loading when paged, a running-agent bar when agents are active, and an enabled composer only when text is present.
 - Inspector: shows task controls, goal, sub-agents with framework/model/workspace/usage, current plan, acceptance criteria, artifacts with verification icons, provider usage, provider policy, priority changes, add-agent form, stop controls, validation controls when validating, archive/reopen, fork, delete, and copy-link.
 - Live behavior: task/status polling refreshes data, selected task polling/streaming merges timeline records by id without cross-task contamination, and Escape closes dialogs/drawers before interrupting active agents.
-- Registration: plugin manifest exposes GUI, XR, and TUI orchestrator views under `/orchestrator` and `/orchestrator/tui`, all carrying the same orchestrator capability set.
+- Registration: plugin manifest exposes the GUI orchestrator view under `/orchestrator` with the orchestrator capability set.
 
 Manual review notes:
 

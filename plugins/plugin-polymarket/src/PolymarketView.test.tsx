@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-// Drives the unified PolymarketView (the single GUI/XR data wrapper) through the
-// rendered DOM: the same component the bundle exports for the "gui", "xr", and
-// (via the spatial terminal registry) "tui" modalities. Asserts the populated
+// Drives PolymarketView through the rendered DOM for the shipped GUI surface.
+// Asserts the populated
 // markets list, the readiness chips, the agent's own positions surface, the
 // clickable market rows (list -> detail), the detail "back" control, the refresh
-// control, and the error path — functional parity with the retired
-// PolymarketTuiView surface. Also covers the unchanged `interact` terminal
-// capability handler the view bundle re-exports.
+// control, and the error path. Also covers the `interact` capability handler
+// the view bundle re-exports.
 
 import {
   type AgentElementSnapshot,
@@ -391,7 +389,7 @@ describe("PolymarketView — refresh + error path", () => {
   });
 });
 
-describe("PolymarketView — terminal interact capabilities", () => {
+describe("PolymarketView interact capabilities", () => {
   it("supports state, market, orderbook, positions, and trading-check capabilities", async () => {
     vi.stubGlobal(
       "fetch",
@@ -405,9 +403,8 @@ describe("PolymarketView — terminal interact capabilities", () => {
     );
 
     await expect(
-      interact("terminal-polymarket-state", { limit: 1, user: "0xabc" }),
+      interact("polymarket-state", { limit: 1, user: "0xabc" }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       status: sampleStatus,
       markets: [sampleMarket],
       orders: disabledOrders,
@@ -416,22 +413,21 @@ describe("PolymarketView — terminal interact capabilities", () => {
     expect(polymarketClient.polymarketPositions).toHaveBeenCalledWith("0xabc");
 
     await expect(
-      interact("terminal-polymarket-market", { id: "market-1" }),
-    ).resolves.toMatchObject({ viewType: "tui", market: { id: "market-1" } });
+      interact("polymarket-market", { id: "market-1" }),
+    ).resolves.toMatchObject({ market: { id: "market-1" } });
 
     await expect(
-      interact("terminal-polymarket-orderbook", { tokenId: "token-yes" }),
+      interact("polymarket-orderbook", { tokenId: "token-yes" }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       orderbook: { tokenId: "token-yes", bestBid: "0.60" },
     });
 
     await expect(
-      interact("terminal-polymarket-positions", { user: "0xabc" }),
-    ).resolves.toMatchObject({ viewType: "tui", positions: samplePositions });
+      interact("polymarket-positions", { user: "0xabc" }),
+    ).resolves.toMatchObject({ positions: samplePositions });
 
     await expect(
-      interact("terminal-polymarket-trading-check", {
+      interact("polymarket-trading-check", {
         marketId: "market-1",
         side: "buy",
         outcome: "Yes",

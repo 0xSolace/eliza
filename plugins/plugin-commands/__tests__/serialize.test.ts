@@ -35,7 +35,7 @@ describe("serializeCommand", () => {
 			},
 		],
 		requiresAuth: false,
-		surfaces: ["gui", "tui"],
+		surfaces: ["gui"],
 		icon: "cpu",
 	};
 
@@ -45,7 +45,7 @@ describe("serializeCommand", () => {
 		expect(wire.nativeName).toBe("model");
 		expect(wire.textAliases).toEqual(["/model", "/m"]);
 		expect(wire.category).toBe("options");
-		expect(wire.surfaces).toEqual(["gui", "tui"]);
+		expect(wire.surfaces).toEqual(["gui"]);
 		expect(wire.icon).toBe("cpu");
 		expect(wire.target).toEqual({ kind: "agent" });
 		expect(wire.source).toBe("builtin");
@@ -91,8 +91,8 @@ describe("commandVisibleForSurface", () => {
 		expect(commandVisibleForSurface([], "telegram")).toBe(true);
 	});
 	it("includes a command only on its declared surfaces", () => {
-		expect(commandVisibleForSurface(["gui", "tui"], "gui")).toBe(true);
-		expect(commandVisibleForSurface(["gui", "tui"], "discord")).toBe(false);
+		expect(commandVisibleForSurface(["gui"], "gui")).toBe(true);
+		expect(commandVisibleForSurface(["gui"], "discord")).toBe(false);
 	});
 	it("does not filter when surface is null/undefined", () => {
 		expect(commandVisibleForSurface(["gui"], null)).toBe(true);
@@ -139,10 +139,11 @@ describe("getCatalogCommands (the route's projection)", () => {
 			expect(keys.has("clear")).toBe(false);
 			expect(keys.has("fullscreen")).toBe(false);
 		}
-		for (const surface of ["gui", "tui"]) {
-			const keys = new Set(getCatalogCommands(surface).map((c) => c.key));
-			expect(keys.has("clear")).toBe(true);
-		}
+		const keys = new Set(getCatalogCommands("gui").map((c) => c.key));
+		expect(keys.has("clear")).toBe(true);
+		expect(getCatalogCommands("tui").some((c) => c.key === "clear")).toBe(
+			false,
+		);
 	});
 
 	it("never fabricates a hardcoded source/auth literal across the catalog", () => {

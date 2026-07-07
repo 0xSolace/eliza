@@ -102,7 +102,7 @@ describe("App navigate-view shell handler", () => {
         { viewId: "views-manager", viewType: "tui" },
         "/apps/views-manager",
       ),
-    ).toBeNull();
+    ).toBe("views");
   });
 
   it("sets direct app tabs without changing browser history", () => {

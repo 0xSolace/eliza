@@ -10,7 +10,7 @@
  *   - `ConnectorCommand` — the shape a connector (Discord, Telegram, …) maps
  *     onto its native command surface (`getConnectorCommands`), or
  *   - `SerializedCommand` — the wire shape `GET /api/commands` serves the web
- *     composer / TUI (`getCatalogCommands`), via `serializeCommand`.
+ *     composer (`getCatalogCommands`), via `serializeCommand`.
  *
  * Each command declares a `target` discriminating where it executes (`agent` /
  * `navigate` / `client`). `ConnectorCommand` options carry a fully-resolved

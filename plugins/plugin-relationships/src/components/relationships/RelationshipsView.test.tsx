@@ -1,9 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * Drives the unified RelationshipsView (the single GUI/XR data wrapper) through
- * the rendered DOM: the same component the bundle exports for both the "gui" and
- * "xr" modalities. It is a read-only entity/relationship graph viewer over the
+ * Drives the RelationshipsView GUI data wrapper through the rendered DOM. It is
+ * a read-only entity/relationship graph viewer over the
  * two endpoints the personal-assistant routes serve:
  *   GET {base}/api/lifeops/entities       -> { entities: EntityWire[] }
  *   GET {base}/api/lifeops/relationships   -> { relationships: RelationshipWire[] }

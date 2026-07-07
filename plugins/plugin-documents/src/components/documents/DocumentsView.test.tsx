@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 
 /**
- * Drives the unified DocumentsView (the single GUI/XR data wrapper) through the
- * rendered spatial DOM: the same component the bundle exports for both the "gui"
- * and "xr" modalities. It is a read-only document browser over the read-only
+ * Drives the DocumentsView GUI data wrapper through the rendered spatial DOM.
+ * It is a read-only document browser over the read-only
  * endpoints this plugin serves:
  *   GET {base}/api/documents          -> { documents, total, ... }
  *   GET {base}/api/documents/stats    -> { documentCount, fragmentCount }

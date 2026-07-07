@@ -82,7 +82,7 @@ const COMMANDS: SlashCommandCatalogItem[] = [
     args: [],
     requiresAuth: false,
     requiresElevated: false,
-    surfaces: ["gui", "tui"],
+    surfaces: ["gui"],
     // Single infinite thread (#13531): the overlay treats clear-chat as inert.
     target: { kind: "client", clientAction: "clear-chat" },
     source: "builtin",
@@ -97,7 +97,7 @@ const COMMANDS: SlashCommandCatalogItem[] = [
     args: [],
     requiresAuth: false,
     requiresElevated: false,
-    surfaces: ["gui", "tui"],
+    surfaces: ["gui"],
     // A client command the overlay STILL forwards — exercises the generic
     // client-action dispatch path now that clear-chat is inert (#13531).
     target: { kind: "client", clientAction: "open-command-palette" },

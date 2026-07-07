@@ -100,28 +100,10 @@ describe("evaluate — React tree → IR", () => {
   });
 });
 
-describe("evaluate — cross-frame state via the TUI component adapter", () => {
-  it("persists useSpatialState across re-renders and re-snapshots on change", () => {
-    const captured: { set?: (v: number | ((p: number) => number)) => void } =
-      {};
-    function Counter() {
-      const [n, setN] = useSpatialState(0);
-      captured.set = setN;
-      return <Text>{`n=${n}`}</Text>;
-    }
-
-    let changes = 0;
-    const comp = createSpatialTuiComponent(() => <Counter />, {
-      onChange: () => {
-        changes += 1;
-      },
-    });
-
-    expect(comp.render(10)[0]).toContain("n=0");
-    captured.set?.(7);
-    expect(changes).toBe(1);
-    expect(comp.render(10)[0]).toContain("n=7");
-    captured.set?.((p: number) => p + 1);
-    expect(comp.render(10)[0]).toContain("n=8");
+describe("spatial terminal compatibility subpath", () => {
+  it("fails explicitly because no concrete renderer ships", () => {
+    expect(() => createSpatialTuiComponent(() => <Text>unused</Text>)).toThrow(
+      "not shipped",
+    );
   });
 });

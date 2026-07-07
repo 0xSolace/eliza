@@ -1,6 +1,7 @@
 /**
- * View-bundle capability handler for the trajectory logger TUI surface.
- * It stays separate from the React component file so Fast Refresh sees component-only exports while the built view bundle still exposes `interact`.
+ * View-bundle capability handler for the trajectory logger surface.
+ * It stays separate from the React component file so Fast Refresh sees
+ * component-only exports while the built view bundle still exposes `interact`.
  */
 
 import { fetchTrajectoryDetail, fetchTrajectoryList } from "../api-client";

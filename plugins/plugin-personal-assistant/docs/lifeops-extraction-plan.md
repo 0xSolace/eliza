@@ -37,7 +37,7 @@ Every claim below was checked against the actual source.
 | Cross-domain spine reads delivery needs: listActiveDefinitions(2723) listOccurrenceViewsForOverview(2898) listChannelPolicies(3854) getChannelPolicy(3865) listCalendarEvents(4320) readCircadianState(6781) getScheduleMergedState(7046) | `lifeops/repository.ts` |
 | Spine tables in `app_lifeops`: life_task_definitions(88) life_task_occurrences(128) life_scheduled_tasks(1417) life_scheduled_task_log(1473) | `lifeops/schema.ts` |
 | Reminder tables in `app_lifeops`: life_reminder_plans(225) life_reminder_attempts(247) life_escalation_states(834) | `lifeops/schema.ts` |
-| Overview view registered (GUI/XR/TUI), id `"lifeops"`, component `LifeOpsPageView` | `src/plugin.ts:755,768,782` |
+| Legacy overview view registered across retired modalities, id `"lifeops"`, component `LifeOpsPageView` | historical `src/plugin.ts` cleanup target |
 | Overview route `GET /api/lifeops/overview` → `service.getOverview()` | `src/routes/plugin.ts:331`; `src/routes/lifeops-routes.ts:2285,2298` |
 | **VIEW_ACTION_MAP critical fact:** `OWNER_REMINDERS/OWNER_ALARMS/OWNER_ROUTINES` map to the **`goals`** view; the **`lifeops`** view maps ONLY to `PERSONAL_ASSISTANT` | `packages/agent/src/runtime/view-action-affinity.ts:165,167` |
 | Core stub `StubScheduledTaskRunner` is DEAD — only 5 self-refs in its own `runner.ts`, exported via `core/index.ts:34` | grep repo-wide |
@@ -101,8 +101,7 @@ cross-domain aggregation the README reserves — but the owner directed its remo
 
 **File ops:**
 - `src/plugin.ts`: delete the three `LifeOpsPageView` view descriptors (id
-  `"lifeops"`, `componentExport: "LifeOpsPageView"`) at lines `755`, `768`, `782`
-  (GUI/XR/TUI) and their imports. Remove `LifeOpsPageView` from the component
+  `"lifeops"`, `componentExport: "LifeOpsPageView"`) and their imports. Remove `LifeOpsPageView` from the component
   export barrel (`src/ui.ts` / `src/components/` if exported there).
 - `src/routes/lifeops-routes.ts`: delete the `GET /api/lifeops/overview` handler
   (`:2285`, calls `service.getOverview()` at `:2298`). Remove the route descriptor

@@ -5,6 +5,9 @@
  * returning a `SelfControlStatus`, the early-release mutation, the load/error
  * state machine, and the settle-chained background poll) and renders the one
  * presentational {@link FocusSpatialView} inside a {@link SpatialSurface}.
+ * Omitting the `modality` prop lets `SpatialSurface` render the browser DOM
+ * surface today while the retained modality contract stays available for future
+ * adapters.
  *
  * The default fetcher builds the URL from `client.getBaseUrl()`; tests inject a
  * `fetchStatus` / `releaseBlock` so they stay offline.

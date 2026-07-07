@@ -120,17 +120,10 @@ const CORE_ACTION_SURFACE: Record<string, readonly string[]> = {
   "@elizaos/plugin-facewear": [
     "FACEWEAR_CONNECT",
     "FACEWEAR_DEBUG",
-    "SETUP_XR_RUNTIME",
     "SMARTGLASSES_CONTROL",
     "SMARTGLASSES_DISPLAY_TEXT",
     "SMARTGLASSES_MICROPHONE",
     "SMARTGLASSES_STATUS",
-    "XR_CLOSE_VIEW",
-    "XR_LIST_VIEWS",
-    "XR_OPEN_VIEW",
-    "XR_QUERY_VISION",
-    "XR_RESIZE_VIEW",
-    "XR_SWITCH_VIEW",
   ],
   "@elizaos/plugin-mcp": [
     "MCP",
@@ -222,12 +215,11 @@ const KNOWN_UNCOVERED: readonly string[] = [
   "SETTINGS",
   // Local-inference management action; no deterministic keyless scenario yet.
   "LOCAL_INFERENCE",
-  // Facewear owns XR plus smartglasses/connection/runtime actions. The XR view
-  // actions are covered; the device-facing actions need dedicated keyless
-  // scenarios before they can leave this baseline.
+  // Facewear owns smartglasses connection/runtime actions. The device-facing
+  // actions need dedicated keyless scenarios before they can leave this
+  // baseline.
   "FACEWEAR_CONNECT",
   "FACEWEAR_DEBUG",
-  "SETUP_XR_RUNTIME",
   "SMARTGLASSES_CONTROL",
   "SMARTGLASSES_DISPLAY_TEXT",
   "SMARTGLASSES_MICROPHONE",
@@ -305,12 +297,6 @@ const COVERED_ACTIONS: readonly string[] = [
   "VIEWS",
   "WORKTREE",
   "WORKFLOW",
-  "XR_CLOSE_VIEW",
-  "XR_LIST_VIEWS",
-  "XR_OPEN_VIEW",
-  "XR_QUERY_VISION",
-  "XR_RESIZE_VIEW",
-  "XR_SWITCH_VIEW",
 ];
 
 /** Deterministic coverage only grows: distinct covered actions must stay >= this. */
@@ -664,12 +650,6 @@ const STRICT_LLM_ROUTED_ACTIONS: readonly string[] = [
   "VIEWS",
   "WORKTREE",
   "WORKFLOW",
-  "XR_CLOSE_VIEW",
-  "XR_LIST_VIEWS",
-  "XR_OPEN_VIEW",
-  "XR_QUERY_VISION",
-  "XR_RESIZE_VIEW",
-  "XR_SWITCH_VIEW",
 ];
 
 const STRICT_LLM_ROUTING_SCENARIOS: Record<
@@ -776,17 +756,6 @@ const STRICT_LLM_ROUTING_SCENARIOS: Record<
   "deterministic-workflow-actions-routes": {
     actionNames: ["WORKFLOW"],
     minMessageTurns: 1,
-  },
-  "deterministic-xr-view-actions": {
-    actionNames: [
-      "XR_CLOSE_VIEW",
-      "XR_LIST_VIEWS",
-      "XR_OPEN_VIEW",
-      "XR_QUERY_VISION",
-      "XR_RESIZE_VIEW",
-      "XR_SWITCH_VIEW",
-    ],
-    minMessageTurns: 6,
   },
 };
 

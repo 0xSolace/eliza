@@ -1,6 +1,7 @@
 /**
  * Drives the unified TrajectoryLoggerView data wrapper through the rendered DOM.
- * The harness mounts the spatial surface, feeds real-shape trajectory data, and routes spatial action ids across the GUI and TUI surfaces.
+ * The harness mounts the spatial surface, feeds real-shape trajectory data, and
+ * routes spatial action ids across the GUI and interact surfaces.
  *
  * @vitest-environment jsdom
  */
@@ -196,7 +197,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("TrajectoryLoggerView — unified GUI/XR wrapper", () => {
+describe("TrajectoryLoggerView — GUI wrapper", () => {
   it("renders the SpatialSurface-wrapped spatial view", async () => {
     installFetch();
     // The view bundle host (DynamicViewLoader) mounts the registered wrapper

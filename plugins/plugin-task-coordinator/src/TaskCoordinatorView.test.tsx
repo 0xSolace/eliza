@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 //
-// Drives the unified TaskCoordinatorView (the single GUI/XR data wrapper) through
-// the rendered DOM — the same component the bundle exports for the "gui", "xr",
-// and "tui" modalities. Asserts the on-mount thread fetch, the Open → detail
-// drill-down, the show-archived toggle re-fetch, and the Delete (archive) +
-// Reopen mutations all reach the client with the right arguments.
+// Drives the TaskCoordinatorView GUI data wrapper through the rendered DOM.
+// Asserts the on-mount thread fetch, the Open → detail drill-down, the
+// show-archived toggle re-fetch, and the Delete (archive) + Reopen mutations all
+// reach the client with the right arguments.
 
 import {
   cleanup,
@@ -130,7 +129,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("TaskCoordinatorView — unified GUI/XR/TUI wrapper", () => {
+describe("TaskCoordinatorView — GUI route wrapper", () => {
   it("fetches the thread list on mount and renders the rows", async () => {
     render(React.createElement(TaskCoordinatorView));
     await screen.findByText("Refactor auth");

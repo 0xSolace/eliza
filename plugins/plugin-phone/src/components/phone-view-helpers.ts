@@ -1,5 +1,5 @@
-// Pure phone data helpers shared between PhoneView.tsx (the unified GUI/XR data
-// wrapper) and phone-interact.ts (the terminal capability handler). Kept in a
+// Pure phone data helpers shared between PhoneView.tsx and phone-interact.ts.
+// Kept in a
 // non-component module so the .tsx files export only React components and stay
 // Fast-Refresh-compatible (Vite full-reloads a component file that also exports
 // plain functions).

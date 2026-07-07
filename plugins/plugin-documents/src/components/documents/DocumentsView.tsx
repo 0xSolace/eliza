@@ -4,7 +4,9 @@
  * It owns the live document data (the fetcher seam over the read-only endpoints
  * this plugin serves, the quiet background poll, the search round-trip, and the
  * wire->display mapping) and renders the one presentational
- * {@link DocumentsSpatialView} inside a {@link SpatialSurface}.
+ * {@link DocumentsSpatialView} inside a {@link SpatialSurface}. The browser DOM
+ * surface ships today, while the retained modality contract stays available for
+ * future adapters.
  *
  * Data source (read-only document routes this plugin serves; see routes.ts):
  *   GET {base}/api/documents?limit=&offset=   -> { documents, total, ... }

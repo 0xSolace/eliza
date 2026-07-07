@@ -101,10 +101,8 @@ export const hyperliquidPlugin = {
     services: [PerpetualMarketService],
     routes: hyperliquidRoutes,
     views: [
-        // ONE GUI declaration, drawn from the single
-        // HyperliquidView spatial source. `modalities` is a plain literal here
-        // (plugin.ts is not in the view bundle), so no brand-new `@elizaos/core`
-        // runtime export reaches the bundle build.
+        // One shipped GUI declaration drawn from HyperliquidView. The modality
+        // enum is retained in the contract for future alternate view entries.
         {
             id: "hyperliquid",
             label: "Hyperliquid",

@@ -1,13 +1,12 @@
 {
 	"id": "facewear",
 	"name": "Facewear",
-	"description": "Unified facewear integration for Meta Quest, XReal, Apple Vision Pro, and Even Realities G1/G2 whole-headset pairing, display text, microphone audio, side-tap mic control, bridge Wi-Fi setup, and diagnostics.",
+	"description": "Even Realities G1/G2 whole-headset pairing, display text, microphone audio, side-tap mic control, bridge Wi-Fi setup, and diagnostics.",
 	"npmName": "@elizaos/plugin-facewear",
 	"version": "0.1.0",
 	"source": "bundled",
 	"tags": [
 		"facewear",
-		"xr",
 		"smartglasses",
 		"wearable",
 		"even-realities",
@@ -104,7 +103,7 @@
 		"icon": "Glasses",
 		"group": "hardware",
 		"groupOrder": 8,
-		"actions": ["enable", "configure", "launch"]
+		"actions": ["enable", "configure"]
 	},
 	"resources": {
 		"homepage": "https://elizaos.ai",
@@ -112,20 +111,5 @@
 	},
 	"dependsOn": [],
 	"kind": "plugin",
-	"subtype": "media",
-	"launch": {
-		"type": "internal-tab",
-		"target": "facewear",
-		"capabilities": [
-			"facewear",
-			"xr-view-host",
-			"smartglasses",
-			"wearable-display",
-			"wearable-microphone",
-			"whole-headset-pairing",
-			"side-tap-microphone-control",
-			"wifi-provisioning"
-		],
-		"curatedSlug": "facewear"
-	}
+	"subtype": "media"
 }

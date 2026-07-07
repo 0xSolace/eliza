@@ -2,8 +2,8 @@
  * TrajectoryLoggerSpatialView — the trajectory inspector authored once with the
  * spatial vocabulary, so it renders correctly wherever it is displayed:
  *
- *   - GUI — mounted in `<SpatialSurface>` (DOM). Only the GUI modality ships;
- *     "xr" and "tui" remain compatibility values in the manifest schema.
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
  * out) and imports only the cross-modality primitives plus type-only views of

@@ -1,10 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * Drives the unified TodosView (the single GUI/XR data wrapper) through the
- * rendered DOM: the same component the bundle exports for both the "gui" and
- * "xr" modalities. It is a read-only three-lane board (Today / Upcoming /
- * Someday) over the single endpoint PA serves:
+ * Drives the TodosView GUI data wrapper through the rendered DOM. It is a
+ * read-only three-lane board (Today / Upcoming / Someday) over the single
+ * endpoint PA serves:
  *   GET {base}/api/lifeops/todos -> { todos: TodoWire[] }
  *
  * The default fetcher hits that URL via `client.getBaseUrl()`; every test here

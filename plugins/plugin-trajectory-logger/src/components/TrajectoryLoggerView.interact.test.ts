@@ -1,6 +1,6 @@
 /**
  * Tests the view-bundle `interact` capability handler against a stubbed `fetch`,
- * asserting each TUI capability (list-trajectories, open-latest, filter-phase,
+ * asserting each capability (list-trajectories, open-latest, filter-phase,
  * refresh) issues the right trajectory route request.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";

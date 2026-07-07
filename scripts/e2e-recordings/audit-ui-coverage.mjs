@@ -23,7 +23,6 @@ const REQUIRED_STANDALONE_UI_DIRS = [
   "packages/os/homepage",
   "packages/os/usb-installer",
   "packages/ui",
-  "plugins/plugin-facewear/app-xr",
   "packages/feed/tools/dag-visualizer",
 ];
 

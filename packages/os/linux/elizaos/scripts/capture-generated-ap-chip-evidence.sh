@@ -169,7 +169,7 @@ export ELIZA_GENERATED_AP_WRITE_BLOCKED='0'
 # - Linux version
 # - elizaos-firstboot-ready
 #
-# Required agent/TUI transcript markers:
+# Required agent transcript markers:
 # - elizaos-agent-ready or systemctl is-active elizaos-agent.service: active
 # - process.pid=<positive integer> or PID=<positive integer>
 # - /opt/elizaos/bin/elizaos or process.command/process.executable containing elizaos
@@ -177,7 +177,6 @@ export ELIZA_GENERATED_AP_WRITE_BLOCKED='0'
 # - agentId in the health response
 # - full-agent marker/full-agent response
 # - fallback_payload_used=false
-# - elizaos-tui-ready
 
 scripts/capture-generated-ap-chip-evidence.sh run
 python3 ../../../chip/scripts/check_os_rv64_chip_boot_contract.py

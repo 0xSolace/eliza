@@ -13,13 +13,12 @@ export async function interact(
   capability: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (capability === "terminal-phone-state") {
+  if (capability === "phone-state") {
     const state = await loadPhoneState({
       limit: params?.limit,
       number: typeof params?.number === "string" ? params.number : undefined,
     });
     return {
-      viewType: "tui",
       status: state.status,
       calls: state.calls.map((call) => ({
         id: call.id,
@@ -36,24 +35,24 @@ export async function interact(
     };
   }
 
-  if (capability === "terminal-place-call") {
+  if (capability === "place-call") {
     const number = normalizeNumber(
       typeof params?.number === "string" ? params.number : "",
     );
     if (!number) throw new Error("number is required");
     await Phone.placeCall({ number });
-    return { placed: true, number, viewType: "tui" };
+    return { placed: true, number };
   }
 
-  if (capability === "terminal-open-dialer") {
+  if (capability === "open-dialer") {
     const number = normalizeNumber(
       typeof params?.number === "string" ? params.number : "",
     );
     await Phone.openDialer(number ? { number } : undefined);
-    return { opened: true, number: number || null, viewType: "tui" };
+    return { opened: true, number: number || null };
   }
 
-  if (capability === "terminal-save-call-transcript") {
+  if (capability === "save-call-transcript") {
     const callId =
       typeof params?.callId === "string" ? params.callId.trim() : "";
     const transcript =
@@ -67,7 +66,7 @@ export async function interact(
       transcript,
       ...(summary ? { summary } : {}),
     });
-    return { saved: true, updatedAt: result.updatedAt, viewType: "tui" };
+    return { saved: true, updatedAt: result.updatedAt };
   }
 
   throw new Error(`Unsupported capability "${capability}"`);

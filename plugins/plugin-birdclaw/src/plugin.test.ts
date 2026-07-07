@@ -4,7 +4,7 @@ import { birdclawPlugin } from "./plugin.ts";
 /**
  * Structural guard for the plugin registration surface: the view descriptor
  * is what the agent's view registry and the app launcher consume, so drift
- * here (renamed export, moved bundle, dropped modality) breaks the tile at
+ * here (renamed export, moved bundle, dropped shipped modality) breaks the tile at
  * runtime without a type error.
  */
 describe("birdclawPlugin registration surface", () => {

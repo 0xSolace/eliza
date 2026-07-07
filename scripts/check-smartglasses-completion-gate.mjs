@@ -54,7 +54,6 @@ function softwareGateFailures() {
     "plugins/plugin-facewear/src/ui/SmartglassesView.tsx",
     "plugins/plugin-facewear/src/register.ts",
     "plugins/plugin-facewear/src/index.ts",
-    "plugins/plugin-facewear/src/routes/views.ts",
     "plugins/plugin-facewear/src/actions/display-text.ts",
     "plugins/plugin-facewear/src/actions/microphone.ts",
     "plugins/plugin-facewear/src/actions/facewear-status.ts",
@@ -66,7 +65,7 @@ function softwareGateFailures() {
     "plugins/plugin-facewear/src/__tests__/protocol-smartglasses.test.ts",
     "plugins/plugin-facewear/src/__tests__/facewear-service.test.ts",
     "plugins/plugin-facewear/src/__tests__/smartglasses-view-report.test.ts",
-    "plugins/plugin-facewear/src/__tests__/xr-smartglasses-bridge.test.ts",
+    "plugins/plugin-facewear/src/__tests__/smartglasses-bridge-contract.test.ts",
     "plugins/plugin-facewear/src/__tests__/smartglasses-control-action.test.ts",
     "plugins/plugin-facewear/src/transport/web-bluetooth.ts",
     "plugins/plugin-facewear/src/transport/noble.ts",
@@ -372,13 +371,6 @@ function softwareGateFailures() {
     ]),
   );
   failures.push(
-    ...sourceTokenFailures("plugins/plugin-facewear/src/routes/views.ts", [
-      'path: "/xr/views"',
-      "listViews(",
-      'viewType: "xr"',
-    ]),
-  );
-  failures.push(
     ...sourceTokenFailures(
       "plugins/plugin-facewear/src/actions/display-text.ts",
       [
@@ -529,8 +521,8 @@ function softwareGateFailures() {
   );
   failures.push(
     ...sourceTokenFailures(
-      "plugins/plugin-facewear/src/__tests__/xr-smartglasses-bridge.test.ts",
-      ["g1_raw", "mic_lc3", "single_tap", "microphoneEnabled"],
+      "plugins/plugin-facewear/src/__tests__/smartglasses-bridge-contract.test.ts",
+      ["callWifiBridge", "does not support Wi-Fi command", "display-result"],
     ),
   );
   failures.push(

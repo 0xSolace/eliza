@@ -1,6 +1,8 @@
 /**
  * Drives the unified ModelTesterView data wrapper through the rendered DOM.
- * The harness covers the same component exported for GUI, XR, and TUI modalities, including status fetch, prompt presets, run-all sequencing, refresh, probe dispatch, and navigation through the spatial action contract.
+ * The harness covers the shipped GUI component export, including status fetch,
+ * prompt presets, run-all sequencing, refresh, probe dispatch, and navigation
+ * through the spatial action contract.
  *
  * @vitest-environment jsdom
  */
@@ -83,7 +85,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("ModelTesterView — unified GUI/XR/TUI wrapper", () => {
+describe("ModelTesterView — unified GUI wrapper", () => {
   beforeEach(() => {
     installFetch();
   });

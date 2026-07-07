@@ -1,6 +1,6 @@
-// Runtime dispatch tests for the task-coordinator TUI view's interact() handler
-// (src/CodingAgentTasksPanel.interact.ts). interact() is what BOTH TUI views'
-// task-coordinator capabilities run at runtime: list-sessions/refresh,
+// Runtime dispatch tests for the task-coordinator view's interact() handler
+// (src/CodingAgentTasksPanel.interact.ts). interact() is what task-coordinator
+// capabilities run at runtime: list-sessions/refresh,
 // list-task-threads (with includeArchived/search/limit coercion), open-thread
 // (with first-thread fallback), stop-session (with the sessionId-required
 // guard), plus delegation of every orchestrator-* id to runOrchestratorCapability

@@ -1,12 +1,12 @@
 /**
- * HealthView — the single GUI/XR data wrapper for the owner sleep summary.
+ * HealthView — the GUI data wrapper for the owner sleep summary.
  *
  * It owns the live sleep data (the fetcher seam over the three read-only
  * endpoints the host serves, the quiet background poll, the window-range state,
  * and the wire->display projection) and renders the one presentational
- * {@link HealthSpatialView} inside a {@link SpatialSurface}. Omitting the
- * `modality` prop lets `SpatialSurface` auto-detect the host surface, so the
- * SAME component serves them all. The view ships GUI-only.
+ * {@link HealthSpatialView} inside a {@link SpatialSurface}. The browser DOM
+ * surface ships today, while the retained modality contract stays available for
+ * future adapters.
  *
  * Data source (three read-only sleep endpoints served by `src/routes/sleep.ts`):
  *   GET {base}/api/lifeops/sleep/history?windowDays&includeNaps   (primary)

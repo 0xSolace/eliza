@@ -10,9 +10,13 @@ Data is read from `GET /api/trajectories` and `GET /api/trajectories/:id`, which
 
 ## Plugin surface
 
-**Views registered**: one GUI view (`id: "trajectory-logger"`, `componentExport: "TrajectoryLoggerView"`, `bundlePath: dist/views/bundle.js`). Only the GUI modality ships; `tui`/`xr` remain compatibility values in the manifest schema.
+**Views registered**:
 
-**View capabilities** (via `interact()`): `list-trajectories`, `open-latest`, `filter-phase`, `refresh`.
+| View | viewType | componentExport | bundlePath |
+|---|---|---|---|
+| Trajectory Logger | `gui` | `TrajectoryLoggerView` | `dist/views/bundle.js` |
+
+**View capabilities**: `list-trajectories`, `open-latest`, `filter-phase`, `refresh`.
 
 No actions, providers, services, evaluators, routes, or events are registered.
 
@@ -40,8 +44,8 @@ src/
     TrajectoryLoggerView.tsx       Root view component + per-slot PhaseStrip
     TrajectoryLoggerView.interact.ts  interact() capability handler (split out from
                                    TrajectoryLoggerView.tsx to keep it Fast-Refresh-compatible)
-    TrajectoryLoggerSpatialView.tsx   Spatial view component; renders in
-                                   <SpatialSurface>
+    TrajectoryLoggerSpatialView.tsx   Spatial presentational component retained
+                                   for future modality adapters
     trajectory-logger-view-bundle.ts  Vite view-bundle entry; re-exports
                                    TrajectoryLoggerView and interact for
                                    dist/views/bundle.js
@@ -83,7 +87,7 @@ None. This plugin reads no env vars and requires no configuration. The only exte
 2. Add classification logic in `phaseOf()` (add step types to the relevant `Set`).
 3. Add a `summarize<Phase>` function and wire it into `summarizePhases()`.
 4. Add a case to the `switch` in `PhaseDrilldown.tsx` returning a new body component.
-5. Register a new capability in the view capabilities array in `src/index.ts` and handle it in `interact()` in `src/components/TrajectoryLoggerView.interact.ts`.
+5. Register a new capability in the view array in `src/index.ts` and handle it in `interact()` in `src/components/TrajectoryLoggerView.interact.ts`.
 
 **Add a new API client method:**
 
@@ -97,7 +101,7 @@ Add a typed `fetch` wrapper to `src/api-client.ts` following the `readJson<T>` p
 - **Polling interval is 700 ms** (`POLL_MS` in `usePollingTrajectories.ts`). The hook uses `AbortController` to cancel in-flight requests on unmount; do not add `setInterval`-based polling alongside it.
 - **`register.ts` is a side-effect import.** Importing it calls `registerTrajectoryLoggerApp()` immediately. Guard with the `registered` flag in `trajectory-logger-app.ts` to prevent double registration.
 - **View bundle entry.** `vite.config.views.ts` points to `src/components/trajectory-logger-view-bundle.ts` (not `TrajectoryLoggerView.tsx` directly) and re-exports `TrajectoryLoggerView` and `interact` as named exports. If entry or export names change, update both the vite config and the `views` array in `src/index.ts`.
-- **interact() is split out.** The capability handler lives in `src/components/TrajectoryLoggerView.interact.ts`, not in `TrajectoryLoggerView.tsx`, so that the component file stays Fast-Refresh-compatible.
+- **interact() is split out.** The view capability handler lives in `src/components/TrajectoryLoggerView.interact.ts`, not in `TrajectoryLoggerView.tsx`, so that the component file stays Fast-Refresh-compatible.
 - **Phase classification heuristic.** `phaseOf()` in `phases.ts` classifies LLM calls by matching `stepType` or `purpose` against hard-coded sets. Calls that match none are silently omitted from all phases (they will not appear in any drilldown).
 
 <!-- BEGIN: evidence-and-e2e-mandate (managed; canonical standard = repo-root AGENTS.md) -->

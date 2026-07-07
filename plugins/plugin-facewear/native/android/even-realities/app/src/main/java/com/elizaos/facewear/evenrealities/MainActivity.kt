@@ -63,8 +63,8 @@ class MainActivity : AppCompatActivity() {
 
         statusText = TextView(this).apply { text = "Even Realities G1 Bridge — idle" }
         agentUrlInput = EditText(this).apply {
-            hint = "Agent WebSocket URL (ws://192.168.1.100:31337/xr-ws)"
-            setText("ws://192.168.1.100:31337/xr-ws")
+            hint = "Agent WebSocket URL (ws://192.168.1.100:31337/smartglasses-ws)"
+            setText("ws://192.168.1.100:31337/smartglasses-ws")
         }
         scanButton = Button(this).apply {
             text = "Scan for G1"

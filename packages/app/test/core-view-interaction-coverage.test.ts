@@ -299,8 +299,8 @@ const CORE_VIEW_INTERACTIONS: Readonly<Record<string, CoreViewInteraction>> = {
       {
         spec: "packages/app/test/ui-smoke/apps-personal-assistant-feed-interactions.spec.ts",
         proves:
-          "Exercises the Feed GUI no-run state and TUI command routing through deterministic interact routes.",
-        signals: ["feed gui no-run state", "feed tui", "feed-agent-smoke"],
+          "Exercises the Feed GUI no-run state and command routing through deterministic interact routes.",
+        signals: ["feed gui no-run state", "feed-agent-smoke"],
       },
     ],
   },

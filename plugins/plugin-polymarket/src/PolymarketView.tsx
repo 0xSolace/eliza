@@ -1,11 +1,11 @@
 /**
- * PolymarketView — the single GUI/XR data wrapper for the Polymarket surface.
+ * PolymarketView — the single GUI data wrapper for the Polymarket surface.
  *
  * It owns the live data (status + markets + the agent's own positions, plus a
  * quiet background poll) and renders the one presentational
- * {@link PolymarketSpatialView} inside a {@link SpatialSurface}. Omitting the
- * `modality` prop lets `SpatialSurface` auto-detect the host surface, so the
- * SAME component serves them all. The view ships GUI-only.
+ * {@link PolymarketSpatialView} inside a {@link SpatialSurface}. The spatial
+ * child is presentational only, which keeps polling and route calls isolated in
+ * this wrapper.
  */
 
 import { useAgentElement } from "@elizaos/ui/agent-surface";
@@ -71,7 +71,7 @@ export function PolymarketView() {
   );
 
   // The spatial primitives below carry only inert `data-agent-*` markers, so the
-  // GUI/XR wrapper registers the view's primary actions with the live
+  // GUI wrapper registers the view's primary actions with the live
   // agent-surface registry here, reusing the same handlers `onAction` dispatches.
   const refreshControl = useAgentElement<HTMLButtonElement>({
     id: "polymarket-refresh",

@@ -1,10 +1,13 @@
 /**
- * CalendarSpatialView — the calendar surface authored with the spatial
- * vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
+ * CalendarSpatialView — the calendar surface authored once with the spatial
+ * vocabulary, so it renders correctly wherever it is displayed:
+ *
+ *   - GUI today through `<SpatialSurface>` (DOM).
+ *   - Future adapters can reuse the same snapshot contract behind the retained modality types.
  *
  * It is purely presentational (a snapshot + an action callback in, primitives
- * out) and imports ONLY the cross-modality primitives (no DOM / browser-only
- * client import).
+ * out) and imports ONLY the cross-modality primitives, so it is safe to render
+ * without pulling browser-only runtime imports into the presentational layer.
  *
  * A terminal calendar is an AGENDA list, not a pixel grid: each row is a time +
  * title with a trailing "Open" control. The header carries the period label,

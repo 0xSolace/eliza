@@ -1,4 +1,4 @@
-// Exhaustive coverage for the TUI `interact` capability handler: the happy path
+// Exhaustive coverage for the view-bundle `interact` capability handler: the happy path
 // for every capability (state/start/session/stop/input/viewer-url), every input
 // dispatch type (click/double-click/move/type/keypress/scroll), and every
 // missing-arg guard + unknown-capability error branch.
@@ -51,11 +51,11 @@ function lastInputBody(): Record<string, unknown> {
   return JSON.parse(String(call?.init?.body)) as Record<string, unknown>;
 }
 
-describe("interact terminal-screenshare-input — all dispatch types", () => {
+describe("interact screenshare-input — all dispatch types", () => {
   const base = { sessionId: "s1", token: "t1" } as const;
 
   it("click forwards x/y/button", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "click",
       x: 10,
@@ -72,7 +72,7 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("double-click forwards x/y/button", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "double-click",
       x: 5,
@@ -88,7 +88,7 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("move forwards x/y (no button)", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "move",
       x: 100,
@@ -100,7 +100,7 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("type forwards text", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "type",
       text: "hello world",
@@ -112,7 +112,7 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("keypress forwards keys", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "keypress",
       keys: "Enter",
@@ -121,7 +121,7 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("scroll forwards deltaY (deltaX is not part of the interact body)", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "scroll",
       deltaY: -120,
@@ -130,12 +130,12 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
   });
 
   it("defaults type to keypress when omitted", async () => {
-    await interact("terminal-screenshare-input", { ...base, keys: "Tab" });
+    await interact("screenshare-input", { ...base, keys: "Tab" });
     expect(lastInputBody()).toMatchObject({ type: "keypress", keys: "Tab" });
   });
 
   it("sends the token in the X-Screenshare-Token header", async () => {
-    await interact("terminal-screenshare-input", {
+    await interact("screenshare-input", {
       ...base,
       type: "move",
       x: 1,
@@ -150,10 +150,10 @@ describe("interact terminal-screenshare-input — all dispatch types", () => {
 
 describe("interact — missing-arg guards", () => {
   for (const capability of [
-    "terminal-screenshare-session",
-    "terminal-screenshare-stop",
-    "terminal-screenshare-input",
-    "terminal-screenshare-viewer-url",
+    "screenshare-session",
+    "screenshare-stop",
+    "screenshare-input",
+    "screenshare-viewer-url",
   ]) {
     it(`${capability} throws when sessionId is missing`, async () => {
       await expect(interact(capability, { token: "t1" })).rejects.toThrow(
@@ -170,7 +170,7 @@ describe("interact — missing-arg guards", () => {
 
   it("blank/whitespace sessionId is treated as missing", async () => {
     await expect(
-      interact("terminal-screenshare-session", {
+      interact("screenshare-session", {
         sessionId: "   ",
         token: "t1",
       }),
@@ -180,8 +180,8 @@ describe("interact — missing-arg guards", () => {
 
 describe("interact — unknown capability", () => {
   it("throws for an unsupported capability name", async () => {
-    await expect(interact("terminal-screenshare-bogus")).rejects.toThrow(
-      'Unsupported capability "terminal-screenshare-bogus"',
+    await expect(interact("screenshare-bogus")).rejects.toThrow(
+      'Unsupported capability "screenshare-bogus"',
     );
   });
 });
@@ -189,7 +189,7 @@ describe("interact — unknown capability", () => {
 // Happy-path coverage for the remaining capabilities (state/start/session/stop/
 // viewer-url) against a full route mock; the input dispatch types and missing-arg
 // guards are covered above.
-describe("interact — terminal capability happy paths", () => {
+describe("interact capability happy paths", () => {
   const sampleCapabilities = {
     platform: "darwin",
     capabilities: {
@@ -264,60 +264,53 @@ describe("interact — terminal capability happy paths", () => {
   it("supports state, session lifecycle, input, and viewer URLs", async () => {
     mockFullRoutes();
 
-    await expect(interact("terminal-screenshare-state")).resolves.toMatchObject(
-      {
-        viewType: "tui",
-        capabilities: sampleCapabilities,
-        sessions: { sessions: [sampleSession] },
-      },
-    );
+    await expect(interact("screenshare-state")).resolves.toMatchObject({
+      capabilities: sampleCapabilities,
+      sessions: { sessions: [sampleSession] },
+    });
 
     await expect(
-      interact("terminal-screenshare-start", { label: "Terminal" }),
+      interact("screenshare-start", { label: "Terminal" }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       session: sampleSession,
       token: "token-1",
     });
 
     await expect(
-      interact("terminal-screenshare-session", {
+      interact("screenshare-session", {
         sessionId: "session-1",
         token: "token-1",
       }),
-    ).resolves.toMatchObject({ viewType: "tui", session: sampleSession });
+    ).resolves.toMatchObject({ session: sampleSession });
 
     await expect(
-      interact("terminal-screenshare-input", {
+      interact("screenshare-input", {
         sessionId: "session-1",
         token: "token-1",
         type: "keypress",
         keys: "Enter",
       }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       success: true,
       message: "Keypress sent.",
     });
 
     await expect(
-      interact("terminal-screenshare-stop", {
+      interact("screenshare-stop", {
         sessionId: "session-1",
         token: "token-1",
       }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       session: { status: "stopped" },
     });
 
     await expect(
-      interact("terminal-screenshare-viewer-url", {
+      interact("screenshare-viewer-url", {
         sessionId: "session-1",
         token: "token-1",
         baseUrl: "https://remote.example",
       }),
     ).resolves.toEqual({
-      viewType: "tui",
       viewerUrl:
         "https://remote.example/api/apps/screenshare/viewer?sessionId=session-1&token=token-1&remoteBase=https%3A%2F%2Fremote.example",
     });

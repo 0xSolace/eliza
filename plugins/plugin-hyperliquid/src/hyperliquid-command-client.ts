@@ -1,6 +1,6 @@
 /**
  * POST client for Hyperliquid command endpoints, backing the view-bundle
- * `interact` handler's `terminal-hyperliquid-execution-check` capability (POST
+ * `interact` handler's `hyperliquid-execution-check` capability (POST
  * /api/hyperliquid/orders/open and siblings). Kept in its own dependency-light
  * module with no `@elizaos/ui`/view imports so it resolves and unit-tests in
  * isolation. Because these are market-mutation-adjacent execution requests,

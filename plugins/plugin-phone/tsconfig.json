@@ -6,7 +6,7 @@
     "moduleResolution": "bundler",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node", "bun-types", "webxr"],
+    "types": ["node", "bun-types"],
     "typeRoots": [
       "./node_modules/@types",
       "./node_modules",
@@ -48,8 +48,6 @@
       "@elizaos/core/*": ["../../packages/core/src/*"],
       "@elizaos/logger": ["../../packages/logger/src/index.ts"],
       "@elizaos/logger/*": ["../../packages/logger/src/*"],
-      "@elizaos/tui": ["../../packages/tui/src/index.ts"],
-      "@elizaos/tui/*": ["../../packages/tui/src/*"],
       "@elizaos/plugin-coding-tools": [
         "../plugin-coding-tools/dist/index.d.ts"
       ],

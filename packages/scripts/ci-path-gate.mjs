@@ -62,12 +62,6 @@ const CONFIGS = {
         reason: "app or shared UI",
       },
       {
-        lanes: ["server", "client", "plugins", "zero_key"],
-        patterns: ["packages/tui/**"],
-        reason:
-          "terminal UI library: its vitest suite runs on the server lane; the client and plugin lanes build it as a spatial-view dependency",
-      },
-      {
         lanes: ["server", "client", "desktop", "zero_key"],
         patterns: ["packages/app-core/**"],
         reason: "app-core host or desktop bridge",

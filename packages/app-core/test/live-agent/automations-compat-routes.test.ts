@@ -370,7 +370,7 @@ describe("automations compat routes", () => {
     expect(body.nodes).toContainEqual(
       expect.objectContaining({
         id: "action:CODE_TASK",
-        class: "agent",
+        class: "action",
         source: "runtime_action",
         availability: "enabled",
       }),

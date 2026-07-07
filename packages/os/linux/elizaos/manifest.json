@@ -41,7 +41,7 @@
         "id": "elizaos-agent-live",
         "status": "collected",
         "path": "evidence/qemu_virt_boot.json",
-        "notes": "Generic qemu-virt transcript contains elizaos-curl-health-ready, elizaos-agent-ready, and elizaos-tui-ready markers; not generated Eliza AP evidence."
+        "notes": "Generic qemu-virt transcript contains elizaos-curl-health-ready and elizaos-agent-ready markers; not generated Eliza AP evidence."
       },
       {
         "id": "riscv64-agent-runtime",

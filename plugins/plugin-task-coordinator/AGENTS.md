@@ -4,7 +4,7 @@ Coding-agent task coordinator and session control surface for elizaOS agents.
 
 ## Purpose / role
 
-This plugin adds a UI workbench for managing coding-agent task threads and PTY sessions. It registers GUI view panels into the elizaOS app shell for both the task coordinator and the multi-agent orchestrator surfaces. All agent/task state is owned by `@elizaos/plugin-agent-orchestrator` — this plugin is the display and control layer only. Its sole server-side runtime contribution is a single view-scoped slash command for the orchestrator view (`/orchestrator-status`), registered through `@elizaos/plugin-commands`, plus its deterministic handler action (no providers, services, or evaluators).
+This plugin adds a GUI workbench for managing coding-agent task threads and PTY sessions. It registers task coordinator, orchestrator, and cockpit views into the elizaOS app shell. All agent/task state is owned by `@elizaos/plugin-agent-orchestrator` — this plugin is the display and control layer only. Its sole server-side runtime contribution is a single view-scoped slash command for the orchestrator view (`/orchestrator-status`), registered through `@elizaos/plugin-commands`, plus its deterministic handler action (no providers, services, or evaluators).
 
 The plugin is opt-in: it must be listed in the agent's plugin configuration. Once loaded, it registers its views into the app shell and fills the slot registry entries (`CodingAgentControlChip`, `CodingAgentSettingsSection`, `CodingAgentTasksPanel`, `PtyConsoleBase`) that `@elizaos/ui` leaves empty without this plugin.
 
@@ -22,7 +22,7 @@ The plugin's `init()` calls `registerOrchestratorCommands(runtime.agentId)`, whi
 
 ### Views registered (`src/index.ts`)
 
-Three views, one adaptive declaration each. Only the GUI modality ships; `tui`/`xr` remain compatibility values in the manifest schema.
+Three GUI views.
 
 | view id | path | viewKind | modalities | componentExport | description |
 |---|---|---|---|---|---|
@@ -30,11 +30,11 @@ Three views, one adaptive declaration each. Only the GUI modality ships; `tui`/`
 | `orchestrator` | `/orchestrator` | `developer` (`developerOnly`) | `gui` | `OrchestratorView` | Multi-agent task orchestration workbench |
 | `cockpit` | `/cockpit` | `developer` (`developerOnly`) | `gui` | `CockpitRoute` | Mobile-first coding cockpit — shaw's live task-room deck + per-session mode picker + tap-in interactive terminal, on one screen |
 
-`TaskCoordinatorView` (`src/TaskCoordinatorView.tsx`) and `OrchestratorView` (`src/OrchestratorView.tsx`) are the route components — each authored once and rendered inside a `SpatialSurface`. `OrchestratorView` wraps the rich `OrchestratorWorkbench` in the spatial `Escape` hatch with the `OrchestratorSpatialView` summary as fallback; `TaskCoordinatorView` renders the presentational `TaskCoordinatorSpatialView` directly. `CockpitRoute` (`src/CockpitRoute.tsx`) composes the shared `CockpitView` deck with `CockpitSessionPane` (drill-in) and `CockpitInteractiveTerminal` (the tap-in `eliza-code` PTY terminal). `CodingAgentTasksPanel` was not deleted; it still fills the `@elizaos/ui` Tasks-page slot (`register-slots.ts`) and is simply no longer a route `componentExport`.
+`TaskCoordinatorView` (`src/TaskCoordinatorView.tsx`) is a GUI route component built with the spatial presentational layer. `OrchestratorView` (`src/OrchestratorView.tsx`) mounts the rich DOM workbench directly. `CockpitRoute` (`src/CockpitRoute.tsx`) composes the shared `CockpitView` deck with `CockpitSessionPane` (drill-in) and `CockpitInteractiveTerminal` (the tap-in coding PTY terminal). `CodingAgentTasksPanel` still fills the `@elizaos/ui` Tasks-page slot (`register-slots.ts`) and is separate from the route `componentExport`.
 
 The `task-coordinator` view declares capabilities: `list-sessions`, `list-task-threads`, `open-thread`, `stop-session`, `refresh`.
 
-The `orchestrator` view declares capabilities — typed descriptors used to drive the workbench programmatically. Capability IDs: `orchestrator-status`, `orchestrator-list-tasks`, `orchestrator-open-task`, `orchestrator-create-task`, `orchestrator-pause-task`, `orchestrator-resume-task`, `orchestrator-pause-all`, `orchestrator-resume-all`, `orchestrator-delete-task`, `orchestrator-fork-task`, `orchestrator-update-task`, `orchestrator-validate-task`, `orchestrator-add-agent`, `orchestrator-stop-agent`, `orchestrator-send-message`.
+The `orchestrator` view declares typed capability descriptors. Capability IDs: `orchestrator-status`, `orchestrator-list-tasks`, `orchestrator-open-task`, `orchestrator-create-task`, `orchestrator-pause-task`, `orchestrator-resume-task`, `orchestrator-pause-all`, `orchestrator-resume-all`, `orchestrator-delete-task`, `orchestrator-fork-task`, `orchestrator-update-task`, `orchestrator-validate-task`, `orchestrator-add-agent`, `orchestrator-stop-agent`, `orchestrator-send-message`.
 
 ### Slot registry fills (`src/register-slots.ts`)
 
@@ -47,7 +47,7 @@ Calls `registerTaskCoordinatorSlots` from `@elizaos/ui` with:
 
 ### Registration side effects (`src/register.ts`)
 
-`register.ts` is a side-effect module (imported for its effects, not exports). It does two things:
+`register.ts` is a side-effect module (imported for its effects, not exports). It activates the slot-registry fills:
 
 - **`import "./register-slots.js"`** — activates the slot-registry fills below (the `@elizaos/ui` empty-slot defaults). Without this import the UI renders empty slots.
 
@@ -59,7 +59,7 @@ The three GUI views (`task-coordinator`, `orchestrator`, `cockpit`) reach the ap
 src/
   index.ts                         Plugin definition — views + capabilities, init() command registration, handler action
   orchestrator-command.ts          /orchestrator-status slash command def + deterministic handler action (#8790)
-  register.ts                      Slot import + DOM-guarded terminal-view registration
+  register.ts                      Slot import side effect
   register-slots.ts                Slot registry fills for ui empty-slot defaults
   CodingAgentTasksPanel.tsx        Task thread list + PTY session panel; re-exports OrchestratorWorkbench
   CodingAgentTasksPanel.interact.ts  View-bundle `interact` capability handler (split for Fast-Refresh compat)
@@ -98,7 +98,7 @@ src/
   session-hydration.ts             Re-exports mapServerTasksToSessions + TERMINAL_STATUSES from @elizaos/ui
   pty-status-dots.ts               Re-exports PULSE_STATUSES + STATUS_DOT from @elizaos/ui
   components/
-    OrchestratorSpatialView.tsx    Spatial-vocabulary orchestrator workbench (GUI)
+    TaskCoordinatorSpatialView.tsx  Spatial-vocabulary task coordinator GUI body
   api/
     coding-agents-auth-sanitize.ts       Sanitizes triggerAuth() responses (whitelist + URL scheme check)
     coding-agents-preflight-normalize.ts Normalizes preflight auth field to typed NormalizedPreflightAuth
@@ -162,7 +162,7 @@ These prefixes are used to build preference keys sent to the agent prefs API; th
 - **Minimal server runtime.** This plugin registers no providers, services, or evaluators, and its only action is the `/orchestrator-status` slash-command handler (`src/orchestrator-command.ts`). All task/session state lives in `@elizaos/plugin-agent-orchestrator`. API boundary helpers in `src/api/` are utilities for route handlers in app-core, not plugin-registered routes.
 - **PTY console buffer cap.** `PtyConsoleBase` caps displayed output at 200,000 characters (`MAX_BUFFER_CHARS`). Older output is silently trimmed from the head.
 - **Live e2e test requires real Codex CLI.** `test:e2e:manual` (`test/coding-agent-codex-artifact.live.e2e.test.ts`) is skipped unless the `codex` binary is in PATH and `~/.codex/auth.json` exists.
-- **Spatial view.** `src/components/OrchestratorSpatialView.tsx` is authored once using the spatial vocabulary. It is purely presentational (typed snapshot + action callback in, primitives out).
+- **Task coordinator spatial view.** `src/components/TaskCoordinatorSpatialView.tsx` is authored with the spatial vocabulary and is the presentational body of the shipped task-coordinator GUI route.
 - See the root `AGENTS.md` for repo-wide conventions (logger-only, ESM, naming, architecture rules).
 
 <!-- BEGIN: evidence-and-e2e-mandate (managed; canonical standard = repo-root AGENTS.md) -->

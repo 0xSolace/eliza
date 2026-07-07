@@ -1,4 +1,4 @@
-// Runtime dispatch tests for the orchestrator TUI view's 15 capabilities
+// Runtime dispatch tests for the orchestrator view's 15 capabilities
 // (src/orchestrator-capabilities.ts). The existing capability-parity test only
 // reads source text; this test actually executes runOrchestratorCapability()
 // with a mocked @elizaos/ui client and asserts each id routes to the correct

@@ -1,13 +1,12 @@
 // Interaction coverage for the decomposed personal-assistant domain views
 // (calendar, finances, focus, goals, health, inbox, todos, relationships).
 // These are dynamic plugin views; the ui-smoke stub registers their bundles so
-// they render (not the launcher fallback). Each `<Domain>View` is the unified
-// spatial wrapper (the author-once GUI/XR/TUI component) — it renders the SAME
-// DOM on the desktop `chromium` and Pixel-7 `mobile-chromium` lanes, so every
-// assertion below is a viewport-independent semantic outcome: populated content
-// from the mocked lifeops endpoints plus a real state-changing interaction
-// (channel/kind/status filters, the calendar mode control). This is the
-// interaction owner that closes INTERACTION_DEBT in
+// they render (not the launcher fallback). Each `<Domain>View` is a spatial
+// wrapper that renders the same DOM on the desktop `chromium` and Pixel-7
+// `mobile-chromium` lanes, so every assertion below is a viewport-independent
+// semantic outcome: populated content from the mocked lifeops endpoints plus a
+// real state-changing interaction (channel/kind/status filters, the calendar
+// mode control). This is the interaction owner that closes INTERACTION_DEBT in
 // view-interaction-coverage.test.ts.
 
 import type { Locator } from "@playwright/test";

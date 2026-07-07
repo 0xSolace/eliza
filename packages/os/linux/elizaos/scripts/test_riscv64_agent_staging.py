@@ -18,10 +18,8 @@ BUILD_SH = LINUX_DIR / "build.sh"
 INSTALL_HOOK = LINUX_DIR / "config/hooks/normal/0010-elizaos-agent.hook.chroot"
 RISCV64_PACKAGE_LIST = LINUX_DIR / "config/package-lists/elizaos-riscv64.list.chroot"
 RUN_AGENT = LINUX_DIR / "config/includes.chroot/usr/lib/elizaos/run-agent.sh"
-RUN_TUI_SMOKE = LINUX_DIR / "config/includes.chroot/usr/lib/elizaos/run-terminal-tui-smoke.sh"
 WAIT_AGENT_HEALTH = LINUX_DIR / "config/includes.chroot/usr/lib/elizaos/wait-agent-health.sh"
 FIRST_BOOT = LINUX_DIR / "config/includes.chroot/usr/local/lib/elizaos/first-boot.sh"
-TUI_SMOKE_UNIT = LINUX_DIR / "config/includes.chroot/etc/systemd/system/elizaos-terminal-tui-smoke.service"
 RISCV64_POSTGRES_HOOK = LINUX_DIR / "config/hooks/normal/0012-riscv64-agent-postgres.hook.chroot"
 MUSL_RUNTIME = LINUX_DIR / "artifacts/riscv64/elizaos-app/musl-runtime"
 AGENT_BUNDLE = ROOT / "packages/agent/dist-mobile/agent-bundle.js"
@@ -242,21 +240,7 @@ def test_riscv64_image_has_node_agent_bundle_fallback_before_bun() -> None:
     if '{ [ "${ARCH}" = "arm64" ] && [ ! -f /opt/elizaos/app/Resources/app/eliza-dist/index.js ]; }' not in run_agent:
         raise AssertionError("node fallback must cover bare arm64 agent bundles without Electrobun")
 
-    run_tui = RUN_TUI_SMOKE.read_text(encoding="utf-8")
-    node_tui = "node \\\n        --no-wasm-tier-up"
-    bun_tui = "/opt/elizaos/bin/bun /opt/elizaos/app/agent-bundle.js tui-smoke"
-    if node_tui not in run_tui:
-        raise AssertionError("run-terminal-tui-smoke.sh is missing the node fallback with V8 Wasm tier-up disabled")
-    for flag in ("--no-wasm-tier-up", "--no-wasm-dynamic-tiering", "--liftoff-only"):
-        if flag not in run_tui:
-            raise AssertionError(f"run-terminal-tui-smoke.sh node fallback is missing {flag}")
-    if run_tui.index(node_tui) > run_tui.index(bun_tui):
-        raise AssertionError("node TUI fallback must run before the Bun path")
-    if '[ "${ARCH}" = "riscv64" ] || [ "${ARCH}" = "arm64" ]' not in run_tui:
-        raise AssertionError("node TUI fallback must cover riscv64 and arm64")
-
-
-def test_boot_health_and_tui_markers_are_serial_provable() -> None:
+def test_boot_health_markers_are_serial_provable() -> None:
     wait_health = WAIT_AGENT_HEALTH.read_text(encoding="utf-8")
     for marker in (
         "elizaos-curl-health-ready",
@@ -278,7 +262,6 @@ def test_boot_health_and_tui_markers_are_serial_provable() -> None:
         "dump_file_to_serial /var/log/elizaos/agent-runtime.log",
         "dump_file_to_serial /var/lib/elizaos/agent-runtime.log",
         "journalctl --no-pager -u elizaos-agent.service -n 120",
-        "elizaos-tui-starting",
     ):
         if expected not in first_boot:
             raise AssertionError(f"first-boot.sh missing serial-provable boot diagnostic: {expected}")
@@ -297,12 +280,6 @@ def test_boot_health_and_tui_markers_are_serial_provable() -> None:
     if "set +e" not in run_agent or "set -e" not in run_agent:
         raise AssertionError("run-agent.sh must capture nonzero agent exits under set -e")
 
-    tui_unit = TUI_SMOKE_UNIT.read_text(encoding="utf-8")
-    if "ExecStartPre=/usr/lib/elizaos/wait-agent-health.sh" not in tui_unit:
-        raise AssertionError("terminal TUI smoke must wait for agent health before running")
-    if "ELIZA_AGENT_HEALTH_TIMEOUT_SECONDS=240" not in tui_unit:
-        raise AssertionError("terminal TUI smoke unit must carry a non-trivial health wait budget")
-
     rv64_hook = RISCV64_POSTGRES_HOOK.read_text(encoding="utf-8")
     for expected in (
         "/var/lib/elizaos/eliza.json",
@@ -315,7 +292,6 @@ def test_boot_health_and_tui_markers_are_serial_provable() -> None:
         "ELIZA_MOBILE_PLATFORM=android",
         "elizaos-first-boot.service.d/10-riscv64-timeout.conf",
         "ELIZA_AGENT_HEALTH_TIMEOUT_SECONDS=600",
-        "elizaos-terminal-tui-smoke.service.d/10-riscv64-timeout.conf",
         "TimeoutStartSec=900",
     ):
         if expected not in rv64_hook:
@@ -329,5 +305,5 @@ if __name__ == "__main__":
     test_live_build_and_install_hook_require_riscv64_bun_provenance()
     test_runtime_smoke_requires_riscv64_output_markers()
     test_riscv64_image_has_node_agent_bundle_fallback_before_bun()
-    test_boot_health_and_tui_markers_are_serial_provable()
+    test_boot_health_markers_are_serial_provable()
     print("OK")

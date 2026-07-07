@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 
 /**
- * CalendarView is the single GUI/XR data wrapper for the calendar surface. It
+ * CalendarView is the GUI data wrapper for the calendar surface. It
  * owns the live feed via `useCalendarWeek`, derives a presentational agenda,
  * and renders the unified `CalendarSpatialView` inside a `SpatialSurface` — the
- * same component the view bundle exports for both the "gui" and "xr"
- * modalities.
+ * same component the view bundle exports for the shipped GUI modality.
  *
  * These tests mock the host data hook and the app-state selector (so the feed
  * and `setActionNotice` stay offline), render the REAL spatial DOM, and drive

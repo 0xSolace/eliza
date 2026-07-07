@@ -362,7 +362,7 @@ function actionBenchmarkPairCollectionAction(
 ): TrainingReadinessAction {
   return {
     label,
-    capability: "terminal-training-run-collection",
+    capability: "training-run-collection",
     params: {
       includeActionBenchmark: true,
       includeBenchmarkMatrix: true,
@@ -519,7 +519,7 @@ function buildModelTrackingCheck(
         : {
             label:
               "Stage or register concrete base/trained Eliza-1 model artifacts",
-            capability: "terminal-training-stage-eliza1-bundle",
+            capability: "training-stage-eliza1-bundle",
             params: { tier: "2b", apply: true },
           },
   };
@@ -834,7 +834,7 @@ export function buildTrainingReadinessReportPayload(
           "No Hugging Face training dataset ingest manifest was found.",
         recommendedAction: {
           label: "Download Hugging Face training files",
-          capability: "terminal-training-ingest-hf-dataset",
+          capability: "training-ingest-hf-dataset",
           params: { dryRun: false },
         },
       }),
@@ -863,7 +863,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No feed trajectory generation artifact was found.",
         recommendedAction: {
           label: "Generate feed training trajectories",
-          capability: "terminal-training-feed-generate",
+          capability: "training-feed-generate",
           params: {
             dryRun: false,
             archetypes: "trader",
@@ -896,7 +896,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No natural app/runtime trajectory bundle was found.",
         recommendedAction: {
           label: "Collect natural app/runtime trajectories",
-          capability: "terminal-training-run-collection",
+          capability: "training-run-collection",
           params: {
             includeNaturalTrajectories: true,
           },
@@ -918,7 +918,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No test trajectory artifact was found.",
         recommendedAction: {
           label: "Collect app-core test trajectories",
-          capability: "terminal-training-run-collection",
+          capability: "training-run-collection",
           params: {
             includeTestTrajectories: true,
           },
@@ -944,7 +944,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No scenario run or native scenario export was found.",
         recommendedAction: {
           label: "Run scenarios with native trajectory export",
-          capability: "terminal-training-run-scenarios",
+          capability: "training-run-scenarios",
           params: {
             dryRun: false,
             exportNative: true,
@@ -972,7 +972,7 @@ export function buildTrainingReadinessReportPayload(
           "No trajectory artifact with readable HTML-viewer samples was found.",
         recommendedAction: {
           label: "Build the training analysis viewer from collected artifacts",
-          capability: "terminal-training-build-analysis-index",
+          capability: "training-build-analysis-index",
           params: {},
         },
       }),
@@ -1019,7 +1019,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No Eliza harness benchmark artifact was found.",
         recommendedAction: {
           label: "Run Eliza action-selection benchmark",
-          capability: "terminal-training-run-collection",
+          capability: "training-run-collection",
           params: {
             includeActionBenchmark: true,
             includeBenchmarkMatrix: true,
@@ -1122,7 +1122,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No Cerebras reference benchmark artifact was found.",
         recommendedAction: {
           label: "Run benchmark against Cerebras GPT-120b",
-          capability: "terminal-training-run-benchmark-vs-cerebras",
+          capability: "training-run-benchmark-vs-cerebras",
           params: {
             tiers: ELIZA_ONE_BENCHMARK_TIER_LIST,
             benchmark: "eliza_harness_action_selection",
@@ -1176,7 +1176,7 @@ export function buildTrainingReadinessReportPayload(
         missingNote: "No training collection manifest was found.",
         recommendedAction: {
           label: "Run training collection",
-          capability: "terminal-training-run-collection",
+          capability: "training-run-collection",
           params: {},
         },
       }),

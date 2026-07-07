@@ -30,8 +30,6 @@ export interface ViewJourneyScenario {
   tags: string[];
 }
 
-// The viewType union keeps "tui" and "xr" so the reintroduction path stays
-// typed (#15269), but the shipped case list below is GUI-only.
 export interface PluginViewMockCase {
   id: string;
   viewType: "gui" | "tui" | "xr";
@@ -39,14 +37,12 @@ export interface PluginViewMockCase {
 }
 
 export const PLUGIN_VIEW_LLM_MOCK_CASES: PluginViewMockCase[] = [
-  // Auto-mirrors the visual smoke matrix (packages/app/test/ui-smoke/plugin-view-cases.ts)
-  // and the XR ratchet (KNOWN_XR_VIEW_CASES in packages/app/test/route-coverage.test.ts,
-  // empty since #15269 removed the shipped tui/xr inventory). Kept in exact
-  // lockstep by plugin-view-llm-mock-coverage.test.ts; PLUGIN_VIEW_LLM_MOCK_JOURNEYS
+  // Auto-mirrors the GUI visual smoke matrix. Kept in exact lockstep by
+  // plugin-view-llm-mock-coverage.test.ts; PLUGIN_VIEW_LLM_MOCK_JOURNEYS
   // derives one journey per case below.
   { id: "birdclaw", viewType: "gui", path: "/birdclaw" },
-  { id: "contacts", viewType: "gui", path: "/contacts" },
   { id: "cloud", viewType: "gui", path: "/cloud" },
+  { id: "contacts", viewType: "gui", path: "/contacts" },
   { id: "hyperliquid", viewType: "gui", path: "/hyperliquid" },
   { id: "focus", viewType: "gui", path: "/focus" },
   { id: "calendar", viewType: "gui", path: "/calendar" },

@@ -100,7 +100,7 @@ export function buildViewerUrl(args: {
   return apiUrl(`/api/apps/screenshare/viewer?${params.toString()}`);
 }
 
-export async function loadScreenshareTuiState(): Promise<{
+export async function loadScreenshareViewState(): Promise<{
   capabilities: CapabilitiesResponse;
   sessions: SessionsResponse;
 }> {

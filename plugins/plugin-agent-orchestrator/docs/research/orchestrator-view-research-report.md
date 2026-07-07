@@ -13,7 +13,7 @@ This report started as a research snapshot. The current branch now has a first d
 Remaining work:
 
 - Replace caller-supplied validation with registered verification hooks that collect durable evidence before `done`.
-- Add end-to-end coverage for every declared orchestrator view capability, TUI endpoint, and task lifecycle mutation.
+- Add end-to-end coverage for every declared orchestrator view capability and task lifecycle mutation.
 - Add screenshot/manual review for the orchestrator UI and any shared cloud frontend changes before declaring UI work complete.
 - Finish provider/subscription settings cleanup and internationalize every new orchestrator string.
 - Prove remote/mobile access against a local desktop agent and against cloud-connected agents.
@@ -48,7 +48,7 @@ The action path is richer. `TASKS_SPAWN_AGENT` constructs task-room/worktree-roo
 
 ## Current UI State
 
-`plugin-task-coordinator` already declares a GUI view at `/task-coordinator`, an XR view at `/task-coordinator`, and a TUI view at `/task-coordinator/tui` in `plugins/plugin-task-coordinator/src/index.ts:6`. The GUI exports `CodingAgentTasksPanel`; the TUI exposes capabilities for listing sessions, listing task threads, opening a thread, stopping a session, and refreshing.
+`plugin-task-coordinator` now declares shipped GUI views for task coordination and orchestration. The older XR/TUI duplicate declarations and terminal capability surface were removed; the remaining view capabilities should be tested against the GUI route and retained `viewType` contract.
 
 `packages/ui` can route dynamic plugin views by matching `ViewRegistryEntry.path` and loading their `bundleUrl` through `DynamicViewLoader` in `packages/ui/src/App.tsx:451`. Built-in static views include `tasks`, which renders `TasksPageView` in `packages/ui/src/App.tsx:542`. The navigation type and path map include `tasks`, but not `orchestrator`, in `packages/ui/src/navigation/index.ts:44` and `packages/ui/src/navigation/index.ts:318`.
 

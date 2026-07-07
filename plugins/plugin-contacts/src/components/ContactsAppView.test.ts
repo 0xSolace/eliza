@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 //
-// GUI / XR surface tests for ContactsAppView — the componentExport shared by
-// the default `gui` view and the `xr` view (both render this same component).
-// Renders the real component with a controllable @elizaos/capacitor-contacts
-// bridge and asserts populated data + every interactive control's behavior.
+// GUI surface tests for ContactsAppView. Renders the real component with a
+// controllable @elizaos/capacitor-contacts bridge and asserts populated data +
+// every interactive control's behavior.
 
 import {
   cleanup,

@@ -1,10 +1,7 @@
 // @vitest-environment node
 //
-// Coverage for the wallet view-bundle `interact` capability handler — the
-// terminal parity surface the agent terminal dispatches against. Ported from the
-// retired InventoryTuiView.test.ts (the standalone TUI component was collapsed
-// into the single InventoryView spatial source); the capability handler is the
-// part that lives on past the collapse.
+// Coverage for the wallet view-bundle `interact` capability handler shared by
+// the GUI bundle and app shell.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -140,46 +137,43 @@ afterEach(() => {
 });
 
 describe("wallet interact capabilities", () => {
-  it("returns terminal wallet state with addresses, totals, and limited token rows", async () => {
-    await expect(
-      interact("terminal-wallet-state", { limit: 2 }),
-    ).resolves.toMatchObject({
-      viewType: "tui",
-      addresses: { evmAddress: "0xabc", solanaAddress: "So111" },
-      totalUsd: 1150,
-      tokenCount: 3,
-      nftCount: 1,
-      tokens: [
-        { chain: "BSC", symbol: "BNB", valueUsd: 750 },
-        { chain: "Solana", symbol: "SOL", valueUsd: 300 },
-      ],
-    });
+  it("returns wallet state with addresses, totals, and limited token rows", async () => {
+    await expect(interact("wallet-state", { limit: 2 })).resolves.toMatchObject(
+      {
+        addresses: { evmAddress: "0xabc", solanaAddress: "So111" },
+        totalUsd: 1150,
+        tokenCount: 3,
+        nftCount: 1,
+        tokens: [
+          { chain: "BSC", symbol: "BNB", valueUsd: 750 },
+          { chain: "Solana", symbol: "SOL", valueUsd: 300 },
+        ],
+      },
+    );
   });
 
   it("returns the market overview", async () => {
-    await expect(interact("terminal-wallet-market-overview")).resolves.toEqual({
-      viewType: "tui",
+    await expect(interact("wallet-market-overview")).resolves.toEqual({
       overview: marketOverview,
     });
   });
 
   it("returns the trading profile for the requested window", async () => {
     await expect(
-      interact("terminal-wallet-trading-profile", { window: "7d" }),
+      interact("wallet-trading-profile", { window: "7d" }),
     ).resolves.toMatchObject({
-      viewType: "tui",
       profile: { summary: { realizedPnlBnb: "0.1" } },
     });
     expect(walletClient.getWalletTradingProfile).toHaveBeenCalledWith("7d");
   });
 
   it("coerces a missing or invalid trading-profile window to 30d", async () => {
-    await interact("terminal-wallet-trading-profile");
+    await interact("wallet-trading-profile");
     expect(walletClient.getWalletTradingProfile).toHaveBeenLastCalledWith(
       "30d",
     );
 
-    await interact("terminal-wallet-trading-profile", { window: "bogus" });
+    await interact("wallet-trading-profile", { window: "bogus" });
     expect(walletClient.getWalletTradingProfile).toHaveBeenLastCalledWith(
       "30d",
     );
@@ -193,8 +187,8 @@ describe("wallet interact capabilities", () => {
     walletClient.getWalletBalances.mockRejectedValue(
       new Error("wallet RPC unavailable"),
     );
-    await expect(
-      interact("terminal-wallet-state", { limit: 2 }),
-    ).rejects.toThrow(/wallet RPC unavailable/);
+    await expect(interact("wallet-state", { limit: 2 })).rejects.toThrow(
+      /wallet RPC unavailable/,
+    );
   });
 });

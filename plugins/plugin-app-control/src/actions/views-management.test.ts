@@ -1537,7 +1537,7 @@ describe("view management actions", () => {
 		expect(runtime.getTasks).toHaveBeenCalled();
 	});
 
-	it("includes explicit TUI view type and always-on-top false in window navigation payloads", async () => {
+	it("preserves explicit future terminal viewType and always-on-top false in window navigation payloads", async () => {
 		const { runtime } = createRuntime();
 		const callback = vi.fn();
 		const action = createViewsAction({
@@ -1557,7 +1557,7 @@ describe("view management actions", () => {
 		const result = await action.handler(
 			runtime as never,
 			message(
-				"open the remote ledger terminal view in a separate window",
+				"open the remote ledger future terminal view in a separate window",
 			) as never,
 			undefined,
 			{
@@ -1594,7 +1594,7 @@ describe("view management actions", () => {
 		);
 	});
 
-	it("includes explicit XR view type in window navigation payloads", async () => {
+	it("preserves explicit future spatial viewType in window navigation payloads", async () => {
 		const { runtime } = createRuntime();
 		const callback = vi.fn();
 		const action = createViewsAction({

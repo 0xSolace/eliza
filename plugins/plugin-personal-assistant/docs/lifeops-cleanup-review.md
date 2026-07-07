@@ -91,7 +91,7 @@ not P0, because moving them changes registration + a string serviceType.
 
 ## D. Views & domain surfaces → focused plugins
 
-- **The LifeOps stub view** (`plugin.ts:753-795` registers `LifeOpsPageView` ×3 GUI/XR/TUI) is a
+- **The LifeOps stub view** (historically registered `LifeOpsPageView` across retired modalities) is a
   **static mockup** that contradicts the CLAUDE.md "No views" contract. Verified breakage if the
   registration is removed: **nothing structural breaks** — the `lifeops` tab is a *builtin* nav
   tab (`navigation/index.ts`), and `App.tsx:826` already falls back to `<ViewUnavailableFallback/>`

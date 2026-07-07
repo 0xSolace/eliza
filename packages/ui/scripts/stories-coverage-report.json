@@ -36,7 +36,6 @@
     "src\\components\\connectors\\SignalQrOverlay.tsx",
     "src\\components\\connectors\\TelegramAccountConnectorPanel.tsx",
     "src\\components\\connectors\\WhatsAppQrOverlay.tsx",
-    "src\\components\\connectors\\XRPairingPanel.tsx",
     "src\\components\\conversations\\ConversationRenameDialog.tsx",
     "src\\components\\conversations\\ConversationsSidebar.tsx",
     "src\\components\\custom-actions\\CustomActionsView.tsx",
@@ -403,7 +402,6 @@
     "src\\components\\ui\\typography.tsx",
     "src\\components\\views\\DynamicViewLoader.tsx",
     "src\\components\\views\\ShellViewAgentSurface.tsx",
-    "src\\components\\views\\TerminalPluginView.tsx",
     "src\\components\\views\\ViewIcon.tsx",
     "src\\components\\voice-pill\\VoicePill.tsx",
     "src\\components\\workspace\\AppWorkspaceChrome.tsx"

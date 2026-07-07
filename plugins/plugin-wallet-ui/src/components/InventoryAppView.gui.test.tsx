@@ -2,10 +2,10 @@
 //
 // Behavioral e2e for the InventoryAppView dashboard GUI
 // surface. Renders the full page with a fully-populated useApp() mock and seeds
-// the local client.getWalletTradingProfile / getWalletMarketOverview fetches via
-// the same vi.hoisted walletClient pattern as InventoryTuiView.test.ts. Every
-// assertion checks real populated data or drives a control and asserts its
-// effect. Fixtures use the real @elizaos/contracts shapes (WalletBalancesResponse,
+// the local client.getWalletTradingProfile / getWalletMarketOverview fetches
+// through a vi.hoisted walletClient. Every assertion checks real populated data
+// or drives a control and asserts its effect. Fixtures use the real
+// @elizaos/contracts shapes (WalletBalancesResponse,
 // WalletNftsResponse, WalletTradingProfileResponse with `pnlSeries`,
 // WalletMarketOverviewResponse with movers/prices/sources) so populated
 // assertions reflect the actual API contract.

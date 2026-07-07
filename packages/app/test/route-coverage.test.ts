@@ -60,10 +60,8 @@ type PluginViewCase = {
 };
 
 /**
- * A collapsed operator view: ONE declaration that draws several modalities from
- * one source (`modalities`), one `path`, one `componentExport` (a
- * SpatialSurface-wrapped view). The gate asserts that single declaration keeps
- * its canonical path, bundle, component, and modality coverage.
+ * A bundled operator view: one source, one `path`, one `componentExport`, and
+ * the shipped modalities the app can actually render.
  */
 type PluginViewManifestContract = {
   manifestPath: string;
@@ -82,6 +80,7 @@ const PLUGIN_VIEW_MANIFESTS = [
   "plugins/plugin-blocker/src/plugin.ts",
   "plugins/plugin-calendar/src/plugin.ts",
   "plugins/plugin-documents/src/plugin.ts",
+  "plugins/plugin-elizacloud/src/index.ts",
   "plugins/plugin-finances/src/plugin.ts",
   "plugins/plugin-goals/src/plugin.ts",
   "plugins/plugin-health/src/index.ts",
@@ -93,9 +92,8 @@ const PLUGIN_VIEW_MANIFESTS = [
   "plugins/plugin-wallet-ui/src/plugin.ts",
   "plugins/plugin-vector-browser/src/plugin.ts",
   "plugins/plugin-feed/src/index.ts",
-  "plugins/plugin-scheduling/src/plugin.ts",
-  "plugins/plugin-elizacloud/src/index.ts",
   "plugins/plugin-app-control/src/index.ts",
+  "plugins/plugin-scheduling/src/plugin.ts",
   "plugins/plugin-screenshare/src/index.ts",
   "plugins/plugin-task-coordinator/src/index.ts",
   "plugins/plugin-trajectory-logger/src/plugin.ts",
@@ -120,6 +118,8 @@ const NOT_APP_BOOT_LOADED_VIEW_MANIFESTS: Readonly<Record<string, string>> = {
     "Calendar is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
   "plugins/plugin-documents/src/plugin.ts":
     "Documents is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
+  "plugins/plugin-elizacloud/src/index.ts":
+    "Cloud account management is registered as a runtime/view-manager plugin view; it is not loaded through the renderer side-effect app-module scanner.",
   "plugins/plugin-finances/src/plugin.ts":
     "Finances is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
   "plugins/plugin-goals/src/plugin.ts":
@@ -128,30 +128,29 @@ const NOT_APP_BOOT_LOADED_VIEW_MANIFESTS: Readonly<Record<string, string>> = {
     "Health is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
   "plugins/plugin-inbox/src/plugin.ts":
     "Inbox is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
+  "plugins/plugin-messages/src/plugin.ts":
+    "Messages is routed by the app shell and discoverable through the View Manager, but its plugin manifest is not imported by the app boot loader.",
   "plugins/plugin-relationships/src/plugin.ts":
     "Relationships is the entity/relationship knowledge-graph viewer; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
   "plugins/plugin-screenshare/src/index.ts":
     "Screenshare is registered by runtime capability loading, not the app boot side-effect loader.",
+  "plugins/plugin-scheduling/src/plugin.ts":
+    "LifeOps Live Test is a developer/QA validation surface; its route stays reachable for live-test workflows but it is not a launcher or app-boot view.",
   "plugins/plugin-todos/src/index.ts":
     "Todos is a decomposed personal-assistant domain view; it is discoverable through the View Manager but not yet a boot-loaded renderer module.",
-  "plugins/plugin-elizacloud/src/index.ts":
-    "Cloud is the Eliza Cloud account view; it is discoverable through the View Manager but not registered by the app boot side-effect loader (no elizaos.appRegister marker, not imported in main.tsx).",
-  "plugins/plugin-scheduling/src/plugin.ts":
-    "LifeOps Live Test is a developer-only QA validation view gated behind Developer Mode; the route is reachable for the live-test workflow but it is not a boot-loaded renderer module.",
 };
 
 const BOOT_PLUGIN_VIEW_MANIFEST_BY_MODULE: Record<string, string | null> = {
   "@elizaos/plugin-contacts": "plugins/plugin-contacts/src/plugin.ts",
   "@elizaos/plugin-native-settings": null,
-  // Facewear no longer declares plugin views (#15269 removed its xr/tui-only
-  // inventory); the boot module remains for the Settings wearables section.
+  // Facewear no longer declares plugin views; the boot module remains for the
+  // Settings wearables section.
   "@elizaos/plugin-facewear": null,
   "@elizaos/plugin-feed": "plugins/plugin-feed/src/index.ts",
   "@elizaos/plugin-hyperliquid": "plugins/plugin-hyperliquid/src/plugin.ts",
   // PA no longer declares a view (the LifeOps overview was removed); it is a
   // boot plugin with no renderer module.
   "@elizaos/plugin-personal-assistant": null,
-  "@elizaos/plugin-messages": "plugins/plugin-messages/src/plugin.ts",
   "@elizaos/plugin-phone": "plugins/plugin-phone/src/plugin.ts",
   "@elizaos/plugin-polymarket": "plugins/plugin-polymarket/src/plugin.ts",
   "@elizaos/plugin-task-coordinator":
@@ -168,43 +167,35 @@ const BOOT_PLUGIN_VIEW_MANIFEST_BY_MODULE: Record<string, string | null> = {
   "@elizaos/app-model-tester": "plugins/app-model-tester/src/plugin.ts",
 };
 
-// Shipped XR view inventory is intentionally EMPTY (#15269): the xr
-// modality remains a valid contract value, but no plugin ships an XR view.
-// Adding one back requires an explicit entry here (runtime coverage
-// classification), which keeps this ratchet as the reintroduction gate.
-const KNOWN_XR_VIEW_CASES: readonly PluginViewCase[] = [];
-
-// Shipped operator views are GUI-only (#15269); reintroducing xr/tui means
-// widening this constant deliberately.
-const ALL_MODALITIES: ReadonlyArray<"gui" | "tui" | "xr"> = ["gui"];
+const SHIPPED_MODALITIES: ReadonlyArray<"gui" | "tui" | "xr"> = ["gui"];
 
 const OPERATOR_VIEW_MANIFEST_CONTRACTS: readonly PluginViewManifestContract[] =
   [
     {
       manifestPath: "plugins/plugin-feed/src/index.ts",
       id: "feed",
-      modalities: ALL_MODALITIES,
+      modalities: SHIPPED_MODALITIES,
       path: "/feed",
       componentExport: "FeedView",
     },
     {
       manifestPath: "plugins/plugin-screenshare/src/index.ts",
       id: "screenshare",
-      modalities: ALL_MODALITIES,
+      modalities: SHIPPED_MODALITIES,
       path: "/screenshare",
       componentExport: "ScreenshareView",
     },
     {
       manifestPath: "plugins/plugin-task-coordinator/src/index.ts",
       id: "task-coordinator",
-      modalities: ALL_MODALITIES,
+      modalities: SHIPPED_MODALITIES,
       path: "/task-coordinator",
       componentExport: "TaskCoordinatorView",
     },
     {
       manifestPath: "plugins/plugin-task-coordinator/src/index.ts",
       id: "orchestrator",
-      modalities: ALL_MODALITIES,
+      modalities: SHIPPED_MODALITIES,
       path: "/orchestrator",
       componentExport: "OrchestratorView",
     },
@@ -272,10 +263,10 @@ function stringField(source: string, field: string): string | null {
 }
 
 /**
- * The surfaces a single view object draws. A collapsed declaration uses
- * `modalities: ["gui","xr","tui"]` — one source, one route, drawn in several
- * modes — and expands to one logical case per surface (all sharing the same
- * `path`). A legacy declaration uses a single `viewType` (default "gui").
+ * The surfaces a single view object draws. A collapsed declaration can use
+ * `modalities` — one source, one route, drawn in several modes — and expands to
+ * one logical case per surface (all sharing the same `path`). A legacy
+ * declaration uses a single `viewType` (default "gui").
  */
 function viewObjectViewTypes(object: string): Array<"gui" | "tui" | "xr"> {
   const modalitiesMatch = object.match(/modalities:\s*\[([^\]]*)\]/);
@@ -376,10 +367,6 @@ function pluginViewCasesFromVisualSpec(): PluginViewCase[] {
 
 function pluginViewCaseKey(viewCase: Pick<PluginViewCase, "id" | "viewType">) {
   return `${viewCase.id}:${viewCase.viewType}`;
-}
-
-function pluginViewCaseFullKey(viewCase: PluginViewCase) {
-  return `${viewCase.manifestPath}:${viewCase.id}:${viewCase.viewType}:${viewCase.path}`;
 }
 
 function appMainPluginIds(): string[] {
@@ -554,7 +541,7 @@ describe("app route coverage gate", () => {
     ).toEqual([]);
   });
 
-  it("plugin views visual matrix covers every bundled gui/tui view", () => {
+  it("plugin views visual matrix covers every bundled gui view", () => {
     const expectedCases = PLUGIN_VIEW_MANIFESTS.flatMap((manifestPath) =>
       pluginViewCasesFromManifest(manifestPath),
     ).filter((viewCase) => viewCase.viewType !== "xr");
@@ -601,7 +588,7 @@ describe("app route coverage gate", () => {
     ).toEqual([]);
   });
 
-  it("operator plugin view manifests keep one collapsed gui/xr/tui contract", () => {
+  it("operator plugin view manifests keep the shipped gui contract", () => {
     const contractsByManifest = new Map<string, PluginViewManifestContract[]>();
     for (const contract of OPERATOR_VIEW_MANIFEST_CONTRACTS) {
       const contracts = contractsByManifest.get(contract.manifestPath) ?? [];
@@ -615,7 +602,7 @@ describe("app route coverage gate", () => {
           path.resolve(REPO_ROOT, manifestPath),
           "utf8",
         );
-        // One collapsed declaration per id (no longer one per viewType).
+        // One declaration per id; future modalities extend this declaration.
         const objectsById = new Map(
           viewObjects(source).map((object) => [
             stringField(object, "id") ?? "",
@@ -710,40 +697,6 @@ describe("app route coverage gate", () => {
     expect(
       pathMismatches,
       `Tracked visual-review report paths drifted: ${pathMismatches.join(", ")}`,
-    ).toEqual([]);
-  });
-
-  it("plugin view manifest ratchet tracks bundled xr view declarations", () => {
-    const actualCases = PLUGIN_VIEW_MANIFESTS.flatMap((manifestPath) =>
-      pluginViewCasesFromManifest(manifestPath),
-    ).filter((viewCase) => viewCase.viewType === "xr");
-    const expectedByKey = new Map(
-      KNOWN_XR_VIEW_CASES.map((viewCase) => [
-        pluginViewCaseFullKey(viewCase),
-        viewCase,
-      ]),
-    );
-    const actualByKey = new Map(
-      actualCases.map((viewCase) => [
-        pluginViewCaseFullKey(viewCase),
-        viewCase,
-      ]),
-    );
-
-    const missing = KNOWN_XR_VIEW_CASES.filter(
-      (viewCase) => !actualByKey.has(pluginViewCaseFullKey(viewCase)),
-    ).map(pluginViewCaseFullKey);
-    const stale = actualCases
-      .filter((viewCase) => !expectedByKey.has(pluginViewCaseFullKey(viewCase)))
-      .map(pluginViewCaseFullKey);
-
-    expect(
-      missing,
-      `Bundled XR view declarations changed or disappeared: ${missing.join(", ")}`,
-    ).toEqual([]);
-    expect(
-      stale,
-      `New bundled XR views need explicit runtime coverage classification: ${stale.join(", ")}`,
     ).toEqual([]);
   });
 

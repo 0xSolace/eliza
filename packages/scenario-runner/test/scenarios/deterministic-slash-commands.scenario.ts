@@ -25,7 +25,7 @@ import { handleCommandsRoutes } from "../../../agent/src/api/commands-routes.ts"
  *   - the served catalog is exactly the projection of the `getConnectorCommands`
  *     source of truth (every command present, none invented),
  *   - each `target.kind` carries the correct effect (agent → message pipeline,
- *     navigate → a concrete in-app route, client → a known GUI/TUI behavior), and
+ *     navigate → a concrete in-app route, client → a known local-client behavior), and
  *   - chat connectors (Discord) drop GUI-only client commands but keep navigation.
  */
 

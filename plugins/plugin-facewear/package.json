@@ -2,7 +2,7 @@
 	"name": "@elizaos/plugin-facewear",
 	"version": "2.0.3-beta.7",
 	"type": "module",
-	"description": "Unified facewear plugin — Meta Quest 3, XReal, Even Realities G1/G2, Apple Vision Pro. Bidirectional voice+camera streaming, smartglasses display, view panels, device management.",
+	"description": "Even Realities G1/G2 smartglasses control, display, microphone, bridge Wi-Fi setup, and diagnostics.",
 	"main": "./dist/index.js",
 	"exports": {
 		"./package.json": "./package.json",
@@ -35,16 +35,10 @@
 	"scripts": {
 		"typecheck": "tsgo --noEmit -p tsconfig.json",
 		"lint": "bunx @biomejs/biome check --write --unsafe .",
-		"test": "bun run build:views && bun run emulator:build && NODE_OPTIONS='--experimental-sqlite' vitest run --config ./vitest.config.ts",
-		"build": "bun run build:js && bun run build:views && bun run build:types",
+		"test": "NODE_OPTIONS='--experimental-sqlite' vitest run --config ./vitest.config.ts",
+		"build": "bun run build:js && bun run build:types",
 		"build:js": "tsup --config ../tsup.plugin-packages.shared.ts",
 		"build:types": "bunx tsc --noCheck -p tsconfig.build.json && node ../../packages/scripts/rewrite-dist-relative-imports-node-esm.mjs",
-		"build:views": "bunx --bun vite build --config vite.config.views.ts",
-		"emulator:build": "cd emulator && bun install --force && bun run build",
-		"emulator:watch": "cd emulator && bun run build:watch",
-		"emulator:cli": "bun run --cwd emulator src/cli.ts",
-		"setup:sdks": "node scripts/setup-sdks.mjs",
-		"setup:openxr": "node scripts/setup-sdks.mjs --install",
 		"verify:app": "bunx vitest --root ../.. run packages/registry/src/first-party/facewear-registry.test.ts packages/app/src/plugin-registrations.test.ts",
 		"lint:check": "bunx @biomejs/biome check .",
 		"format": "bunx @biomejs/biome format --write .",
@@ -56,7 +50,6 @@
 		"@elizaos/shared": "workspace:*",
 		"@elizaos/ui": "workspace:*",
 		"lucide-react": "^1.0.0",
-		"ws": "^8.18.0",
 		"zod": "^4.4.3"
 	},
 	"peerDependencies": {
@@ -71,7 +64,6 @@
 		"@types/node": "^25.0.3",
 		"@types/react": "^19.2.3",
 		"@types/react-dom": "^19.2.3",
-		"@types/ws": "^8.5.10",
 		"bun-types": "^1.3.14",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
@@ -90,12 +82,6 @@
 	"agentConfig": {
 		"pluginType": "elizaos:plugin:1.0.0",
 		"pluginParameters": {
-			"FACEWEAR_WS_PORT": {
-				"type": "number",
-				"description": "WebSocket port for XR streaming (Quest 3, XReal, Vision Pro).",
-				"required": false,
-				"default": 31338
-			},
 			"FACEWEAR_SMARTGLASSES_TRANSPORT": {
 				"type": "string",
 				"description": "Even Realities transport selection.",

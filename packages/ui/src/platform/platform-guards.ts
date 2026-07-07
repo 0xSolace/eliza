@@ -10,13 +10,6 @@
 import { Capacitor } from "@capacitor/core";
 import { isElectrobunRuntime } from "../bridge/electrobun-runtime";
 
-declare global {
-  interface Window {
-    /** Set by the XR view-host (plugin-facewear / plugin-xr) inside a headset. */
-    __elizaXRContext?: unknown;
-  }
-}
-
 /** Frontend platform identifier matching the server-side AgentPlatform type. */
 export type FrontendPlatform = "ios" | "android" | "web" | "desktop";
 
@@ -62,15 +55,10 @@ export type ViewModality = "gui" | "tui" | "xr";
 /**
  * Detect the active view modality of the current surface.
  *
- * The dashboard shell is a GUI surface on every device platform (web, desktop,
- * iOS, Android). The WebXR view host (`@elizaos/plugin-facewear`) sets the
- * `window.__elizaXRContext` global when a view runs inside a headset, so its
- * presence means the surface is XR. The terminal renderer is a separate,
- * non-DOM host, so the React shell never reports `tui`.
+ * The shipped dashboard shell is a GUI surface on every device platform. The
+ * retained union leaves room for future hosts to report other modalities
+ * through their own adapters.
  */
 export function getActiveViewModality(): ViewModality {
-  if (typeof window !== "undefined" && window.__elizaXRContext) {
-    return "xr";
-  }
   return "gui";
 }

@@ -65,8 +65,7 @@
       "category": "system",
       "androidOnly": true,
       "heroImage": "assets/hero.png"
-    },
-    "appRegister": "register"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -77,7 +76,6 @@
     "dist"
   ],
   "devDependencies": {
-    "@elizaos/tui": "workspace:*",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

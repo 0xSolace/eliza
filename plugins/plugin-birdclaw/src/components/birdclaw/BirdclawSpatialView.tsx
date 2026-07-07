@@ -1,9 +1,7 @@
 /**
- * BirdclawSpatialView — the Birdclaw archive browser authored once with the
- * spatial vocabulary so it renders on every surface:
- *
- *   - GUI / XR — mounted in `<SpatialSurface>` (DOM; XR scales up).
- *   - TUI      — rendered to terminal lines via the spatial TUI renderer.
+ * Birdclaw archive browser presentation authored with the spatial vocabulary.
+ * The shipped route is GUI-only today, while the snapshot/action boundary stays
+ * available for future modality adapters.
  *
  * Purely presentational: a snapshot + an action callback in, primitives out.
  * The live data wrapper {@link BirdclawView} owns the `/api/birdclaw/*`

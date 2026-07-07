@@ -1,6 +1,5 @@
 /**
- * LifeOpsLiveTestView — the single GUI/XR/TUI data wrapper for the HITL
- * "LifeOps Live Test" surface.
+ * LifeOps Live Test data wrapper for the HITL GUI surface.
  *
  * It owns every live read + write and hands the presentational
  * {@link LifeOpsLiveTestSpatialView} a fully-resolved snapshot:

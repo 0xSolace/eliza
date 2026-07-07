@@ -48,9 +48,7 @@
       ],
       "@elizaos/capacitor-camera": [
         "../../plugins/plugin-native-camera/src/index.ts"
-      ],
-      "@elizaos/tui": ["../../packages/tui/src/index.ts"],
-      "@elizaos/tui/*": ["../../packages/tui/src/*"]
+      ]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],

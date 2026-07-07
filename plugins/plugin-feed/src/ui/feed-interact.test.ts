@@ -1,8 +1,7 @@
-// Real-handler tests for the Feed TUI `interact()` capability dispatcher.
+// Real-handler tests for the Feed view-bundle `interact()` capability dispatcher.
 //
-// `interact()` (feed-interact.ts) is the code the host
-// `TerminalPluginView` invokes for every TUI capability. It talks to the Feed
-// proxy over `global.fetch` and parses responses through `readFeedJson`. These
+// `interact()` (feed-interact.ts) talks to the Feed proxy over `global.fetch`
+// and parses responses through `readFeedJson`. These
 // tests drive the REAL handler with a stubbed `fetch`, asserting the exact
 // request URLs/methods/bodies and the returned shape for every capability —
 // including the blank-content default, the non-ok throw, and the
@@ -81,7 +80,7 @@ const marketsPayload = {
   pageSize: 5,
 };
 
-describe("Feed TUI interact() capability handler", () => {
+describe("Feed view interact() capability handler", () => {
   for (const capability of ["get-state", "refresh-agent-status"] as const) {
     it(`"${capability}" fetches status, dashboard, and markets?pageSize=5 and returns {status,dashboard,markets}`, async () => {
       const { calls } = stubFetch(({ url }) => {
@@ -169,7 +168,7 @@ describe("Feed TUI interact() capability handler", () => {
     expect(result).toEqual({ ok: true, messageId: "msg-9" });
   });
 
-  it('"send-team-message" falls back to "Terminal status check" when content is blank or omitted', async () => {
+  it('"send-team-message" falls back to "Feed status check" when content is blank or omitted', async () => {
     const { calls } = stubFetch(({ url }) => {
       if (url === "/api/apps/feed/team/chat") return jsonResponse({ ok: true });
       throw new Error(`Unexpected request: ${url}`);
@@ -182,7 +181,7 @@ describe("Feed TUI interact() capability handler", () => {
     expect(calls).toHaveLength(3);
     for (const call of calls) {
       expect(call.init?.body).toBe(
-        JSON.stringify({ content: "Terminal status check" }),
+        JSON.stringify({ content: "Feed status check" }),
       );
     }
   });
@@ -230,7 +229,7 @@ describe("Feed TUI interact() capability handler", () => {
     });
 
     await expect(interact("totally-unknown")).rejects.toThrow(
-      'Feed TUI does not support "totally-unknown".',
+      'Feed view does not support "totally-unknown".',
     );
   });
 });

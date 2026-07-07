@@ -1,11 +1,11 @@
 /**
- * ViewManagerSpatialView — the registered-views list authored with the spatial
- * vocabulary and mounted in `<SpatialSurface>` for the GUI surface.
+ * View manager presentation authored with the spatial vocabulary. The shipped
+ * route is GUI-only today, but the view keeps the modality-chip and primitive
+ * boundaries so future adapters can reuse the same snapshot contract.
  *
  * It is purely presentational (a snapshot + an open callback in, primitives out)
- * and imports only the cross-modality primitives plus the pure `ViewEntry`
- * helpers (no shell-host UI import). The collapse-by-id + modality-chip logic is
- * pure over the snapshot.
+ * and imports only cross-modality primitives plus the pure `ViewEntry` helpers.
+ * The collapse-by-id + modality-chip logic is pure over the snapshot.
  */
 
 import {
@@ -31,7 +31,7 @@ export interface ViewManagerSnapshot {
 	error?: string | null;
 }
 
-/** The surfaces this logical view renders on, ordered gui · xr · tui. */
+/** The surfaces this logical view can render on, ordered gui · xr · tui. */
 function viewModalities(view: ViewEntry): ViewModality[] {
 	return view.modalities ?? [view.viewType ?? "gui"];
 }
@@ -49,7 +49,7 @@ function modalityTone(modality: ViewModality): SpatialTone {
 
 export interface ViewManagerSpatialViewProps {
 	snapshot: ViewManagerSnapshot;
-	/** Open a listed view (GUI press / terminal dispatch by `open:<id>`). */
+	/** Open a listed view from a rendered control or future adapter dispatch. */
 	onOpenView?: (view: ViewEntry) => void;
 }
 
@@ -57,9 +57,8 @@ export function ViewManagerSpatialView({
 	snapshot,
 	onOpenView,
 }: ViewManagerSpatialViewProps) {
-	// One row per logical view id, carrying the union of its surfaces — collapses
-	// duplicate gui/xr/tui declarations of the same view into a single row with
-	// modality chips, instead of one duplicate row per surface.
+	// One row per logical view id, carrying the union of its surfaces, so future
+	// modality declarations cannot duplicate the base GUI row.
 	const views = collapseViewEntries(snapshot.views);
 	const available = views.filter((view) => view.available).length;
 	return (
@@ -103,9 +102,8 @@ export function ViewManagerSpatialView({
 								<Text style="caption" tone="muted" wrap={false}>
 									{view.path ?? view.pluginName}
 								</Text>
-								{/* Surface chips (gui/xr/tui) + per-view open/available
-								    state, kept on one wrapped line so it never competes
-								    horizontally with the open control on narrow terminals. */}
+								{/* Surface chips plus per-view open/available state stay on
+								    one wrapped line so the open control remains readable. */}
 								<HStack gap={1} wrap align="center">
 									{viewModalities(view).map((modality) => (
 										<Text

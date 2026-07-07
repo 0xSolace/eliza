@@ -1,24 +1,69 @@
 /**
- * `@elizaos/ui/spatial/tui` — the terminal renderer for unified spatial views.
+ * Compatibility seam for the retired terminal adapter.
  *
- * Node-only (depends on `@elizaos/tui`). Import this from a terminal host (the
- * agent CLI), never from browser code — the browser uses `@elizaos/ui/spatial`.
+ * `viewType: "tui"` remains a public contract so older payloads and future
+ * reintroductions can compile, but this package no longer ships a concrete
+ * alternate renderer or plugin registry.
  */
 
-// Re-export the terminal-view registry so plugins/hosts use one import surface.
-export {
-  getTerminalView,
-  getTerminalViewFactory,
-  hasTerminalView,
-  listTerminalViewIds,
-  registerTerminalView,
-} from "@elizaos/tui";
-export { measureWidth, render as renderSpatialNode } from "./engine.ts";
-export {
-  createSpatialTuiComponent,
-  getSpatialViewThunk,
-  registerSpatialTerminalView,
-  renderSpatialToLines,
-  renderViewToLines,
-  type SpatialTuiComponentOptions,
-} from "./renderer.ts";
+import type { ReactElement } from "react";
+
+export interface SpatialTuiComponentOptions {
+  onChange?: () => void;
+}
+
+function unsupported(): never {
+  throw new Error("The terminal adapter is not shipped in this build.");
+}
+
+export function renderViewToLines(
+  _view: ReactElement,
+  _width?: number,
+): string[] {
+  unsupported();
+}
+
+export function renderSpatialToLines(
+  _view: ReactElement,
+  _width?: number,
+): string[] {
+  unsupported();
+}
+
+export function createSpatialTuiComponent(
+  _render: () => ReactElement,
+  _options?: SpatialTuiComponentOptions,
+): never {
+  unsupported();
+}
+
+export function registerSpatialTerminalView(
+  _id: string,
+  _render: () => ReactElement,
+): never {
+  unsupported();
+}
+
+export function getSpatialViewThunk(_id: string): undefined {
+  return undefined;
+}
+
+export function listTerminalViewIds(): string[] {
+  return [];
+}
+
+export function hasTerminalView(_id: string): boolean {
+  return false;
+}
+
+export function getTerminalView(_id: string): undefined {
+  return undefined;
+}
+
+export function getTerminalViewFactory(_id: string): undefined {
+  return undefined;
+}
+
+export function registerTerminalView(_id: string, _factory: unknown): never {
+  unsupported();
+}

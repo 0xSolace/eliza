@@ -21,8 +21,8 @@ export type {
 } from "@elizaos/core";
 
 // The wire transport contract (`SerializedCommand*`) is declared once in
-// @elizaos/shared and consumed by every surface — the TUI, the UI client, and
-// the connector bridges — so no hand-synced copy can drift (#12411). Re-exported
+// @elizaos/shared and consumed by the UI client and connector bridges, so no
+// hand-synced copy can drift (#12411). Re-exported
 // here so `serializeCommand` and downstream plugin consumers keep one import.
 export type {
 	SerializedCommand,

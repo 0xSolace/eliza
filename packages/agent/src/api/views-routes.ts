@@ -1087,9 +1087,9 @@ export async function handleViewsRoutes(
   }
 
   // ── POST /api/views/:id/activate ─────────────────────────────────────────
-  // Activate one addressable control in a view by its element id (the focused
-  // button's agent id in a spatial/TUI mount). This is the terminal host's
-  // "a focused view button was pressed" → agent path.
+  // Activate one addressable control in a view by its element id (for spatial
+  // views, the focused button's agent id). This is the adapter path for
+  // "a focused view button was pressed" -> agent dispatch.
   //
   // Contract:
   //   body: { elementId: string }

@@ -76,13 +76,6 @@ Environment=ELIZA_AGENT_HEALTH_TIMEOUT_SECONDS=600
 TimeoutStartSec=900
 UNIT
 
-install -d -m 0755 /etc/systemd/system/elizaos-terminal-tui-smoke.service.d
-cat >/etc/systemd/system/elizaos-terminal-tui-smoke.service.d/10-riscv64-timeout.conf <<'UNIT'
-[Service]
-Environment=ELIZA_AGENT_HEALTH_TIMEOUT_SECONDS=600
-TimeoutStartSec=900
-UNIT
-
 # The agent reads its Postgres DSN from $POSTGRES_URL / $DATABASE_URL (the
 # bundle's pg-connection-string parser falls back to host "base" when neither
 # is set — getaddrinfo EAI_AGAIN base — so migrations fail and /api/health

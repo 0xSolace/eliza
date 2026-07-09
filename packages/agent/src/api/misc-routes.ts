@@ -40,6 +40,7 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.ts";
 import { runShell } from "../services/shell-execution-router.ts";
+import { handlePendantInsightsRoutes } from "./pendant-insights-routes.ts";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.ts";
 
 // ---------------------------------------------------------------------------
@@ -244,6 +245,22 @@ export async function handleMiscRoutes(
 ): Promise<boolean> {
   const { req, res, method, pathname, url, state, json, error, readJsonBody } =
     ctx;
+
+  // ── POST /api/pendant/insights ───────────────────────────────────────
+  if (
+    await handlePendantInsightsRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      state,
+      json,
+      error,
+      readJsonBody,
+    })
+  ) {
+    return true;
+  }
 
   // ── GET /api/location/approximate ───────────────────────────────────
   if (method === "GET" && pathname === "/api/location/approximate") {

@@ -1,0 +1,71 @@
+---
+title: Pendant Quickstart
+sidebarTitle: Quickstart
+description: Flash the current Eliza pendant reference firmware to an Omi DevKit1 or Seeed XIAO nRF52840 Sense board, then connect from desktop Chrome or packaged Android.
+---
+
+This quickstart is for an Omi DevKit1 compatible board based on the Seeed XIAO nRF52840 Sense. The current verified Eliza v3 artifact is produced from a pinned local firmware lane, not from a public GitHub release asset. Obtain the UF2 by running the pinned [firmware build gate](/apps/pendant/firmware-build) after that source lane is published, or use the checksum-verified release workflow below once a release exists.
+
+## Identify the Hardware
+
+Use this path only for the Omi DevKit1 / Seeed XIAO nRF52840 Sense target:
+
+- Board target: `xiao_ble/nrf52840/sense`.
+- Bootloader volume: `XIAO-SENSE`.
+- Verified bootloader during QA: UF2 `0.9.0`.
+- Firmware identity after flashing: BLE name `eliza`, DIS model `eliza pendant`.
+- Device Information Service values in the reference config: manufacturer `Based Hardware`, firmware revision `2.0.10`, hardware revision `Seeed Xiao BLE Sense`.
+
+Do not use the DK2-only offline storage, speaker, or haptic assumptions on a bare DK1. The Eliza v3 config disables those features because they can fail before BLE starts on DK1 hardware.
+
+## Artifact Source
+
+Current verified local-source artifact:
+
+| File | Size | SHA-256 |
+| --- | ---: | --- |
+| `eliza-pendant-v3.uf2` | 590,336 bytes | `e09e22865d0d082b7bf33e0e1852110c88a38fb799a000c0ac64496648e282e6` |
+
+No public release URL or public source checkout exists yet. Do not flash an artifact obtained through an unverified mirror, and do not commit the UF2 to this repository.
+
+The intended future public workflow is:
+
+1. Download `eliza-pendant-v3.uf2` and `SHA256SUMS` from the official elizaOS GitHub release for issue `#15744` once that release exists.
+2. Run `sha256sum -c SHA256SUMS`.
+3. Flash only if the checksum for `eliza-pendant-v3.uf2` matches the published file.
+
+Until the firmware lane is published, the public build prerequisite is still unmet. The deterministic source and script currently live in a separate unpublished firmware lane at commit `d85eab9035ca64376a2414876656b2c898b5fbb9`.
+
+## Flash by UF2
+
+1. Connect the board by USB.
+2. Double-tap reset on the XIAO.
+3. Wait for the `XIAO-SENSE` mass-storage volume.
+4. Open `INFO_UF2.TXT` and confirm the bootloader is the expected UF2 bootloader for the board. QA observed UF2 `0.9.0`.
+5. Copy `eliza-pendant-v3.uf2` to the `XIAO-SENSE` volume.
+6. The volume should self-eject and the board should reboot. Some operating systems report an `Input/output error` or interrupted copy at the moment of self-eject. Treat that as expected only if the board reboots and later advertises as `eliza`.
+7. Scan for BLE advertisements named exactly `eliza`.
+
+## Connect from Desktop Chrome
+
+1. Start an elizaOS app session with the agent and `/api/asr/local-inference` backend you intend to use.
+2. Open the app in desktop Chrome or Edge.
+3. Go to Settings, then Voice.
+4. In the Pendant card, select Connect.
+5. Choose the BLE device named `eliza`.
+6. Grant Bluetooth permission when the browser asks.
+7. Wait for battery and status to update.
+8. Speak near the pendant. The card should move through listening, hearing, transcribing, then show the first transcript.
+
+The first transcript is dispatched into chat as a `VOICE_DM`, so the reply follows the same voice response path as other voice-originated turns.
+
+## Connect from Packaged Android
+
+1. Build and install the packaged Android app that includes `@capacitor-community/bluetooth-le`.
+2. Open Settings, then Voice.
+3. Select Connect in the Pendant card.
+4. Grant the Android Nearby Devices / Bluetooth permission when prompted. The manifest declares `BLUETOOTH_SCAN` with `neverForLocation` and `BLUETOOTH_CONNECT`.
+5. Choose `eliza`.
+6. Confirm the battery value, listening state, and first transcript.
+
+Packaged Android uses native BLE because the Android WebView does not expose Web Bluetooth. iOS is not supported by this pendant branch.

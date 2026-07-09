@@ -1,0 +1,149 @@
+---
+title: Pendant Troubleshooting and Testing
+sidebarTitle: Troubleshooting and Testing
+description: LED semantics, BLE recovery, ASR failure cases, rollback, test commands, and contribution evidence for pendant work.
+---
+
+Use this page when a board does not advertise, connect, notify, transcribe, or recover cleanly.
+
+## LED Semantics
+
+These meanings come from the firmware source audited for the v3 build:
+
+| LED behavior | Meaning |
+| --- | --- |
+| Red, green, blue, then all LEDs during boot | Boot LED sequence. |
+| Green toggling while USB powered | USB charge indication. Green alone is not connected. |
+| Blue on and red off | BLE connected state. |
+| Red on and blue off | BLE disconnected state. |
+| Green blinks five times | `transport_start()` failed before BLE became usable. |
+| Blue blinks five times | Codec startup failed. |
+| Red and green blink five times | Microphone startup failed. |
+| Blue on for 1 second, then off | Successful initialization marker. |
+
+Do not call green connected. In the v2 failure analysis, green was consistent with USB charge indication while BLE never advertised.
+
+## BLE Discovery and Connection
+
+If `eliza` does not appear in scans:
+
+1. Confirm the board is the DK1 / XIAO target and the UF2 copy completed.
+2. Double-tap reset and re-copy the verified UF2.
+3. Confirm the firmware artifact SHA-256 is `e09e22865d0d082b7bf33e0e1852110c88a38fb799a000c0ac64496648e282e6`.
+4. Watch LEDs for the transport, codec, or microphone failure blink patterns.
+5. Roll back to stock Omi v2.0.4 to confirm the board still advertises and connects.
+
+If the app sees the device but GATT hangs:
+
+1. Capture browser console logs with `[pendant]` step messages.
+2. Note the failed step, especially `gatt-connect`, `codec-read`, `decoder-init`, or `start-notifications`.
+3. On desktop Chrome, retry once after a full disconnect. The app already performs one automatic retry after a step timeout.
+4. On Android, confirm Nearby Devices / Bluetooth permission is granted and Bluetooth is on.
+5. Confirm only one central owns the GATT connection. Disconnect nRF Connect or other scanners before using the app.
+
+If notifications do not arrive:
+
+1. Confirm the audio data characteristic exists at `19b10001-e8f2-537e-4f6c-d104768a1214`.
+2. Confirm the central subscribed to notifications.
+3. Run the Bleak smoke utility and inspect notification cadence and packet loss.
+4. Confirm the selected device advertises exactly `eliza` for the v3 QA smoke.
+
+If ASR does not produce transcripts:
+
+1. Confirm the app reaches `hearing` or `transcribing`.
+2. Check frontend network logs for `POST /api/asr/local-inference`.
+3. Check backend readiness and logs for that route.
+4. Remember that pendant ASR errors are currently dropped silently and listening resumes.
+5. Verify the ASR backend is local or remote according to the deployment policy you intend to test.
+
+## Stock Rollback
+
+Official stock Omi v2.0.4 rollback asset:
+
+```text
+https://github.com/BasedHardware/omi/releases/download/omi_firmware_v2.0.4/Omi_v2.0.4.uf2
+```
+
+QA independently fetched:
+
+- Size: 586,240 bytes.
+- SHA-256: `b4879fdb5eef844a35b320123319c5eafdadc3d0b5a3e0165dbdffac54d1b3cf`.
+
+Run:
+
+```bash
+echo 'b4879fdb5eef844a35b320123319c5eafdadc3d0b5a3e0165dbdffac54d1b3cf  Omi_v2.0.4.uf2' | sha256sum -c -
+```
+
+Flash by double-tapping reset, waiting for `XIAO-SENSE`, copying the stock UF2, and confirming stock advertisement plus GATT connection before returning to Eliza firmware.
+
+## Firmware Gates
+
+In the unpublished firmware lane:
+
+```bash
+omi/firmware/devkit/scripts/build_verify_eliza_pendant_v3.sh \
+  --ncs-workspace /path/to/ncs-ws \
+  --output-dir /path/to/output/eliza-pendant-v3
+
+python3 omi/firmware/devkit/scripts/test_eliza_pendant_v3_invariants.py
+```
+
+Run the Bleak smoke utility with explicit adapter and device:
+
+```bash
+python3 -m pip install -r omi/firmware/devkit/requirements-qa.txt
+python3 omi/firmware/devkit/scripts/ble_smoke_eliza_pendant_v3.py \
+  --adapter "$ELIZA_PENDANT_BLE_ADAPTER" \
+  --device "$ELIZA_PENDANT_BLE_DEVICE" \
+  --duration 10
+```
+
+Set `ELIZA_PENDANT_BLE_ADAPTER` and `ELIZA_PENDANT_BLE_DEVICE` to the actual adapter and address or identifier you selected. The utility intentionally has no implicit default for either value. The smoke utility refuses to connect unless the selected device advertises exactly `eliza`. It discovers audio and Battery services, reads codec and battery, subscribes only to audio notifications, reports cadence, bytes, packet gaps, and out-of-order packets, then disconnects.
+
+## App and UI Tests
+
+For pendant TypeScript changes in `packages/ui`:
+
+```bash
+bun run --cwd packages/ui typecheck
+bun run --cwd packages/ui test -- src/pendant
+```
+
+For packaged app integration:
+
+```bash
+bun run --cwd packages/app typecheck
+bun run --cwd packages/app test
+bun run --cwd packages/app build:android
+```
+
+For app UI changes under `packages/app` or shared UI changes that affect the app:
+
+```bash
+bun run --cwd packages/app audit:app
+```
+
+For docs-only changes:
+
+```bash
+bun run --cwd packages/docs test
+```
+
+## Physical E2E Checklist
+
+Attach issue `#15744` evidence for new boards, new transports, or firmware changes:
+
+- Board identity, bootloader, firmware SHA-256, source commit, and build manifest.
+- BLE advertisement as `eliza`.
+- GATT discovery showing audio service, audio data, codec, BAS, and Battery Level.
+- Codec read returns `20`.
+- Battery read appears in the app.
+- Audio notifications stream for at least 10 minutes with packet-loss summary.
+- Desktop Chrome connect, listening, first transcript, and disconnect.
+- Packaged Android connect, permission prompt, listening, first transcript, and disconnect.
+- Frontend console logs, network logs, backend ASR logs, and Android logcat when applicable.
+- Video or screenshots showing the real device and the app states.
+- Consent and retention note for any captured speech.
+
+Every evidence artifact must be opened and manually reviewed before a PR is marked ready.

@@ -18,6 +18,10 @@ Eliza is available across all primary platforms. Each app connects to the same a
   iOS and Android app built with Capacitor, featuring native plugins and push notifications.
 </Card>
 
+<Card title="Eliza Pendant" icon="bluetooth" href="/apps/pendant">
+  Open Omi-compatible BLE audio reference for talking to the same Eliza agent from desktop Chrome or packaged Android.
+</Card>
+
 <Card title="Dashboard" icon="browser" href="/apps/dashboard">
   Web-based management interface for agent configuration, monitoring, and analytics.
 </Card>

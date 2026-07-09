@@ -1,0 +1,52 @@
+---
+title: Eliza Pendant Reference
+sidebarTitle: Overview
+description: Open reference implementation for an Omi-compatible BLE audio pendant that feeds the same persistent Eliza agent.
+---
+
+The Eliza pendant is an open reference implementation for a wearable microphone path into elizaOS. It is not a proprietary hardware SKU. The current reference target is an Omi DevKit1 style board, specifically the Seeed XIAO nRF52840 Sense, running firmware that advertises as `eliza` and streams Omi-compatible BLE audio.
+
+The mental model is one persistent agent across devices. A pendant can capture speech, a desktop browser or packaged Android app can transport and transcribe it, and the final transcript is sent into the same agent as a `VOICE_DM` turn. The architecture is local-first and cloud-optional: the BLE audio decode and utterance segmentation happen in the app, while ASR locality depends on where the operator runs the `/api/asr/local-inference` backend.
+
+```mermaid
+flowchart LR
+  Mic["Pendant mic"] --> Opus["16 kHz mono Opus frames"]
+  Opus --> Gatt["BLE GATT notify"]
+  Gatt --> Transport["App transport<br/>Web Bluetooth or native Android BLE"]
+  Transport --> Decode["Opus decode<br/>Float32 PCM"]
+  Decode --> Vad["VAD utterance segmentation"]
+  Vad --> Asr["POST /api/asr/local-inference"]
+  Asr --> VoiceDm["VOICE_DM transcript"]
+  VoiceDm --> Agent["Same persistent Eliza agent"]
+```
+
+## Current Support
+
+| Surface | Status |
+| --- | --- |
+| Desktop Chrome and Edge with Web Bluetooth | Supported by the Web Bluetooth transport. |
+| Android Chrome with Web Bluetooth | Supported where the browser exposes `navigator.bluetooth`. |
+| Packaged Android app | Supported through `@capacitor-community/bluetooth-le` native BLE. This is the path used for Light Phone III style Android WebView builds. |
+| iOS Safari, iOS installed PWA, packaged iOS app | Unsupported on this branch. There is no iOS native BLE pendant transport here. |
+
+The app transport selection lives in `packages/ui/src/pendant/select-transport.ts`: native Android first, then Web Bluetooth, then unsupported. The shared audio pipeline lives in `packages/ui/src/pendant/pendant-connection.ts` and is reused by both supported transports.
+
+## What Is Stable
+
+The stable compatibility surface is the Omi BLE audio profile used by the app:
+
+- Audio service UUID `19b10000-e8f2-537e-4f6c-d104768a1214`.
+- Audio data characteristic UUID `19b10001-e8f2-537e-4f6c-d104768a1214`, notified with the Omi 3-byte packet header.
+- Codec characteristic UUID `19b10002-e8f2-537e-4f6c-d104768a1214`, read as one byte. `20` means Opus.
+- Standard Bluetooth Battery Service `0x180F` and Battery Level `0x2A19`.
+
+The exact Eliza v3 firmware build, device name, deterministic build gate, and disabled DK2-only peripherals are reference details. A custom board can keep the stable Omi-compatible surface while changing internal pins, power management, enclosure, or boot UX.
+
+## Pages
+
+- [15-minute quickstart](/apps/pendant/quickstart)
+- [Firmware build and release gate](/apps/pendant/firmware-build)
+- [Protocol and porting](/apps/pendant/protocol-porting)
+- [App integration](/apps/pendant/app-integration)
+- [Privacy and consent](/apps/pendant/privacy-consent)
+- [Troubleshooting, testing, and contribution](/apps/pendant/troubleshooting-testing)

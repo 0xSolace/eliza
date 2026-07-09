@@ -1,0 +1,87 @@
+---
+title: Pendant App Integration
+sidebarTitle: App Integration
+description: How the elizaOS app chooses BLE transports and routes pendant audio through shared decode, VAD, ASR, and VOICE_DM handling.
+---
+
+The pendant app integration is intentionally split in two layers:
+
+- `PendantTransport` owns platform BLE.
+- `PendantConnection` owns audio reassembly, decode, VAD, WAV encoding, ASR, and transcript dispatch.
+
+That split lets another transport be added without forking decode, VAD, ASR, or chat dispatch.
+
+## Transport Selection
+
+Runtime selection in `packages/ui/src/pendant/select-transport.ts` is:
+
+1. If Capacitor reports a native Android platform, use `NativeBlePendantTransport`.
+2. Otherwise, if `navigator.bluetooth.requestDevice` exists, use `WebBluetoothPendantTransport`.
+3. Otherwise, mark the pendant unsupported.
+
+This means packaged Android uses native BLE even if a browser-like API appears later, because Android WebView does not expose Web Bluetooth today. Desktop Chrome and Android Chrome use Web Bluetooth. iOS has no supported transport on this branch.
+
+## Web Bluetooth Transport
+
+`WebBluetoothPendantTransport`:
+
+- calls `navigator.bluetooth.requestDevice`;
+- filters by `Friend`, `Omi`, or `eliza` name prefix, or by the audio service UUID;
+- connects GATT;
+- reads the codec characteristic;
+- starts audio notifications;
+- subscribes to BAS battery updates when present;
+- normalizes chooser cancellation to an idle state.
+
+## Native Android BLE Transport
+
+`NativeBlePendantTransport` uses `@capacitor-community/bluetooth-le` dynamically so the web build does not execute native plugin code. It:
+
+- initializes `BleClient` with `androidNeverForLocation: true`;
+- requests a device by audio service UUID;
+- connects by `deviceId`;
+- reads codec and battery;
+- starts audio notifications;
+- stops notifications and disconnects during teardown.
+
+`packages/app/capacitor.config.ts` resolves the default upstream Android project to `packages/app-core/platforms/android`. The manifest there, `packages/app-core/platforms/android/app/src/main/AndroidManifest.xml`, declares `BLUETOOTH_SCAN` with `neverForLocation`, `BLUETOOTH_CONNECT`, legacy `BLUETOOTH` and `BLUETOOTH_ADMIN` for older Android, and optional BLE hardware. Run `bun run --cwd packages/app cap:sync:android` after Capacitor config changes so the generated Android project and native plugin list stay aligned.
+
+## Shared Audio Pipeline
+
+Both transports deliver raw notification bytes to the same pipeline:
+
+1. `OmiFrameReassembler` strips the 3-byte Omi header and emits encoded frames. See [Protocol and Porting](/apps/pendant/protocol-porting) for the current split-frame compatibility constraint.
+2. `createPendantAudioDecoder` decodes Opus ID `20` into 16 kHz mono Float32 PCM.
+3. The same local ASR VAD detector used by mic surfaces segments utterances.
+4. The utterance is encoded as mono PCM16 WAV.
+5. `transcribeLocalInferenceWav` posts JSON `{ audioBase64 }` to `/api/asr/local-inference`.
+6. The final transcript dispatches `eliza:pendant:voice-transcript`.
+7. `useShellController` sends it as `VOICE_DM` with `voiceSource: "pendant"`.
+
+ASR errors and empty transcripts are currently dropped silently in the pendant path, and listening resumes.
+
+## Adding Another Transport
+
+To add a new platform transport:
+
+1. Implement `PendantTransport` from `packages/ui/src/pendant/pendant-transport.ts`.
+2. Return exact notification bytes as `Uint8Array`.
+3. Make `requestAndConnect`, `readCodec`, `startAudio`, `startBattery`, `onDisconnected`, and `disconnect` match the existing lifecycle.
+4. Add runtime selection in `selectPendantTransport`.
+5. Add unit tests beside the transport.
+6. Run the pendant protocol and connection tests.
+7. Run a physical E2E with the new transport and attach issue `#15744` evidence.
+
+Do not duplicate the frame reassembler, Opus decoder, VAD detector, ASR client, or `VOICE_DM` dispatch path unless the protocol itself changes.
+
+## Troubleshooting Logs
+
+The connection code emits browser console messages with a `[pendant]` prefix for each connect step:
+
+- `gatt-connect`
+- `codec-read`
+- `decoder-init`
+- `start-notifications`
+- `battery`
+
+Each step has a 12 second timeout. A timeout triggers teardown and one clean retry before surfacing an error. Capture frontend console logs, browser Bluetooth chooser behavior, Android logcat, and network calls to `/api/asr/local-inference` when debugging.

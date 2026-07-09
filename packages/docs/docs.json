@@ -234,6 +234,18 @@
             ]
           },
           {
+            "group": "Pendant",
+            "pages": [
+              "apps/pendant/index",
+              "apps/pendant/quickstart",
+              "apps/pendant/firmware-build",
+              "apps/pendant/protocol-porting",
+              "apps/pendant/app-integration",
+              "apps/pendant/privacy-consent",
+              "apps/pendant/troubleshooting-testing"
+            ]
+          },
+          {
             "group": "Framework App (your own shell)",
             "pages": [
               "tracks/framework-app/overview",

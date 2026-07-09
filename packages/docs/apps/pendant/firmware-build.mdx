@@ -1,0 +1,128 @@
+---
+title: Pendant Firmware Build
+sidebarTitle: Firmware Build
+description: Deterministic firmware build, pinned toolchain, Omi provenance, and release gates for the Eliza pendant v3 reference firmware.
+---
+
+The Eliza pendant v3 firmware is a small Omi DevKit1 variant derived from the upstream [BasedHardware/omi firmware](https://github.com/BasedHardware/omi). Upstream is distributed under the [MIT License](https://github.com/BasedHardware/omi/blob/main/LICENSE), with copyright attributed to Based Hardware Contributors. Eliza retains that provenance while changing the reference identity, configuration, and release gate. The local audited firmware lane is not yet public, so a truly public local build still requires publishing that lane or an equivalent source release.
+
+## Pinned Inputs
+
+The deterministic QA gate validates these exact inputs:
+
+| Input | Value |
+| --- | --- |
+| Firmware lane commit | `d85eab9035ca64376a2414876656b2c898b5fbb9` |
+| Source release commit used for v3 artifact | `30c6196ccc852fc8b2975a11cf15310b3c537757` |
+| Docker image | `ghcr.io/zephyrproject-rtos/ci@sha256:3e43c81b93271ee93c23adbcb65eb1ad5621bd9ada296a2a129f560b6310e565` |
+| Local image ID observed in QA | `sha256:3ec9ae3c7931ef1a75d84e272970978c8eccb5cbd6ef7824e11e40daf23fcdbf` |
+| NCS `nrf` commit | `5cb85570ca43bc344d3145c2338128eacf4b48ec`, tag `v2.7.0` |
+| Zephyr commit | `100befc70c74f7ec83dd8ac3171ee18eeddb4dbd`, tag `v3.6.99-ncs2` |
+| Zephyr SDK | `0.17.0`, from the pinned container |
+| Board | `xiao_ble/nrf52840/sense` |
+| Config | `omi/firmware/devkit/prj_eliza_pendant_v3.conf` |
+| Overlay | `omi/firmware/devkit/overlay/xiao_ble_sense_devkitv2-adafruit.overlay` |
+
+## Initialize the NCS Workspace
+
+The build script requires a pre-existing NCS workspace and refuses to run when `nrf` or `zephyr` are not at the pinned commits. Initialize that workspace with the same immutable container used by the build gate:
+
+```bash
+mkdir -p /path/to/ncs-ws
+docker run --rm \
+  -v /path/to/ncs-ws:/ncs-ws \
+  ghcr.io/zephyrproject-rtos/ci@sha256:3e43c81b93271ee93c23adbcb65eb1ad5621bd9ada296a2a129f560b6310e565 \
+  bash -lc 'set -e; cd /ncs-ws; export CMAKE_PREFIX_PATH=/opt/toolchains; \
+    west init -m https://github.com/nrfconnect/sdk-nrf --mr v2.7.0; \
+    west update; \
+    west zephyr-export'
+```
+
+Verify the revisions before building:
+
+```bash
+test "$(git -C /path/to/ncs-ws/nrf rev-parse HEAD)" = \
+  5cb85570ca43bc344d3145c2338128eacf4b48ec
+test "$(git -C /path/to/ncs-ws/zephyr rev-parse HEAD)" = \
+  100befc70c74f7ec83dd8ac3171ee18eeddb4dbd
+```
+
+These commands are the validated NCS `v2.7.0` initialization path. The gate checks the two revisions above. A published firmware source should also ship its complete `west` manifest lock so builders can audit every transitive module.
+
+## Run the Build Gate
+
+From the unpublished firmware lane, the validated command is:
+
+```bash
+omi/firmware/devkit/scripts/build_verify_eliza_pendant_v3.sh \
+  --ncs-workspace /path/to/ncs-ws \
+  --output-dir /path/to/output/eliza-pendant-v3
+```
+
+The script never flashes hardware. It runs a pristine `west build`, copies UF2, BIN, and HEX outputs, then verifies the release artifact.
+
+The underlying `west build` command is:
+
+```bash
+west build -b xiao_ble/nrf52840/sense --pristine always /omi/firmware/devkit -- \
+  -DNCS_TOOLCHAIN_VERSION="NONE" \
+  -DCONF_FILE="prj_eliza_pendant_v3.conf" \
+  -DDTC_OVERLAY_FILE="/omi/firmware/devkit/overlay/xiao_ble_sense_devkitv2-adafruit.overlay" \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS="YES" \
+  -DCMAKE_BUILD_TYPE="Debug" \
+  -DPLATFORM=nrf52840 \
+  -DCACHED_CONF_FILE="/omi/firmware/devkit/prj_eliza_pendant_v3.conf"
+```
+
+## Expected Artifacts
+
+| Artifact | Size | SHA-256 |
+| --- | ---: | --- |
+| `eliza-pendant-v3.uf2` | 590,336 bytes | `e09e22865d0d082b7bf33e0e1852110c88a38fb799a000c0ac64496648e282e6` |
+| `eliza-pendant-v3.bin` | 294,940 bytes | `a05d16bf3749c95ea164961f3ef4a0f54fbd651911e428ff16c115088b2e40d0` |
+| `eliza-pendant-v3.hex` | 829,797 bytes | `92f158356401f27f15beca56e49cf3ccf60ee3d8cd09fc87f36b106dfbd6a594` |
+
+QA reproduced FLASH at 294,940 / 806,912 bytes, 36.55%, and RAM at 166,712 / 262,144 bytes, 63.60%.
+
+## Invariants
+
+The release gate and host invariant test reject:
+
+- mutable Docker image tags;
+- NCS `nrf` or Zephyr revisions that differ from the pinned commits;
+- malformed UF2 block magic;
+- a UF2 hash that differs from the verified v3 hash;
+- missing `eliza` or `eliza pendant` identity strings;
+- legacy `Friend`, `Friend DevKit`, `Omi DevKit`, or `Omi DevKit 2` identity strings;
+- FLASH or RAM overflow;
+- loss of the Omi audio service, data characteristic, codec characteristic, codec ID `20`, or standard Battery Service;
+- re-enabling immediate UART logging or console output;
+- re-enabling DK2-only `OFFLINE_STORAGE`, `SPEAKER`, or `HAPTIC` on the DK1 target.
+
+Run the static invariant test in the firmware lane:
+
+```bash
+python3 omi/firmware/devkit/scripts/test_eliza_pendant_v3_invariants.py
+```
+
+## Why DK2 Features Stay Off on DK1
+
+The v3 config differs from the renamed v2 config by disabling exactly three features:
+
+```text
+CONFIG_OMI_ENABLE_OFFLINE_STORAGE=n
+CONFIG_OMI_ENABLE_SPEAKER=n
+CONFIG_OMI_ENABLE_HAPTIC=n
+```
+
+Those features can hard-return before BLE starts on a bare DK1:
+
+- `mount_sd_card()` returns before `transport_start()` when no SD card is present.
+- `speaker_init()` can fail before transport on hardware without the DK2 speaker path.
+- `init_haptic_pin()` can fail before transport on hardware without the haptic motor path.
+
+The app only needs microphone to BLE audio. Keeping those DK2-only paths disabled makes BLE startup the first feature-critical boundary.
+
+## Publication Prerequisite
+
+The source branch and release gate described here currently live in a separate unpublished firmware lane. Public documentation can describe the verified digest and process, but public builders cannot reproduce it until the firmware source, release script, and source commit are published. A public release should include the UF2, BIN, HEX, `SHA256SUMS`, build manifest, source commit, and the exact NCS workspace lock or revision instructions.

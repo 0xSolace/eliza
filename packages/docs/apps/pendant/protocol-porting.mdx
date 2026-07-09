@@ -1,0 +1,88 @@
+---
+title: Pendant Protocol and Porting
+sidebarTitle: Protocol and Porting
+description: Omi-compatible BLE audio service, packet framing, codec behavior, BAS support, and minimum requirements for new boards.
+---
+
+The app consumes the Omi DevKit BLE audio profile. A new board does not need to copy the Eliza firmware internals, but it must preserve the GATT and audio behavior below unless it also changes the app transport and protocol parser.
+
+## UUIDs
+
+| Purpose | UUID | Properties |
+| --- | --- | --- |
+| Audio service | `19b10000-e8f2-537e-4f6c-d104768a1214` | Primary service |
+| Audio data | `19b10001-e8f2-537e-4f6c-d104768a1214` | Notify, read in current Omi source |
+| Codec type | `19b10002-e8f2-537e-4f6c-d104768a1214` | Read, one byte |
+| Battery Service | `0000180f-0000-1000-8000-00805f9b34fb` | Standard BAS |
+| Battery Level | `00002a19-0000-1000-8000-00805f9b34fb` | Read, notify |
+
+Web Bluetooth accepts the short names `battery_service` and `battery_level`. The native Android BLE plugin uses the full 128-bit UUIDs.
+
+## Codec
+
+The verified DK1 firmware reports codec ID `20`, which means Opus at 16 kHz mono. Source parameters:
+
+- Sample rate: `16000` Hz.
+- Channels: `1`.
+- Frame size: `160` samples, or 10 ms.
+- Opus application: restricted low delay.
+- Bitrate: 32 kbps VBR.
+- Complexity: 3.
+
+The app also has decoder paths for Omi codec IDs `0` and `1` as PCM and `10` as 8 kHz mu-law, but the reference pendant build is Opus ID `20`.
+
+## Packet Framing
+
+Every audio notification has a 3-byte header followed by payload:
+
+```text
+byte 0     notification packet ID LSB
+byte 1     notification packet ID MSB
+byte 2     chunk index within the encoded audio frame
+byte 3..n  Opus payload bytes, or one chunk of a larger frame
+```
+
+The packet ID is a little-endian uint16 and wraps at 65536. In the audited Omi firmware, it increments for every notification. The chunk index starts at `0` for a new encoded frame and increments if that frame is split across notifications.
+
+The current app reassembler treats a rising chunk index as a continuation only when the packet ID is unchanged. That differs from the audited firmware for split frames. The reference 10 ms, 32 kbps Opus frames normally fit in one notification, so the shipped path uses one notification per encoded frame with chunk index `0` and does not hit the mismatch. Until split-frame interoperability is fixed and tested, custom firmware should keep each encoded frame within one notification.
+
+## Stable Surface Versus Reference Details
+
+Stable Omi compatibility surface:
+
+- BLE name is discoverable by service UUID, and the Eliza reference also advertises exactly `eliza`.
+- Audio service/data/codec UUIDs and behavior above.
+- Codec ID `20` for Opus 16 kHz mono.
+- Standard BAS for battery.
+- Notification payloads use the 3-byte Omi packet header. The verified reference path sends each 10 ms encoded frame in one notification.
+
+Eliza reference details:
+
+- Firmware name and DIS model are `eliza` and `eliza pendant`.
+- DK2-only offline storage, speaker, and haptic are disabled for DK1.
+- Build gate requires one pinned local v3 UF2 hash.
+- App transport accepts name prefixes `Friend`, `Omi`, and `eliza` for compatibility, but the QA smoke utility for the Eliza v3 build refuses anything other than `eliza`.
+
+Internal implementation details, such as Zephyr file layout, LED sequence, and exact Kconfig values, are not protocol guarantees for custom hardware.
+
+## Porting Requirements
+
+For an nRF52 board:
+
+- Provide a PDM microphone path at 16 kHz mono.
+- Encode Opus frames compatible with codec ID `20`, or update the app decoder if using another codec.
+- Implement the Omi audio service, audio data notify characteristic, and codec read characteristic.
+- Keep BAS read/notify if the board has a battery.
+- Advertise the audio service UUID so Web Bluetooth can find renamed devices.
+- Use a safe MTU and notification cadence for 10 ms frames.
+
+For ESP32 or another BLE-capable MCU:
+
+- Preserve the same GATT service and characteristic UUIDs.
+- Preserve the 3-byte packet header.
+- Keep each encoded frame in one notification with chunk index `0` for current app compatibility.
+- Ensure the central subscribes before audio emission.
+- Validate loss, ordering, and cadence with a physical BLE smoke test.
+- Publish board-specific flashing, recovery, and checksum evidence.
+
+For any custom board, include issue `#15744` evidence with the new board: source commit, build log, artifact checksums, BLE smoke output, app logs, battery behavior, first transcript, and a short physical E2E recording.

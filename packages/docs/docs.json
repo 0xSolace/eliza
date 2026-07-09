@@ -241,6 +241,7 @@
               "apps/pendant/firmware-build",
               "apps/pendant/protocol-porting",
               "apps/pendant/app-integration",
+              "apps/pendant/continuity-language",
               "apps/pendant/privacy-consent",
               "apps/pendant/troubleshooting-testing"
             ]

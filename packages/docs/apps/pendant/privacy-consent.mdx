@@ -4,7 +4,7 @@ sidebarTitle: Privacy and Consent
 description: Consent, local processing boundaries, ASR locality, and retention behavior for the Eliza pendant reference path.
 ---
 
-The pendant is an ambient microphone. Operators must get consent from people who may be recorded and must comply with applicable law before connecting or testing it.
+The pendant is an ambient microphone. Operators must get consent from people who may be recorded and must comply with applicable law before connecting or testing it. The system does not obtain third-party consent on the operator's behalf.
 
 ## Capture Starts After Connect
 
@@ -38,7 +38,7 @@ Verify the actual deployment policy, network route, model provider, and logs bef
 
 The final transcript is dispatched as a `VOICE_DM` into the same Eliza agent. From that point onward, it follows the configured agent, model, logging, memory, conversation, and storage path for that deployment.
 
-There are no pendant-specific retention, export, or delete controls on this branch. Use the app conversation and storage controls available in your deployment, disconnect the pendant when capture should stop, and verify deployment retention policy before collecting real speech.
+There are no pendant-specific retention, export, or delete controls on this branch. Use the app conversation and storage controls available in your deployment, disconnect the pendant when capture should stop, and verify deployment retention policy before collecting real speech. Do not describe a local UI clear action as server-side deletion unless the authoritative records and documented derivatives are actually removed.
 
 ## Error Visibility
 
@@ -51,3 +51,5 @@ Pendant ASR errors and empty transcripts are currently dropped silently while li
 - Do not use a pendant in places where recording is prohibited.
 - Do not test with sensitive speech unless the deployment retention and ASR backend are verified.
 - Treat transcripts as agent messages governed by the same model and storage policy as other voice turns.
+- Do not claim anonymous voice clusters identify people. Any speaker alias must be explicitly assigned by a user.
+- Do not claim cross-device session synchronization on this branch. See [Continuity and Public Language](/apps/pendant/continuity-language).

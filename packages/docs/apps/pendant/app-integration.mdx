@@ -74,6 +74,8 @@ To add a new platform transport:
 
 Do not duplicate the frame reassembler, Opus decoder, VAD detector, ASR client, or `VOICE_DM` dispatch path unless the protocol itself changes.
 
+For a multi-device client, preserve this transport boundary and implement the [capturer/follower model](/apps/pendant/continuity-language). Only the capturer owns BLE and raw audio. Followers subscribe to the same server-authoritative session instead of opening another radio connection or rerunning ASR.
+
 ## Troubleshooting Logs
 
 The connection code emits browser console messages with a `[pendant]` prefix for each connect step:

@@ -31,6 +31,8 @@ flowchart LR
 
 The app transport selection lives in `packages/ui/src/pendant/select-transport.ts`: native Android first, then Web Bluetooth, then unsupported. The shared audio pipeline lives in `packages/ui/src/pendant/pendant-connection.ts` and is reused by both supported transports.
 
+The current bridge feeds the same configured agent, but it does not yet implement a server-authoritative pendant session or live follower views across devices. See [Continuity and Public Language](/apps/pendant/continuity-language) for the capturer/follower integration contract and the claims that remain unsupported.
+
 ## What Is Stable
 
 The stable compatibility surface is the Omi BLE audio profile used by the app:
@@ -48,5 +50,6 @@ The exact Eliza v3 firmware build, device name, deterministic build gate, and di
 - [Firmware build and release gate](/apps/pendant/firmware-build)
 - [Protocol and porting](/apps/pendant/protocol-porting)
 - [App integration](/apps/pendant/app-integration)
+- [Continuity and public language](/apps/pendant/continuity-language)
 - [Privacy and consent](/apps/pendant/privacy-consent)
 - [Troubleshooting, testing, and contribution](/apps/pendant/troubleshooting-testing)

@@ -1,0 +1,91 @@
+---
+title: Pendant Continuity and Public Language
+sidebarTitle: Continuity and Language
+description: Capturer and follower integration model, current synchronization limits, and approved public language for the Eliza pendant reference surface.
+---
+
+The pendant is a reference surface for the persistent-agent OS, not a consumer hardware product. The system goal is one agent across devices, with each device acting as a window onto one agent-owned session.
+
+## Current Implementation Limit
+
+The base pendant bridge does not yet provide a server-authoritative pendant session or a live follower view. It connects one app surface to the pendant, transcribes utterances, and sends final text to the configured agent as `VOICE_DM` turns.
+
+Do not present two independently connected clients as synchronized. Do not claim that pendant session state, transcript segments, insight state, pause state, delete actions, or export actions currently propagate between devices.
+
+## Capturer and Follower Model
+
+A cross-device implementation should use two explicit roles:
+
+- **Capturer:** the one device that owns the exclusive BLE connection, receives audio notifications, decodes audio, runs VAD, and submits utterances for ASR.
+- **Follower:** any other authorized surface that subscribes to the same server-authoritative session. A follower renders confirmed session state but does not connect to the pendant radio or process duplicate audio.
+
+Only one device may be the capturer at a time. Multiple followers may display the same session.
+
+The server-authoritative session should own:
+
+- session ID, owner, start time, and end time;
+- ordered transcript segments with stable deterministic IDs;
+- segment revisions and diarization clusters without inferred identities;
+- insights linked to source segment IDs;
+- session mutations such as resolving an item or assigning a user-provided speaker alias;
+- any agent memory writes derived from the session.
+
+Device-local state must remain non-authoritative:
+
+- the live BLE link;
+- scroll position and expanded panels;
+- optimistic audio or transcript state awaiting server confirmation;
+- uncommitted local edits.
+
+Followers should subscribe to confirmed server state. Duplicate segment delivery must deduplicate by stable ID. A later ASR or diarization revision must patch the existing segment by ID and revision instead of appending a second segment. A mutation accepted on one surface must become visible on every follower.
+
+Until this model is implemented and physically verified, describe the pendant as feeding the same configured agent, not as providing a synchronized pendant session on every screen.
+
+## Privacy Contract Across Devices
+
+The capturer is the only surface that should receive raw BLE audio. Followers should receive only the server-authoritative data their authorization permits.
+
+A pause control is truthful only when it stops capture and severs any active vendor or remote ASR upload path. A disconnected UI toggle that merely hides updates is not pause.
+
+Delete is truthful only when the authoritative session data and documented derived records are removed according to the deployment's retention policy. Export is truthful only when the current implementation produces a complete, user-readable export. The base pendant bridge has no pendant-specific pause, delete, or export controls.
+
+The system does not obtain consent from third parties. Operators remain responsible for notice, consent, and applicable recording law. Diarization may cluster anonymous voices, but the system must not claim to identify people unless a user explicitly assigns an alias and the implementation preserves that distinction.
+
+## Public Language Standard
+
+The following language defines the intended public framing. Capability claims may be used only after the corresponding behavior is implemented and evidenced.
+
+**Say:**
+
+- "One agent. Every device. It's the same mind on your phone, your desktop, and the pendant on your collar."
+- "The pendant is just another way in. Everything it hears goes to your agent — the same one you already talk to."
+- "Your context stays yours. Local-first, cloud optional, and you can always see where your words are being processed."
+- "Pause and it stops. Delete and it's gone. Export and it's yours."
+- "It clusters voices in a conversation. It does not decide who people are."
+- "This is a reference device, not a product line. We build the layer underneath, not another gadget you have to carry."
+
+**Never say:**
+
+- "The best AI wearable / the Omi killer / our hardware." (We are not a hardware company.)
+- "It transcribes your whole life." (Attention-economy framing; we return time, not capture it.)
+- "It knows everyone in the room." (Fabricated identity claim.)
+- "Private and secure" without the enforced behavior behind it.
+- Anything implying preordered devices or a shipping consumer product.
+
+**Demo one-liner:**
+
+> "Everyone built a gadget. We built the mind underneath — and here it is on three surfaces at once."
+
+For wellness or neurodivergent contexts, say "Helps you remember what you said you'd do." Do not make medical or treatment claims.
+
+## Language That Is Truthful Today
+
+For the base pendant bridge, use narrower wording:
+
+- "The pendant is an open reference input surface for your configured Eliza agent."
+- "Audio is decoded and segmented in the app, then sent to the configured `/api/asr/local-inference` backend. Check where that backend runs before calling the path local."
+- "Disconnect stops this app's BLE subscription. There is no separate pendant pause control on this branch."
+- "Pendant-specific session export and delete controls are not implemented on this branch."
+- "iOS has no supported pendant transport on this branch."
+
+Do not use the stronger pause, delete, export, processing-location, speaker-clustering, or synchronized-three-surface claims until the implementation and evidence support them.

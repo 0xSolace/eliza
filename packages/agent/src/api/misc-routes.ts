@@ -26,6 +26,7 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.ts";
 import { runShell } from "../services/shell-execution-router.ts";
+import { handlePendantInsightsRoutes } from "./pendant-insights-routes.ts";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.ts";
 
 // ---------------------------------------------------------------------------
@@ -138,6 +139,25 @@ export async function handleMiscRoutes(
 ): Promise<boolean> {
   const { req, res, method, pathname, url, state, json, error, readJsonBody } =
     ctx;
+
+  // ── POST /api/pendant/insights ───────────────────────────────────────
+  // Structured rollup over accumulated pendant transcript segments, generated
+  // via the agent's own runtime model. Delegated to a dedicated module so the
+  // generation core stays pure + unit-tested.
+  if (
+    await handlePendantInsightsRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      state,
+      json,
+      error,
+      readJsonBody,
+    })
+  ) {
+    return true;
+  }
 
   // ── POST /api/restart ───────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {

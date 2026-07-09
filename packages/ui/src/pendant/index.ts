@@ -45,3 +45,14 @@ export {
   type PendantAudioDecoder,
 } from "./opus-frame-decoder";
 export { usePendant, type UsePendantOptions, type UsePendantResult } from "./usePendant";
+export {
+  HttpInsightsClient,
+  type InsightsClient,
+  type InsightsClientResult,
+  type RequestInsightsInput,
+} from "./insights-client";
+export {
+  type InsightsSchedulerOptions,
+  normalizeForDedupe,
+  PendantInsightsScheduler,
+} from "./insights-scheduler";

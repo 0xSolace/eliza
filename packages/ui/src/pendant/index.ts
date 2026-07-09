@@ -41,6 +41,17 @@ export {
   type PendantVoiceTranscriptDetail,
 } from "./pendant-connection";
 export {
+  EMPTY_PENDANT_TRANSCRIPT_SESSION,
+  loadPendantTranscriptSession,
+  MAX_PERSISTED_PENDANT_TRANSCRIPT_SEGMENTS,
+  PENDANT_TRANSCRIPT_STORAGE_KEY,
+  type PendantTranscriptSegment,
+  type PendantTranscriptSessionAction,
+  type PendantTranscriptSessionState,
+  pendantTranscriptSessionReducer,
+  savePendantTranscriptSession,
+} from "./pendant-transcript-session";
+export {
   type PendantTransport,
   PendantUserCancelledError,
 } from "./pendant-transport";
@@ -48,6 +59,14 @@ export {
   isNativeAndroid,
   selectPendantTransport,
 } from "./select-transport";
+export {
+  dispatchPendantTranscriptSegment,
+  normalizePendantAsrWords,
+  PENDANT_TRANSCRIPT_SEGMENT_EVENT,
+  type PendantAsrWord,
+  type PendantSegmentStatus,
+  type PendantTranscriptSegmentDetail,
+} from "./transcript-segment-event";
 export {
   type UsePendantOptions,
   type UsePendantResult,

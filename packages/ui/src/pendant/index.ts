@@ -84,3 +84,10 @@ export {
   normalizeForDedupe,
   PendantInsightsScheduler,
 } from "./insights-scheduler";
+export {
+  createPendantSessionSyncClient,
+  PendantSessionSyncClient,
+  type PendantSessionSyncClientOptions,
+  PendantSessionSyncError,
+  type QueuedPendantMutation,
+} from "./session-sync-client";

@@ -15,7 +15,7 @@
  *                                                   surfaces post to)
  *     → dispatchPendantVoiceTranscript           → useShellController sends it as
  *                                                  a VOICE_DM so the reply is
- *                                                  spoken back — full voice loop.
+ *                                                  spoken back: full voice loop.
  *
  * The BLE layer is abstracted behind {@link PendantTransport} so this whole
  * pipeline is platform-agnostic: {@link WebBluetoothPendantTransport} on Chrome
@@ -39,8 +39,10 @@ import {
 } from "./connect-timeout";
 import {
   OMI_OPUS_SAMPLE_RATE_HZ,
-  OmiFrameReassembler,
   type OmiCodecId,
+  type OmiFrameMetricsSnapshot,
+  OmiFrameReassembler,
+  type OmiFrameReassemblerResult,
 } from "./omi-protocol";
 import {
   createPendantAudioDecoder,
@@ -48,10 +50,7 @@ import {
 } from "./opus-frame-decoder";
 import type { PendantTransport } from "./pendant-transport";
 import { isUserCancelled } from "./pendant-transport";
-import {
-  isPendantSupported,
-  selectPendantTransport,
-} from "./select-transport";
+import { isPendantSupported, selectPendantTransport } from "./select-transport";
 
 export type PendantStatus =
   | "unsupported"
@@ -129,19 +128,23 @@ export function dispatchPendantVoiceTranscript(text: string): void {
  * A live pendant connection. Construct via {@link connectPendant}; call
  * {@link PendantConnection.disconnect} to tear down.
  *
- * The BLE specifics live in a {@link PendantTransport} — this class owns the
+ * The BLE specifics live in a {@link PendantTransport}; this class owns the
  * connect orchestration (steps, timeouts, retry) and the audio pipeline only.
  */
 export class PendantConnection {
   private transport: PendantTransport | null = null;
   private decoder: PendantAudioDecoder | null = null;
   private readonly reassembler = new OmiFrameReassembler();
+  private accountedDroppedPackets = 0;
 
   // Utterance accumulation.
   private utterance: Float32Array[] = [];
   private utteranceSamples = 0;
   private detector:
-    | ((pcm: Float32Array, t?: number) => {
+    | ((
+        pcm: Float32Array,
+        t?: number,
+      ) => {
         shouldBuffer: boolean;
         shouldStop: boolean;
       })
@@ -159,7 +162,7 @@ export class PendantConnection {
     error: null,
   };
 
-  /** True while an utterance is being transcribed — serializes finalizations. */
+  /** True while an utterance is being transcribed; serializes finalizations. */
   private finalizing: Promise<void> = Promise.resolve();
 
   private readonly onAudioPayload = (payload: Uint8Array): void => {
@@ -172,11 +175,12 @@ export class PendantConnection {
 
   private readonly onDisconnected = (): void => {
     // A remote disconnect (device powered off / out of range) must release the
-    // decoder and reset refs — not just detach — so we don't leak the wasm
+    // decoder and reset refs, not just detach, so we don't leak the wasm
     // decoder until an explicit disconnect() that may never come.
     this.decoder?.free();
     this.decoder = null;
     this.reassembler.reset();
+    this.accountedDroppedPackets = 0;
     if (this.state.status !== "error") {
       this.patch({
         status: "idle",
@@ -194,6 +198,10 @@ export class PendantConnection {
 
   getState(): PendantState {
     return this.state;
+  }
+
+  getMetricsSnapshot(): OmiFrameMetricsSnapshot {
+    return this.reassembler.getMetricsSnapshot();
   }
 
   private patch(next: Partial<PendantState>): void {
@@ -251,8 +259,7 @@ export class PendantConnection {
 
   /** Request a device, connect GATT, subscribe to audio + battery. */
   async connect(): Promise<void> {
-    const transport =
-      (this.opts.createTransport ?? selectPendantTransport)();
+    const transport = (this.opts.createTransport ?? selectPendantTransport)();
     if (!transport) {
       this.patch({
         status: "unsupported",
@@ -278,13 +285,14 @@ export class PendantConnection {
         if (!isStepTimeout(err)) throw err;
         // eslint-disable-next-line no-console
         console.warn(
-          `[pendant] ${err.message} — disconnecting and retrying once`,
+          `[pendant] ${err.message}: disconnecting and retrying once`,
         );
         await this.partialTeardown();
         // Give the stack a beat to fully drop the link before reconnecting.
         await new Promise((r) => setTimeout(r, 400));
-        const retryTransport =
-          (this.opts.createTransport ?? selectPendantTransport)();
+        const retryTransport = (
+          this.opts.createTransport ?? selectPendantTransport
+        )();
         if (!retryTransport) throw err;
         this.transport = retryTransport;
         retryTransport.onDisconnected(this.onDisconnected);
@@ -342,12 +350,13 @@ export class PendantConnection {
     });
 
     this.reassembler.reset();
+    this.accountedDroppedPackets = 0;
     this.resetDetector();
     await this.step("start-notifications", () =>
       transport.startAudio(this.onAudioPayload),
     );
 
-    // Battery (best-effort — not all builds expose it; never fatal).
+    // Battery is best effort because not all builds expose it.
     const battery = await this.step("battery", () =>
       transport.startBattery(this.onBattery),
     );
@@ -357,9 +366,9 @@ export class PendantConnection {
   }
 
   /**
-   * Release everything a partial/failed connect left live — the transport, the
-   * decoder, and refs — WITHOUT touching status (so a retry can re-run cleanly,
-   * and the terminal catch can set the final status). Safe to call more than
+   * Release everything a partial/failed connect left live: the transport, the
+   * decoder, and refs. Leave status alone so a retry can re-run cleanly,
+   * and the terminal catch can set the final status. Safe to call more than
    * once.
    */
   private async partialTeardown(): Promise<void> {
@@ -371,21 +380,33 @@ export class PendantConnection {
     this.decoder?.free();
     this.decoder = null;
     this.reassembler.reset();
+    this.accountedDroppedPackets = 0;
   }
 
   private handleNotification(notification: Uint8Array): void {
     if (!this.decoder || !this.detector) return;
-    const frames = this.reassembler.push(notification);
-    for (const frame of frames) {
-      if (frame.droppedBefore > 0) {
-        this.patch({
-          droppedPackets: this.state.droppedPackets + frame.droppedBefore,
-        });
-      }
+    this.consumeReassemblerResult(this.reassembler.push(notification));
+  }
+
+  private consumeReassemblerResult(result: OmiFrameReassemblerResult): void {
+    this.updateDroppedPackets(result.metrics);
+    if (!this.decoder) return;
+    for (const frame of result.frames) {
       const pcm = this.decoder.decodeFrame(frame.data);
       if (pcm.length === 0) continue;
       this.feedVad(pcm);
     }
+  }
+
+  private updateDroppedPackets(metrics: OmiFrameMetricsSnapshot): void {
+    const observedDropped =
+      metrics.missingNotifications + metrics.missingChunks;
+    const delta = observedDropped - this.accountedDroppedPackets;
+    if (delta <= 0) return;
+    this.accountedDroppedPackets = observedDropped;
+    this.patch({
+      droppedPackets: this.state.droppedPackets + delta,
+    });
   }
 
   private feedVad(pcm: Float32Array): void {
@@ -437,7 +458,7 @@ export class PendantConnection {
       this.patch({ lastTranscript: text });
       this.opts.onTranscript?.(text);
     } catch {
-      // Empty transcript / ASR error — silently drop this turn (the mic path
+      // Empty transcript / ASR error: silently drop this turn (the mic path
       // surfaces these as toasts; the pendant is ambient, so we stay quiet and
       // just keep listening).
     } finally {
@@ -455,13 +476,10 @@ export class PendantConnection {
 
   /** Tear down: stop notifications, disconnect GATT, free the decoder. */
   async disconnect(): Promise<void> {
-    // Flush the final in-flight frame (no following packet will close it) so a
-    // trailing utterance still gets transcribed on a clean disconnect.
+    // Finalize reassembly diagnostics. The wire has no end marker, so flush
+    // conservatively drops an unconfirmed tail instead of decoding partial audio.
     if (this.decoder) {
-      for (const frame of this.reassembler.flush()) {
-        const pcm = this.decoder.decodeFrame(frame.data);
-        if (pcm.length > 0) this.feedVad(pcm);
-      }
+      this.consumeReassemblerResult(this.reassembler.flush());
     }
     try {
       await this.transport?.disconnect();
@@ -472,6 +490,7 @@ export class PendantConnection {
     this.decoder = null;
     this.transport = null;
     this.reassembler.reset();
+    this.accountedDroppedPackets = 0;
     this.patch({
       status: "idle",
       connectStep: "idle",
@@ -490,6 +509,6 @@ export async function connectPendant(
   return conn;
 }
 
+export { isPendantSupported } from "./select-transport";
 // Re-export for existing importers that pulled availability from this module.
 export { isWebBluetoothAvailable } from "./web-bluetooth-transport";
-export { isPendantSupported } from "./select-transport";

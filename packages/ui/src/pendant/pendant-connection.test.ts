@@ -4,7 +4,7 @@
  * (so no real BLE) and mock the decoder + ASR so the pipeline is deterministic.
  *
  * This proves the transport abstraction is clean: the SAME connection logic
- * works for Web Bluetooth and native BLE — only the injected transport differs.
+ * works for Web Bluetooth and native BLE; only the injected transport differs.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,10 +52,7 @@ vi.mock("@capacitor/core", () => ({
   },
 }));
 
-import {
-  PendantConnection,
-  type PendantState,
-} from "./pendant-connection";
+import { PendantConnection, type PendantState } from "./pendant-connection";
 
 /** A fully controllable fake transport implementing the interface. */
 class FakeTransport implements PendantTransport {
@@ -201,6 +198,26 @@ describe("PendantConnection connect orchestration", () => {
 
     expect(transcripts).toEqual(["hello world"]);
     expect(conn.getState().lastTranscript).toBe("hello world");
+  });
+
+  it("accounts for reassembler loss metrics without packet-level state churn", async () => {
+    const transport = new FakeTransport({});
+    const { onState, states } = collectStates();
+    const conn = new PendantConnection({
+      onState,
+      createTransport: () => transport,
+    });
+    await conn.connect();
+
+    transport.audioListener?.(new Uint8Array([10, 0, 0, 1]));
+    transport.audioListener?.(new Uint8Array([12, 0, 0, 2]));
+
+    expect(conn.getState().droppedPackets).toBe(1);
+    expect(conn.getMetricsSnapshot().missingNotifications).toBe(1);
+    expect(conn.getMetricsSnapshot().droppedFrames).toBe(1);
+    expect(states.filter((state) => state.droppedPackets === 1)).toHaveLength(
+      1,
+    );
   });
 
   it("a remote disconnect returns to idle and releases the decoder", async () => {

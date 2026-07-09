@@ -37,31 +37,9 @@ export const INSIGHT_CONFIDENCE_MAX = 1;
 // Deterministic segment IDs
 // ---------------------------------------------------------------------------
 
-/**
- * Prefix retained for callers that recognize pendant-derived ids. Canonical ids
- * are emitted by session-sync as `<sessionId>:segment:<ordinal>`.
- */
-export const PENDANT_SEGMENT_ID_PREFIX = "pseg";
-
 /** Prompt-safe subset used by generated session-sync ids (`session_<uuid>`). */
 export const PENDANT_SAFE_SESSION_ID_PATTERN =
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/;
-
-/**
- * Deterministic FNV-1a 32-bit hash (browser- + node-safe, no crypto dep). The
- * scheduler uses it only for recent normalized-text dedupe; canonical segment
- * identity deliberately does not depend on mutable transcript text.
- */
-export function fnv1a32(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    // hash *= 16777619, kept in 32-bit via Math.imul.
-    hash = Math.imul(hash, 0x01000193);
-  }
-  // >>> 0 coerces to unsigned; pad to 8 hex chars for a stable width.
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
 
 /**
  * Build the canonical session-sync segment id from session id + ordinal. Text is

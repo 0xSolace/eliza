@@ -18,7 +18,6 @@ export {
   type InsightsSchedulerSegmentInput,
   type InsightsSchedulerState,
   type InsightsSchedulerStatus,
-  normalizeForDedupe,
   PendantInsightsScheduler,
 } from "./insights-scheduler";
 export {

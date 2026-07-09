@@ -26,6 +26,8 @@ export interface InsightSourceSegment {
   sessionId: string;
   /** Ordinal within the session (for range + deterministic id derivation). */
   ordinal: number;
+  /** Finalized session-sync status. Insights never consume pending/error rows. */
+  status: "resolved";
   /** Session-sync revision for late ASR/diarization patches. */
   revision?: number;
   text: string;
@@ -208,9 +210,9 @@ ${INSIGHTS_OUTPUT_SCHEMA_HINT}`;
 }
 
 /**
- * Convenience: derive an {@link InsightSourceSegment} from raw utterance text
- * using the deterministic id scheme. The scheduler uses this when it hasn't been
- * handed pre-built {@link import("./transcripts.js").TranscriptSegment}s.
+ * Test/server convenience for constructing a finalized canonical source segment.
+ * Production insight scheduling consumes session-sync segments directly and does
+ * not derive transcript rows from raw utterances.
  */
 export function makeSourceSegment(args: {
   sessionId: string;
@@ -224,6 +226,7 @@ export function makeSourceSegment(args: {
     id: makePendantSegmentId(args.sessionId, args.ordinal, args.text),
     sessionId: args.sessionId,
     ordinal: args.ordinal,
+    status: "resolved",
     revision: 0,
     text: args.text,
     ...(args.speakerId !== undefined ? { speakerId: args.speakerId } : {}),

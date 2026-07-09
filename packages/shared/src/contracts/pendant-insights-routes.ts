@@ -24,6 +24,8 @@ export const PendantInsightSegmentInputSchema = z
       .max(240)
       .regex(PENDANT_SAFE_SESSION_ID_PATTERN, "sessionId must be prompt-safe"),
     ordinal: z.number().int().min(0),
+    /** Insights consume only session-sync committed/finalized transcript rows. */
+    status: z.literal("resolved"),
     /** Session-sync revision for late ASR/diarization patches. */
     revision: z.number().int().min(0).optional(),
     text: z.string().trim().min(1).max(3_000),

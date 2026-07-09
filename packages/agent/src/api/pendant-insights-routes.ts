@@ -53,7 +53,9 @@ export async function generatePendantInsights(args: {
   signal?: AbortSignal;
 }): Promise<GenerateInsightsResult> {
   const now = args.now ?? Date.now;
-  const nonEmpty = args.segments.filter((segment) => segment.text.trim());
+  const nonEmpty = args.segments.filter(
+    (segment) => segment.status === "resolved" && segment.text.trim(),
+  );
   if (nonEmpty.length < MIN_INSIGHT_SEGMENTS) {
     return { ok: false, skip: "too-few-segments" };
   }

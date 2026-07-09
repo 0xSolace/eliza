@@ -5,7 +5,28 @@ import type {
   InsightsClientResult,
   RequestInsightsInput,
 } from "./insights-client";
-import { PendantInsightsScheduler } from "./insights-scheduler";
+import {
+  type InsightsSchedulerSegmentInput,
+  PendantInsightsScheduler,
+} from "./insights-scheduler";
+
+const SESSION_ID = "stable";
+
+function segment(
+  ordinal: number,
+  text: string,
+  overrides: Partial<InsightsSchedulerSegmentInput> = {},
+): InsightsSchedulerSegmentInput {
+  return {
+    id: `${SESSION_ID}:segment:${ordinal}`,
+    sessionId: SESSION_ID,
+    ordinal,
+    status: "resolved",
+    revision: 0,
+    text,
+    ...overrides,
+  };
+}
 
 function insights(summary = "summary"): PendantInsights {
   return {
@@ -31,10 +52,12 @@ function success(summary = "summary"): InsightsClientResult {
     ok: true,
     insights: insights(summary),
     provenance: {
-      sessionId: "stable",
+      sessionId: SESSION_ID,
       agentId: "agent-1",
       memoryId: "memory-1",
-      sourceSegments: [{ id: "stable:segment:0", ordinal: 0, revision: 0 }],
+      sourceSegments: [
+        { id: `${SESSION_ID}:segment:0`, ordinal: 0, revision: 0 },
+      ],
     },
   };
 }
@@ -51,7 +74,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("PendantInsightsScheduler privacy and cost controls", () => {
+describe("PendantInsightsScheduler canonical session-sync controls", () => {
   it("retains and uploads nothing before opt-in or while paused", async () => {
     const requestInsights = vi.fn(
       async (): Promise<InsightsClientResult> => success(),
@@ -59,21 +82,22 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
     const scheduler = new PendantInsightsScheduler({
       client: { requestInsights },
       onInsights: vi.fn(),
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 0,
     });
 
-    scheduler.addUtterance("before opt in");
+    expect(scheduler.addSegment(segment(0, "before opt in"))).toBe(false);
     expect(scheduler.getWindow()).toEqual([]);
     scheduler.setEnabled(true);
     scheduler.setPaused(true);
-    scheduler.addUtterance("while paused");
+    expect(scheduler.addSegment(segment(0, "while paused"))).toBe(false);
     expect(scheduler.getWindow()).toEqual([]);
     await scheduler.flush();
     expect(requestInsights).not.toHaveBeenCalled();
   });
 
-  it("dedupes normalized repeats and bounds the rolling window", () => {
+  it("accepts only resolved canonical segments, dedupes replay by id, and bounds the window", () => {
     const scheduler = new PendantInsightsScheduler({
       client: {
         requestInsights: vi.fn(async () => ({
@@ -83,25 +107,29 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
         })),
       },
       onInsights: vi.fn(),
+      sessionId: SESSION_ID,
       minSegments: 3,
       maxWindowSegments: 3,
-      sessionId: "stable",
     });
     scheduler.setEnabled(true);
-    const first = scheduler.addUtterance("Hello   there.");
-    expect(scheduler.addUtterance("hello there")).toBeNull();
-    scheduler.addUtterance("two");
-    scheduler.addUtterance("three");
-    scheduler.addUtterance("four");
-    expect(first).toBe("stable:segment:0");
-    expect(scheduler.getWindow().map((segment) => segment.text)).toEqual([
-      "two",
-      "three",
-      "four",
+    expect(
+      scheduler.addSegment(segment(0, "pending", { status: "pending" })),
+    ).toBe(false);
+    expect(
+      scheduler.addSegment(segment(0, "failed", { status: "asr-error" })),
+    ).toBe(false);
+    const first = segment(0, "repeat this");
+    expect(scheduler.addSegment(first)).toBe(true);
+    expect(scheduler.addSegment(first)).toBe(false);
+    expect(scheduler.addSegment(segment(1, "repeat this"))).toBe(true);
+    scheduler.addSegment(segment(2, "three"));
+    scheduler.addSegment(segment(3, "four"));
+    expect(scheduler.getWindow().map((item) => item.ordinal)).toEqual([
+      1, 2, 3,
     ]);
   });
 
-  it("accepts canonical session segments by shared id and nullable speaker id", () => {
+  it("consumes session-sync revisions and existing nullable speaker attribution", () => {
     const scheduler = new PendantInsightsScheduler({
       client: { requestInsights: vi.fn() },
       onInsights: vi.fn(),
@@ -109,10 +137,11 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
       sessionId: "shared",
     });
     scheduler.setEnabled(true);
-    const first = {
+    const first: InsightsSchedulerSegmentInput = {
       id: "shared:segment:4",
       sessionId: "shared",
       ordinal: 4,
+      status: "resolved",
       revision: 0,
       text: "repeat this",
       speakerCluster: null,
@@ -124,10 +153,11 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
       revision: 1,
       text: "repeat this, corrected",
     };
-    const second = {
+    const second: InsightsSchedulerSegmentInput = {
       id: "shared:segment:5",
       sessionId: "shared",
       ordinal: 5,
+      status: "resolved",
       revision: 0,
       text: "repeat this",
       speakerCluster: "spk_1",
@@ -143,20 +173,22 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
         id: revisedFirst.id,
         sessionId: "shared",
         ordinal: 4,
+        status: "resolved",
         revision: 1,
         text: revisedFirst.text,
         speakerId: null,
-        atMs: Date.parse(first.startedAt),
+        atMs: Date.parse(first.startedAt ?? ""),
       },
       {
         id: second.id,
         sessionId: "shared",
         ordinal: 5,
+        status: "resolved",
         revision: 0,
         text: second.text,
         speakerId: "spk_1",
         speakerLabel: "Speaker 1",
-        atMs: Date.parse(second.startedAt),
+        atMs: Date.parse(second.startedAt ?? ""),
       },
     ]);
   });
@@ -174,6 +206,7 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
         id: "timestamps:segment:0",
         sessionId: "timestamps",
         ordinal: 0,
+        status: "resolved",
         revision: 0,
         text: "valid text",
         startedAt: "not-a-date",
@@ -182,22 +215,21 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
     expect(scheduler.getWindow()[0]).not.toHaveProperty("atMs");
   });
 
-  it("marks a retained rollup stale as soon as new speech arrives", async () => {
+  it("marks a retained rollup stale as soon as a canonical segment arrives", async () => {
     const states: string[] = [];
     const scheduler = new PendantInsightsScheduler({
-      client: {
-        requestInsights: vi.fn(async () => success()),
-      },
+      client: { requestInsights: vi.fn(async () => success()) },
       onInsights: vi.fn(),
       onStateChange: (state) =>
         states.push(`${state.status}:${state.freshness}`),
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 0,
     });
     scheduler.setEnabled(true);
-    scheduler.addUtterance("one");
-    scheduler.addUtterance("two");
-    scheduler.addUtterance("three");
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      scheduler.addSegment(segment(ordinal, `segment ${ordinal}`));
+    }
     await Promise.resolve();
     await Promise.resolve();
     expect(scheduler.getState()).toMatchObject({
@@ -205,7 +237,7 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
       freshness: "fresh",
       error: null,
     });
-    scheduler.addUtterance("new context");
+    scheduler.addSegment(segment(3, "new context"));
     expect(scheduler.getState()).toMatchObject({
       status: "idle",
       freshness: "stale",
@@ -228,14 +260,15 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
     const scheduler = new PendantInsightsScheduler({
       client,
       onInsights,
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 0,
     });
     scheduler.setEnabled(true);
-    scheduler.addUtterance("one");
-    scheduler.addUtterance("two");
-    scheduler.addUtterance("three");
-    expect(input?.sessionId).toMatch(/^s\d+$/);
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      scheduler.addSegment(segment(ordinal, `segment ${ordinal}`));
+    }
+    expect(input?.sessionId).toBe(SESSION_ID);
     expect(input?.signal?.aborted).toBe(false);
     scheduler.setPaused(true);
     expect(input?.signal?.aborted).toBe(true);
@@ -256,12 +289,14 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
         }),
       },
       onInsights: vi.fn(),
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 0,
-      sessionId: "delete-me",
     });
     scheduler.setEnabled(true);
-    for (const text of ["one", "two", "three"]) scheduler.addUtterance(text);
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      scheduler.addSegment(segment(ordinal, `segment ${ordinal}`));
+    }
     scheduler.clearForSessionDelete();
     expect(signal?.aborted).toBe(true);
     expect(scheduler.isEnabled()).toBe(false);
@@ -304,14 +339,15 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
           freshness: state.freshness,
           error: state.error,
         }),
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 1_000,
       now: () => now,
     });
     scheduler.setEnabled(true);
-    scheduler.addUtterance("one");
-    scheduler.addUtterance("two");
-    scheduler.addUtterance("three");
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      scheduler.addSegment(segment(ordinal, `segment ${ordinal}`));
+    }
     await Promise.resolve();
     await Promise.resolve();
     expect(requestInsights).toHaveBeenCalledTimes(1);
@@ -320,7 +356,7 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
       freshness: "none",
       error: "bad model output",
     });
-    scheduler.addUtterance("four");
+    scheduler.addSegment(segment(3, "four"));
     expect(requestInsights).toHaveBeenCalledTimes(1);
     now += 999;
     await vi.advanceTimersByTimeAsync(999);
@@ -330,7 +366,7 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
     expect(requestInsights).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves speech arriving in flight and schedules a follow-up pass", async () => {
+  it("preserves canonical segments arriving in flight and schedules a follow-up", async () => {
     vi.useFakeTimers();
     let now = 1_000;
     const first = deferred<InsightsClientResult>();
@@ -341,13 +377,15 @@ describe("PendantInsightsScheduler privacy and cost controls", () => {
     const scheduler = new PendantInsightsScheduler({
       client: { requestInsights },
       onInsights: vi.fn(),
+      sessionId: SESSION_ID,
       minSegments: 3,
       minIntervalMs: 100,
       now: () => now,
     });
     scheduler.setEnabled(true);
-    for (const text of ["one", "two", "three"]) scheduler.addUtterance(text);
-    for (const text of ["four", "five", "six"]) scheduler.addUtterance(text);
+    for (let ordinal = 0; ordinal < 6; ordinal++) {
+      scheduler.addSegment(segment(ordinal, `segment ${ordinal}`));
+    }
     first.resolve(success("first"));
     await first.promise;
     await Promise.resolve();

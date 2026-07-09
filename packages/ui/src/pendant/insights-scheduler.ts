@@ -1,9 +1,12 @@
 /**
  * Pendant insights — the cadence + dedupe scheduler (privacy/cost core).
  *
- * The pendant streams finalized transcript utterances (see
- * {@link import("./pendant-connection.js").PendantConnection}). This scheduler
- * accumulates them and periodically asks an {@link
+ * The scheduler consumes only `status: "resolved"` canonical segments delivered
+ * by `PendantSessionSyncClientOptions.onSnapshot` in
+ * `packages/ui/src/pendant/session-sync-client.ts`. It does not perform ASR, VAD,
+ * speaker clustering, diarization, or transcript persistence. Server-side
+ * integrations use `subscribePendantCommittedSegments` from
+ * `packages/agent/src/api/pendant-session-routes.ts`. It periodically asks an {@link
  * import("./insights-client.js").InsightsClient} for a structured rollup — under
  * strict privacy + cost controls:
  *
@@ -15,8 +18,8 @@
  *     uploaded while paused.
  *  3. ROLLING WINDOW: only the most recent `maxWindowSegments` are kept; older
  *     segments age out so the buffer (and each prompt) is bounded.
- *  4. DEDUPE HASH: an utterance whose normalized-text hash matches a recent one
- *     is dropped (ASR repeats / echo), so we don't pay to summarize the same line.
+ *  4. CANONICAL DEDUPE: replayed segment IDs and same/older revisions are
+ *     ignored; a newer revision patches the same retained segment in place.
  *  5. MIN THRESHOLD: generation only fires once at least `minSegments` NEW
  *     segments have accumulated since the last successful rollup.
  *  6. MAX CADENCE: at most one generation per `minIntervalMs`, regardless of how
@@ -28,7 +31,6 @@
  */
 
 import {
-  fnv1a32,
   MAX_INSIGHT_SEGMENTS_PER_REQUEST,
   MIN_INSIGHT_SEGMENTS,
   makePendantSegmentId,
@@ -69,33 +71,30 @@ export interface InsightsSchedulerOptions {
    * Consumers should render from this state, not assume the last rollup is current.
    */
   onStateChange?: (state: InsightsSchedulerState) => void;
-  /** Stable id for this listening session (drives deterministic segment ids). */
-  sessionId?: string;
+  /** Canonical server-authoritative session-sync id. */
+  sessionId: string;
   /** New segments required since last rollup before generating. Default 6. */
   minSegments?: number;
   /** Minimum ms between generations (hard cost cap). Default 90_000 (90s). */
   minIntervalMs?: number;
   /** Rolling window cap on retained segments. Default 200. */
   maxWindowSegments?: number;
-  /** How many recent hashes to remember for dedupe. Default 64. */
-  dedupeHistory?: number;
   /** Transcript char budget forwarded to the server. Optional. */
   maxTranscriptChars?: number;
   /** Clock injector (tests). Defaults to Date.now. */
   now?: () => number;
 }
 
-export interface InsightsSchedulerSegmentInput
-  extends PendantInsightSegmentInput {
-  /** Direct session-sync field names, accepted without a second identity layer. */
+export type InsightsSchedulerSegmentInput = Omit<
+  PendantInsightSegmentInput,
+  "status"
+> & {
+  /** Direct session-sync status and field names, with no parallel transcript type. */
+  status: "pending" | "resolved" | "asr-error";
   speakerCluster?: string | null;
   speakerAlias?: string | null;
   startedAt?: string;
-}
-
-interface InternalSegment extends PendantInsightSegmentInput {
-  hash: string;
-}
+};
 
 /** A rolling ambient-insight scheduler. Construct one per listening session. */
 export class PendantInsightsScheduler {
@@ -104,8 +103,7 @@ export class PendantInsightsScheduler {
   private disposed = false;
 
   private readonly sessionId: string;
-  private ordinal = 0;
-  private readonly window: InternalSegment[] = [];
+  private readonly window: PendantInsightSegmentInput[] = [];
   private readonly windowSegmentIds = new Set<string>();
   private latestInsights: PendantInsights | null = null;
   private latestProvenance: PendantInsightsProvenance | null = null;
@@ -124,22 +122,16 @@ export class PendantInsightsScheduler {
   private lastSummary = "";
   private cadenceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** Recent normalized-text hashes for dedupe (FIFO, capped). */
-  private readonly recentHashes: string[] = [];
-  private readonly recentHashSet = new Set<string>();
-
   private inFlight: AbortController | null = null;
   private generating = false;
 
   private readonly minSegments: number;
   private readonly minIntervalMs: number;
   private readonly maxWindowSegments: number;
-  private readonly dedupeHistory: number;
   private readonly now: () => number;
 
   constructor(private readonly opts: InsightsSchedulerOptions) {
-    this.sessionId =
-      opts.sessionId ?? `s${Math.floor((opts.now ?? Date.now)())}`;
+    this.sessionId = opts.sessionId;
     this.minSegments = Math.min(
       MAX_INSIGHT_SEGMENTS_PER_REQUEST,
       Math.max(MIN_INSIGHT_SEGMENTS, opts.minSegments ?? 6),
@@ -149,7 +141,6 @@ export class PendantInsightsScheduler {
       MAX_INSIGHT_SEGMENTS_PER_REQUEST,
       Math.max(this.minSegments, opts.maxWindowSegments ?? 200),
     );
-    this.dedupeHistory = Math.max(1, opts.dedupeHistory ?? 64);
     this.now = opts.now ?? Date.now;
   }
 
@@ -192,40 +183,6 @@ export class PendantInsightsScheduler {
   }
 
   /**
-   * Feed one finalized utterance. No-op unless enabled + not paused + not
-   * disposed. Applies dedupe + rolling-window trimming, then evaluates whether a
-   * generation should fire. Returns the segment id if ingested, else null.
-   */
-  addUtterance(
-    text: string,
-    atMs?: number,
-    speakerLabel?: string,
-  ): string | null {
-    if (!this.enabled || this.paused || this.disposed) return null;
-    const trimmed = text.trim();
-    if (!trimmed) return null;
-
-    const hash = fnv1a32(normalizeForDedupe(trimmed));
-    if (this.recentHashSet.has(hash)) return null;
-
-    const id = makePendantSegmentId(this.sessionId, this.ordinal, trimmed);
-    const accepted = this.ingestSegment(
-      {
-        id,
-        sessionId: this.sessionId,
-        ordinal: this.ordinal,
-        revision: 0,
-        text: trimmed,
-        ...(speakerLabel ? { speakerLabel } : {}),
-        ...(atMs ? { atMs } : {}),
-      },
-      hash,
-      true,
-    );
-    return accepted ? id : null;
-  }
-
-  /**
    * Canonical session-sync seam. Preserves the shared deterministic segment id
    * and ordinal instead of inventing a second transcript/session identity.
    * Nullable speaker ids are retained honestly; canonical repeats dedupe by id,
@@ -236,6 +193,7 @@ export class PendantInsightsScheduler {
     const text = segment.text.trim();
     if (
       !text ||
+      segment.status !== "resolved" ||
       segment.sessionId !== this.sessionId ||
       segment.id !== makePendantSegmentId(this.sessionId, segment.ordinal)
     ) {
@@ -254,6 +212,7 @@ export class PendantInsightsScheduler {
       id: segment.id,
       sessionId: segment.sessionId,
       ordinal: segment.ordinal,
+      status: "resolved",
       revision: segment.revision ?? 0,
       text,
       ...(segment.speakerId !== undefined ||
@@ -274,25 +233,18 @@ export class PendantInsightsScheduler {
     if (existingIndex >= 0) {
       const existing = this.window[existingIndex];
       if ((normalized.revision ?? 0) <= (existing.revision ?? 0)) return false;
-      this.window[existingIndex] = {
-        ...normalized,
-        hash: fnv1a32(normalizeForDedupe(text)),
-      };
+      this.window[existingIndex] = normalized;
       this.newSinceLastRun++;
       this.publishState("idle");
       void this.maybeGenerate();
       return true;
     }
-    return this.ingestSegment(
-      normalized,
-      fnv1a32(normalizeForDedupe(text)),
-      false,
-    );
+    return this.ingestSegment(normalized);
   }
 
   /** Snapshot the current retained window (defensive copy) for inspection/UI. */
   getWindow(): PendantInsightSegmentInput[] {
-    return this.window.map(({ hash: _hash, ...rest }) => ({ ...rest }));
+    return this.window.map((segment) => ({ ...segment }));
   }
 
   /** Freshness/error snapshot for UI and cross-device session integration. */
@@ -352,17 +304,11 @@ export class PendantInsightsScheduler {
     this.opts.onStateChange?.({ ...this.state });
   }
 
-  private ingestSegment(
-    segment: PendantInsightSegmentInput,
-    hash: string,
-    rememberTextHash: boolean,
-  ): boolean {
+  private ingestSegment(segment: PendantInsightSegmentInput): boolean {
     if (this.windowSegmentIds.has(segment.id)) return false;
-    this.window.push({ ...segment, hash });
+    this.window.push({ ...segment });
     this.windowSegmentIds.add(segment.id);
-    this.ordinal = Math.max(this.ordinal, segment.ordinal + 1);
     this.newSinceLastRun++;
-    if (rememberTextHash) this.rememberHash(hash);
     this.trimWindow();
     const priorError = this.state.status === "error" ? this.state.error : null;
     this.publishState(priorError ? "error" : "idle", priorError);
@@ -374,15 +320,12 @@ export class PendantInsightsScheduler {
     this.abortInFlight("reset");
     this.window.length = 0;
     this.windowSegmentIds.clear();
-    this.recentHashes.length = 0;
-    this.recentHashSet.clear();
     this.newSinceLastRun = 0;
     this.lastAttemptAt = null;
     this.lastSummary = "";
     this.latestInsights = null;
     this.latestProvenance = null;
     this.clearCadenceTimer();
-    // Keep `ordinal` monotonic so re-enabling in the same session never reuses ids.
   }
 
   private abortInFlight(reason: string): void {
@@ -391,15 +334,6 @@ export class PendantInsightsScheduler {
       this.inFlight = null;
     }
     this.generating = false;
-  }
-
-  private rememberHash(hash: string): void {
-    this.recentHashes.push(hash);
-    this.recentHashSet.add(hash);
-    while (this.recentHashes.length > this.dedupeHistory) {
-      const evicted = this.recentHashes.shift();
-      if (evicted !== undefined) this.recentHashSet.delete(evicted);
-    }
   }
 
   private trimWindow(): void {
@@ -536,17 +470,4 @@ export class PendantInsightsScheduler {
       this.generating = false;
     }
   }
-}
-
-/**
- * Normalize an utterance for dedupe: lowercase, collapse whitespace, strip
- * trailing punctuation. So "Hello there." and "hello  there" dedupe to the same
- * hash. Does NOT mutate the stored text — dedupe is hash-only (no silent redaction).
- */
-export function normalizeForDedupe(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[.,!?;:]+$/g, "")
-    .trim();
 }

@@ -3,7 +3,6 @@ import { PostPendantInsightsRequestSchema } from "./contracts/pendant-insights-r
 import {
   composePendantInsights,
   extractFirstJsonObject,
-  fnv1a32,
   isEmptyInsights,
   isPendantSegmentId,
   makePendantSegmentId,
@@ -19,6 +18,7 @@ describe("pendant insights route contract", () => {
     id: "session-1:segment:0",
     sessionId: "session-1",
     ordinal: 0,
+    status: "resolved" as const,
     revision: 0,
     text: "hello",
   };
@@ -85,17 +85,6 @@ describe("pendant insights route contract", () => {
         segments: [segment],
       }).success,
     ).toBe(false);
-  });
-});
-
-describe("fnv1a32", () => {
-  it("is deterministic + 8 hex chars", () => {
-    const a = fnv1a32("hello world");
-    expect(a).toBe(fnv1a32("hello world"));
-    expect(a).toMatch(/^[0-9a-f]{8}$/);
-  });
-  it("differs for different input", () => {
-    expect(fnv1a32("a")).not.toBe(fnv1a32("b"));
   });
 });
 

@@ -11,6 +11,7 @@ const segment = {
   id: "session-1:segment:0",
   sessionId: "session-1",
   ordinal: 0,
+  status: "resolved" as const,
   revision: 0,
   text: "hello",
 };

@@ -342,6 +342,154 @@ async function readJsonBody(req: IncomingMessage, limitBytes = 64 * 1024): Promi
 
 class BodyTooLargeError extends Error {}
 
+/**
+ * Parsed shape of a PCM WAV header, plus a normalized body ready to forward.
+ *
+ * iOS/Safari's MediaRecorder-free capture path (packages/ui local-asr-capture)
+ * hand-encodes a WAV in `encodeMonoPcm16Wav`. That encoder writes correct sizes
+ * for a clean single-shot buffer, BUT the bytes that actually arrive here can
+ * still carry sizes that DON'T match the payload: a proxy/recorder that flushes
+ * before the final size patch, a trailing/short read, or a non-canonical chunk
+ * order all leave the declared `RIFF`/`data` sizes inconsistent with the real
+ * byte length. Deepgram's pre-recorded endpoint answers such a WAV with a 408
+ * (it waits for the bytes the header promised and times out) — which is exactly
+ * the iPhone symptom (desktop Chrome WAVs are always self-consistent, so they
+ * pass). The fix is deterministic: reparse the fmt chunk, locate the real audio
+ * data, and REWRITE a canonical 44-byte header whose sizes match the payload we
+ * actually hold before forwarding. See IOS-ASR-FIX-REPORT.md.
+ */
+interface NormalizedWav {
+  /** A freshly-built canonical 44-byte-header PCM WAV whose sizes are correct. */
+  body: Buffer;
+  /** Sample rate read from the fmt chunk (Hz) — forwarded to Deepgram as a hint. */
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+  /** Actual PCM data byte length after normalization. */
+  dataBytes: number;
+  /** Diagnostics: what the incoming header *declared* vs the real byte length. */
+  declaredRiffSize: number;
+  declaredDataBytes: number;
+  incomingBytes: number;
+  /** True when we had to rewrite because declared sizes were wrong. */
+  rewritten: boolean;
+}
+
+/**
+ * Parse a PCM WAV and return a normalized, self-consistent copy. Walks the RIFF
+ * chunk list (does NOT assume a canonical 44-byte header) to find `fmt ` and
+ * `data`. If the `data` sub-chunk's declared size is a streaming placeholder
+ * (0, 0xffffffff, or larger than the bytes actually present), the real data is
+ * taken as "everything from the data payload start to end of buffer". A clean
+ * 44-byte header is then rebuilt so the forwarded WAV's RIFF/data sizes always
+ * match its payload. Returns null when the body can't be parsed as PCM WAV.
+ */
+function normalizePcmWav(buf: Buffer): NormalizedWav | null {
+  if (buf.length < 12) return null;
+  if (buf.toString("ascii", 0, 4) !== "RIFF") return null;
+  if (buf.toString("ascii", 8, 12) !== "WAVE") return null;
+  const declaredRiffSize = buf.readUInt32LE(4);
+
+  let fmtOffset = -1;
+  let dataOffset = -1;
+  let dataDeclared = 0;
+  // Walk sub-chunks starting after the 12-byte RIFF/WAVE header.
+  let pos = 12;
+  while (pos + 8 <= buf.length) {
+    const id = buf.toString("ascii", pos, pos + 4);
+    const size = buf.readUInt32LE(pos + 4);
+    const bodyStart = pos + 8;
+    if (id === "fmt ") {
+      fmtOffset = bodyStart;
+    } else if (id === "data") {
+      dataOffset = bodyStart;
+      dataDeclared = size;
+      // Do NOT trust `size` for advancing when it's a placeholder; break here —
+      // audio data is conventionally the last chunk and any trailing bytes are
+      // the real samples.
+      break;
+    }
+    // Advance by the declared size (chunks are word-aligned/padded to even).
+    const advance = size + (size % 2);
+    if (advance <= 0) break;
+    pos = bodyStart + advance;
+  }
+  if (fmtOffset < 0 || fmtOffset + 16 > buf.length) return null;
+  if (dataOffset < 0) return null;
+
+  const audioFormat = buf.readUInt16LE(fmtOffset);
+  const channels = buf.readUInt16LE(fmtOffset + 2);
+  const sampleRate = buf.readUInt32LE(fmtOffset + 4);
+  const bitsPerSample = buf.readUInt16LE(fmtOffset + 14);
+  // Only linear PCM (1) is supported by the client encoder + the rewrite below.
+  if (audioFormat !== 1) return null;
+  if (channels < 1 || sampleRate < 1 || bitsPerSample < 8) return null;
+
+  const bytesAvailable = buf.length - dataOffset;
+  // Trust the declared data size only when it fits inside the bytes we actually
+  // hold and isn't a streaming placeholder (0 / 0xffffffff). Otherwise use the
+  // real remaining bytes.
+  const isPlaceholder =
+    dataDeclared === 0 ||
+    dataDeclared === 0xffffffff ||
+    dataDeclared > bytesAvailable;
+  let dataBytes = isPlaceholder ? bytesAvailable : dataDeclared;
+  const blockAlign = channels * Math.floor(bitsPerSample / 8);
+  if (blockAlign > 0) dataBytes -= dataBytes % blockAlign; // whole frames only
+  if (dataBytes <= 0) {
+    return {
+      body: Buffer.alloc(0),
+      sampleRate,
+      channels,
+      bitsPerSample,
+      dataBytes: 0,
+      declaredRiffSize,
+      declaredDataBytes: dataDeclared,
+      incomingBytes: buf.length,
+      rewritten: true,
+    };
+  }
+
+  // Detect whether the incoming header was already canonical + self-consistent
+  // (44-byte header, correct sizes) so we can skip the rewrite for the desktop
+  // path and only touch the pathological iOS case.
+  const wasCanonical =
+    dataOffset === 44 &&
+    dataDeclared === dataBytes &&
+    declaredRiffSize === 36 + dataBytes;
+
+  const bytesPerSample = Math.floor(bitsPerSample / 8);
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + dataBytes, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  header.writeUInt16LE(channels * bytesPerSample, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(dataBytes, 40);
+  const body = Buffer.concat([
+    header,
+    buf.subarray(dataOffset, dataOffset + dataBytes),
+  ]);
+  return {
+    body,
+    sampleRate,
+    channels,
+    bitsPerSample,
+    dataBytes,
+    declaredRiffSize,
+    declaredDataBytes: dataDeclared,
+    incomingBytes: buf.length,
+    rewritten: !wasCanonical,
+  };
+}
+
 async function readRawBody(req: IncomingMessage, limitBytes: number): Promise<Buffer> {
   return await new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -616,14 +764,67 @@ export async function startStandaloneVoiceServer(
         json(res, 400, { error: "valid audio/wav body required" });
         return;
       }
+      // #ios-asr-fix: iPhone (installed PWA) posts WAVs whose declared RIFF/data
+      // sizes don't match the payload — Deepgram answers those with a 408. Parse
+      // + rewrite a canonical, self-consistent header before forwarding, and
+      // forward the true sample_rate/encoding as query hints so Deepgram never
+      // has to trust a header at all. Desktop WAVs are already canonical and
+      // pass through byte-identical (rewritten=false).
+      const normalized = normalizePcmWav(audio);
+      // TEMP diagnostic: log exactly what the client posted so we can confirm
+      // the iPhone header shape from /tmp/voice-standalone.log. Remove once the
+      // iOS capture path is verified clean end to end.
+      hooks.log("info", "asr cloud request wav", {
+        incomingBytes: audio.length,
+        declaredRiffSize: normalized?.declaredRiffSize ?? null,
+        declaredDataBytes: normalized?.declaredDataBytes ?? null,
+        sampleRate: normalized?.sampleRate ?? null,
+        channels: normalized?.channels ?? null,
+        bitsPerSample: normalized?.bitsPerSample ?? null,
+        realDataBytes: normalized?.dataBytes ?? null,
+        rewritten: normalized?.rewritten ?? null,
+      });
+      if (!normalized) {
+        json(res, 400, { error: "unparseable WAV body" });
+        return;
+      }
+      if (normalized.dataBytes <= 0) {
+        // Genuinely empty/near-silent capture (iOS suspended AudioContext or
+        // denied mic) — a clear client-facing error beats a doomed 408 round-trip.
+        json(res, 400, { error: "audio contained no samples (check microphone permission)" });
+        return;
+      }
+      const dgUrl = new URL("https://api.deepgram.com/v1/listen");
+      dgUrl.searchParams.set("model", "nova-3");
+      dgUrl.searchParams.set("smart_format", "true");
+      // Forward strategy: for 16-bit PCM (what encodeMonoPcm16Wav always emits),
+      // strip the WAV header entirely and send RAW PCM with explicit encoding
+      // hints. This side-steps ANY header trust issue — Deepgram decodes from
+      // the query params, so a malformed/placeholder iOS header can't cause a
+      // 408. For any other bit depth, fall back to forwarding the rewritten
+      // (now self-consistent) WAV so the container/format is still valid.
+      let forwardBody: Buffer;
+      if (normalized.bitsPerSample === 16) {
+        forwardBody = normalized.body.subarray(44); // raw PCM, header stripped
+        dgUrl.searchParams.set("encoding", "linear16");
+        dgUrl.searchParams.set("sample_rate", String(normalized.sampleRate));
+        dgUrl.searchParams.set("channels", String(normalized.channels));
+      } else {
+        forwardBody = normalized.body; // rewritten canonical WAV container
+      }
       let provider: Response;
       try {
         provider = await (config.deepgramFetch ?? fetch)(
-          "https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true",
+          dgUrl.toString(),
           {
             method: "POST",
-            headers: { Authorization: `Token ${config.deepgramApiKey}`, "Content-Type": contentType, Accept: "application/json" },
-            body: audio,
+            headers: {
+              Authorization: `Token ${config.deepgramApiKey}`,
+              // Raw PCM forward uses octet-stream; the WAV-container fallback keeps audio/wav.
+              "Content-Type": normalized.bitsPerSample === 16 ? "application/octet-stream" : "audio/wav",
+              Accept: "application/json",
+            },
+            body: forwardBody,
           },
         );
       } catch (err) {

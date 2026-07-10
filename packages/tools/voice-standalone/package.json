@@ -1,0 +1,22 @@
+{
+  "name": "@elizaos/voice-standalone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone node/bun deployment of the REAL Phase-1 realtime + ambient voice-session backend (mint consent+JWT chain -> attachVoiceWsHandler -> VoiceSession/AmbientSession -> merged Deepgram Flux / Cartesia Sonic adapters), as a long-running HTTP + WS service bound to 127.0.0.1 so nginx can front /api/v1/voice/session/** for the in-browser sol-dev voice test. Auth-gated by a shared secret (dev/test deployment; see standalone-server.ts for the honest CF-worker-vs-standalone auth/tenancy boundary). NOT a second production voice implementation — it mounts the same real route logic the CF worker mounts.",
+  "bin": {
+    "voice-standalone": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "typecheck": "tsgo --noEmit || tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.21.0"
+  }
+}

@@ -190,6 +190,59 @@ describe("auth gate", () => {
   });
 });
 
+describe("POST /api/asr/cloud", () => {
+  const wav = () => new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]);
+  async function bootAsr(deepgramFetch: typeof fetch): Promise<RunningStandaloneServer> {
+    return startStandaloneVoiceServer({
+      host: "127.0.0.1", port: pickPort(), authToken: AUTH,
+      deepgramApiKey: PROVIDER_STUB, cartesiaApiKey: PROVIDER_STUB,
+      cartesiaVoiceId: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4",
+      elizaEndpoint: "https://openrouter.ai/api/v1/chat/completions", elizaAuthorization: "Bearer unused",
+      organizationId: "00000000-0000-4000-8000-0000000000a1",
+      userId: "00000000-0000-4000-8000-0000000000b2",
+      agentId: "00000000-0000-4000-8000-0000000000c3",
+      conversationId: "00000000-0000-4000-8000-0000000000d4",
+      ambientStore: new FilePendantStore(dataDir), hooks: { log: () => {} }, deepgramFetch,
+    });
+  }
+
+  test("returns exact { text } contract for raw WAV", async () => {
+    let forwarded: RequestInit | undefined;
+    server = await bootAsr((async (_url, init) => {
+      forwarded = init;
+      return Response.json({ results: { channels: [{ alternatives: [{ transcript: "  what is the weather  " }] }] } });
+    }) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: wav() });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ text: "what is the weather" });
+    expect((forwarded?.headers as Record<string, string>).Authorization).toBe(`Token ${PROVIDER_STUB}`);
+  });
+
+  test("auth gate rejects before provider access", async () => {
+    let called = false;
+    server = await bootAsr((async () => { called = true; return Response.json({}); }) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav() });
+    expect(res.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  test("empty audio is 400", async () => {
+    server = await bootAsr(fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: new Uint8Array() });
+    expect(res.status).toBe(400);
+  });
+
+  test("provider error is 502", async () => {
+    server = await bootAsr((async () => new Response("bad key", { status: 401 })) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: wav() });
+    expect(res.status).toBe(502);
+  });
+});
+
 describe("file store durability (restart recovery)", () => {
   test("ambient segments survive a service restart", async () => {
     // Boot 1: mint an ambient session (creates the pendant session on disk) and

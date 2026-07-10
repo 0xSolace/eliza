@@ -268,6 +268,8 @@ export interface StandaloneServerConfig {
   /** File-backed ambient pendant store (durable across restart). */
   ambientStore: AmbientSegmentStore & AmbientSessionProvisioner;
   hooks: StandaloneHooks;
+  /** Injectable only for contract tests; production uses the global fetch. */
+  deepgramFetch?: typeof fetch;
 }
 
 export interface RunningStandaloneServer {
@@ -280,6 +282,7 @@ const CONSENT_PATH = "/api/v1/voice/session/consent";
 const MINT_PATH = "/api/v1/voice/session";
 const WS_PATH = "/api/v1/voice/session/ws";
 const HEALTH_PATH = "/api/v1/voice/session/health";
+const ASR_CLOUD_PATH = "/api/asr/cloud";
 /** Read-only segment inspection for the standalone service's own store. */
 const SEGMENTS_PATH_PREFIX = "/api/v1/voice/session/segments";
 
@@ -334,6 +337,28 @@ async function readJsonBody(req: IncomingMessage, limitBytes = 64 * 1024): Promi
       }
     });
     req.on("error", reject);
+  });
+}
+
+class BodyTooLargeError extends Error {}
+
+async function readRawBody(req: IncomingMessage, limitBytes: number): Promise<Buffer> {
+  return await new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    req.on("data", (chunk: Buffer) => {
+      if (settled) return;
+      total += chunk.length;
+      if (total > limitBytes) {
+        settled = true;
+        reject(new BodyTooLargeError("body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => { if (!settled) resolve(Buffer.concat(chunks)); });
+    req.on("error", (err) => { if (!settled) reject(err); });
   });
 }
 
@@ -569,6 +594,55 @@ export async function startStandaloneVoiceServer(
     if (path === CONSENT_PATH && req.method === "POST") {
       const issued = await mintConsent();
       json(res, 200, { consentNonce: issued.nonce, expiresAt: issued.expiresAt });
+      return;
+    }
+
+    if (path === ASR_CLOUD_PATH && req.method === "POST") {
+      let audio: Buffer;
+      try {
+        audio = await readRawBody(req, 25 * 1024 * 1024);
+      } catch (err) {
+        json(res, err instanceof BodyTooLargeError ? 413 : 400, {
+          error: err instanceof BodyTooLargeError ? "audio exceeds 25MB limit" : "invalid audio body",
+        });
+        return;
+      }
+      if (audio.length === 0) {
+        json(res, 400, { error: "audio body required" });
+        return;
+      }
+      const contentType = String(req.headers["content-type"] ?? "").split(";", 1)[0].trim();
+      if (contentType !== "audio/wav" || audio.length < 12 || audio.toString("ascii", 0, 4) !== "RIFF" || audio.toString("ascii", 8, 12) !== "WAVE") {
+        json(res, 400, { error: "valid audio/wav body required" });
+        return;
+      }
+      let provider: Response;
+      try {
+        provider = await (config.deepgramFetch ?? fetch)(
+          "https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true",
+          {
+            method: "POST",
+            headers: { Authorization: `Token ${config.deepgramApiKey}`, "Content-Type": contentType, Accept: "application/json" },
+            body: audio,
+          },
+        );
+      } catch (err) {
+        hooks.log("warn", "batch ASR provider transport failed", { err: String(err) });
+        json(res, 502, { error: "ASR provider unavailable" });
+        return;
+      }
+      if (!provider.ok) {
+        hooks.log("warn", "batch ASR provider rejected request", { status: provider.status });
+        json(res, 502, { error: "ASR provider failed" });
+        return;
+      }
+      const payload = (await provider.json().catch(() => null)) as { results?: { channels?: Array<{ alternatives?: Array<{ transcript?: unknown }> }> } } | null;
+      const transcript = payload?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+      if (typeof transcript !== "string") {
+        json(res, 502, { error: "ASR provider returned an invalid response" });
+        return;
+      }
+      json(res, 200, { text: transcript.trim() });
       return;
     }
 

@@ -12,6 +12,10 @@ mock.module("@/lib/utils/logger", () => fakeLogger);
 mock.module("@elizaos/core", () => ({
   isSensitiveKeyName: () => false,
   redactLogArgs: (a: unknown) => a,
+  // The ambient merge routes route.ts -> pendant-store-client ->
+  // @elizaos/shared/contracts -> env-utils, which re-exports this from core.
+  isTruthyEnvValue: (v: string | undefined | null) =>
+    typeof v === "string" && ["true", "1", "yes", "on"].includes(v.trim().toLowerCase()),
 }));
 // Auth: return a fixed authed user.
 mock.module("@/lib/auth/workers-hono-auth", () => ({

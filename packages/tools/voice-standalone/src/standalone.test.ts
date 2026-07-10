@@ -191,7 +191,34 @@ describe("auth gate", () => {
 });
 
 describe("POST /api/asr/cloud", () => {
-  const wav = () => new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]);
+  // Build a real mono PCM16 WAV. `dataSamples` = number of int16 samples of data.
+  // `declared` overrides the RIFF/data sizes to simulate the iOS placeholder bug
+  // (undefined = write correct/canonical sizes like desktop Chrome).
+  function makeWav(
+    dataSamples: number,
+    sampleRate = 48000,
+    declared?: { riffSize?: number; dataBytes?: number },
+  ): Uint8Array {
+    const dataBytes = dataSamples * 2;
+    const buf = Buffer.alloc(44 + dataBytes);
+    buf.write("RIFF", 0, "ascii");
+    buf.writeUInt32LE(declared?.riffSize ?? 36 + dataBytes, 4);
+    buf.write("WAVE", 8, "ascii");
+    buf.write("fmt ", 12, "ascii");
+    buf.writeUInt32LE(16, 16);
+    buf.writeUInt16LE(1, 20); // PCM
+    buf.writeUInt16LE(1, 22); // mono
+    buf.writeUInt32LE(sampleRate, 24);
+    buf.writeUInt32LE(sampleRate * 2, 28);
+    buf.writeUInt16LE(2, 32);
+    buf.writeUInt16LE(16, 34);
+    buf.write("data", 36, "ascii");
+    buf.writeUInt32LE(declared?.dataBytes ?? dataBytes, 40);
+    // Non-zero samples so the body isn't classified as empty.
+    for (let i = 0; i < dataSamples; i += 1) buf.writeInt16LE(1000, 44 + i * 2);
+    return new Uint8Array(buf);
+  }
+  const wav = () => makeWav(160); // non-empty PCM16 WAV with canonical sizes
   async function bootAsr(deepgramFetch: typeof fetch): Promise<RunningStandaloneServer> {
     return startStandaloneVoiceServer({
       host: "127.0.0.1", port: pickPort(), authToken: AUTH,
@@ -240,6 +267,57 @@ describe("POST /api/asr/cloud", () => {
     base = `http://127.0.0.1:${server.port}`;
     const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: wav() });
     expect(res.status).toBe(502);
+  });
+
+  // #ios-asr-fix: iPhone posts WAVs whose declared RIFF/data sizes DON'T match
+  // the payload (streaming placeholder / early flush). Deepgram 408s those. The
+  // shim must rewrite a clean header (and forward raw linear16) so the turn
+  // succeeds. This is the exact bug that killed the mic on the installed PWA.
+  test("WAV with wrong declared sizes still transcribes (iOS placeholder)", async () => {
+    let forwardedUrl = "";
+    let forwardedBytes = -1;
+    server = await bootAsr((async (url, init) => {
+      forwardedUrl = String(url);
+      const body = (init as RequestInit | undefined)?.body;
+      forwardedBytes = body instanceof Uint8Array ? body.byteLength : Buffer.isBuffer(body) ? body.length : -1;
+      return Response.json({ results: { channels: [{ alternatives: [{ transcript: "weather please" }] }] } });
+    }) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    // 320 samples of PCM (640 data bytes) but the header lies: RIFF=0xffffffff,
+    // data=0xffffffff (classic iOS streaming placeholder).
+    const bad = makeWav(320, 48000, { riffSize: 0xffffffff, dataBytes: 0xffffffff });
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: bad });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ text: "weather please" });
+    // Forwarded as raw linear16 (header stripped): exactly the data bytes.
+    expect(forwardedBytes).toBe(640);
+    expect(forwardedUrl).toContain("encoding=linear16");
+    expect(forwardedUrl).toContain("sample_rate=48000");
+  });
+
+  test("empty data chunk (near-silent iOS capture) is 400", async () => {
+    let called = false;
+    server = await bootAsr((async () => { called = true; return Response.json({}); }) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    // Valid header, zero data samples — mic denied / suspended AudioContext.
+    const empty = makeWav(0);
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: empty });
+    expect(res.status).toBe(400);
+    expect(called).toBe(false); // never wastes a provider round-trip
+  });
+
+  test("canonical desktop WAV forwards raw PCM data unchanged", async () => {
+    let forwardedBytes = -1;
+    server = await bootAsr((async (_url, init) => {
+      const body = (init as RequestInit | undefined)?.body;
+      forwardedBytes = body instanceof Uint8Array ? body.byteLength : Buffer.isBuffer(body) ? body.length : -1;
+      return Response.json({ results: { channels: [{ alternatives: [{ transcript: "ok" }] }] } });
+    }) as unknown as typeof fetch);
+    base = `http://127.0.0.1:${server.port}`;
+    const good = makeWav(160); // canonical, 320 data bytes
+    const res = await fetch(`${base}/api/asr/cloud`, { method: "POST", headers: { Authorization: `Bearer ${AUTH}`, "Content-Type": "audio/wav" }, body: good });
+    expect(res.status).toBe(200);
+    expect(forwardedBytes).toBe(320); // raw PCM data, header stripped
   });
 });
 

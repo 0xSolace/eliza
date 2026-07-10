@@ -131,6 +131,64 @@ export function subscribePendantCommittedSegments(
   };
 }
 
+/**
+ * Read-only, owner+agent-scoped enumeration of a tenant's pendant sessions,
+ * newest-first. This is the ONE canonical read path for consumers outside the
+ * mutation routes (e.g. the retrieval provider): it enumerates the same
+ * owner/agent session room the writer persists into, parses each stored
+ * document through the same schema, and re-checks the owner/agent boundary on
+ * every record before returning it. Because it reads the LIVE memory store,
+ * cascade-deleted sessions are simply absent — there is no cache that can
+ * outlive a delete.
+ *
+ * Never throws for a missing store or an unparsable record: a malformed or
+ * foreign row is skipped, not surfaced, so a single bad record cannot poison an
+ * otherwise-valid read. Returns `[]` when the runtime cannot enumerate.
+ */
+export async function readOwnerPendantSessions(params: {
+  runtime: Pick<AgentRuntime, "agentId" | "getMemories">;
+  ownerId: string;
+  agentId: string;
+  /** Cap on sessions scanned (newest-first). Defaults to 200. */
+  limit?: number;
+}): Promise<PendantSessionSnapshot[]> {
+  const ownerId = params.ownerId.trim();
+  const agentId = params.agentId.trim();
+  if (!ownerId || !agentId) return [];
+  if (typeof params.runtime.getMemories !== "function") return [];
+
+  let memories: Memory[];
+  try {
+    memories = await params.runtime.getMemories({
+      roomId: sessionRoomId(ownerId, agentId),
+      tableName: TABLE_NAME,
+      limit: Math.max(1, Math.floor(params.limit ?? 200)),
+      includeEmbedding: false,
+    });
+  } catch {
+    // error-policy:J4 an enumeration failure degrades to no retrievable
+    // sessions rather than crashing the caller's turn.
+    return [];
+  }
+
+  const snapshots: PendantSessionSnapshot[] = [];
+  for (const memory of memories) {
+    // Defence in depth: the room key already scopes to (owner, agent), but the
+    // stored document carries its own ownerId/agentId — re-check both so a
+    // mis-keyed row can never cross the tenant boundary.
+    if (memory.agentId && String(memory.agentId) !== agentId) continue;
+    const payload = (memory.content as { pendantSession?: unknown })
+      .pendantSession;
+    const parsed = StoredPendantSessionDocumentSchema.safeParse(payload);
+    if (!parsed.success) continue;
+    const stored = parsed.data;
+    if (stored.session.ownerId !== ownerId || stored.session.agentId !== agentId)
+      continue;
+    snapshots.push(snapshotFromStored(stored));
+  }
+  return snapshots;
+}
+
 function snapshotFromStored(
   stored: StoredPendantSessionDocument,
 ): PendantSessionSnapshot {

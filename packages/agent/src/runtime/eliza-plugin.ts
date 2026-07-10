@@ -52,6 +52,7 @@ import { adminTrustProvider } from "../providers/admin-trust.ts";
 import { automationTerminalBridgeProvider } from "../providers/automation-terminal-bridge.ts";
 import { escalationTriggerProvider } from "../providers/escalation-trigger.ts";
 import { pageScopedContextProvider } from "../providers/page-scoped-context.ts";
+import { pendantRecallProvider } from "../providers/pendant-recall.ts";
 import { pendingPermissionsProvider } from "../providers/pending-permissions-provider.ts";
 import { recentConversationsProvider } from "../providers/recent-conversations.ts";
 import { relevantConversationsProvider } from "../providers/relevant-conversations.ts";
@@ -249,6 +250,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       pageScopedContextProvider,
       recentConversationsProvider,
       relevantConversationsProvider,
+      pendantRecallProvider,
       rolodexProvider,
 
       uiWidgetsProvider,

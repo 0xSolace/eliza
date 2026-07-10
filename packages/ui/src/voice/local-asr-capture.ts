@@ -53,6 +53,11 @@ export interface LocalAsrAutoStopUpdate {
   shouldStop: boolean;
 }
 
+export interface LocalAsrPcmPreRoll {
+  chunks: Float32Array[];
+  sampleCount: number;
+}
+
 type AudioContextConstructor = typeof AudioContext;
 
 type WindowWithAudioContext = Window & {
@@ -197,10 +202,34 @@ export const DEFAULT_LOCAL_ASR_AUTO_STOP: LocalAsrAutoStopConfig = {
   // `silenceMs` first and only falls back to this default. On-device tuning can
   // move this again once false-cutoff behavior is verified on the installed PWA.
   silenceMs: 650,
-  maxSpeechMs: 12_000,
+  maxSpeechMs: 4_000,
   speechRmsThreshold: 0.003,
   speechPeakThreshold: 0.012,
 };
+
+export function appendBoundedPcmPreRoll(
+  preRoll: LocalAsrPcmPreRoll,
+  pcm: Float32Array,
+  maxSampleCount: number,
+): void {
+  if (maxSampleCount <= 0 || pcm.length === 0) return;
+
+  preRoll.chunks.push(pcm);
+  preRoll.sampleCount += pcm.length;
+
+  while (preRoll.sampleCount > maxSampleCount && preRoll.chunks.length > 0) {
+    const first = preRoll.chunks[0];
+    if (!first) break;
+    const excess = preRoll.sampleCount - maxSampleCount;
+    if (first.length <= excess) {
+      preRoll.chunks.shift();
+      preRoll.sampleCount -= first.length;
+      continue;
+    }
+    preRoll.chunks[0] = first.slice(excess);
+    preRoll.sampleCount -= excess;
+  }
+}
 
 export function createLocalAsrAutoStopDetector(
   options: LocalAsrAutoStopOptions | undefined,
@@ -491,8 +520,11 @@ export async function startLocalAsrRecorder(
   analyser.smoothingTimeConstant = 0.8;
   source.connect(analyser);
   const chunks: Float32Array[] = [];
+  const preRoll: LocalAsrPcmPreRoll = { chunks: [], sampleCount: 0 };
+  const preRollMaxSamples = Math.round(context.sampleRate * 0.2);
   let stopped = false;
   let autoStopRequested = false;
+  let autoStopStartedBuffering = false;
   let firstChunkTraced = false;
   const autoStopDetector = createLocalAsrAutoStopDetector(options.autoStop);
 
@@ -521,7 +553,15 @@ export async function startLocalAsrRecorder(
       shouldStop: false,
     };
     if (autoStopUpdate.shouldBuffer) {
+      if (autoStopDetector && !autoStopStartedBuffering) {
+        chunks.push(...preRoll.chunks);
+        preRoll.chunks = [];
+        preRoll.sampleCount = 0;
+        autoStopStartedBuffering = true;
+      }
       chunks.push(mono);
+    } else if (autoStopDetector && !autoStopStartedBuffering) {
+      appendBoundedPcmPreRoll(preRoll, mono, preRollMaxSamples);
     }
     if (autoStopUpdate.shouldStop && !autoStopRequested && options.onAutoStop) {
       autoStopRequested = true;

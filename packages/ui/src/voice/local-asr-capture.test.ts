@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  appendBoundedPcmPreRoll,
   createLocalAsrAutoStopDetector,
   DEFAULT_LOCAL_ASR_AUTO_STOP,
   decodeMonoPcm16Wav,
@@ -15,6 +16,35 @@ import {
   queryMicrophonePermission,
   startLocalAsrRecorder,
 } from "./local-asr-capture";
+
+const globalStubs: Array<{
+  name: PropertyKey;
+  descriptor: PropertyDescriptor | undefined;
+}> = [];
+
+function stubGlobal(name: PropertyKey, value: unknown): void {
+  globalStubs.push({
+    name,
+    descriptor: Object.getOwnPropertyDescriptor(globalThis, name),
+  });
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
+function restoreGlobals(): void {
+  while (globalStubs.length > 0) {
+    const stub = globalStubs.pop();
+    if (!stub) continue;
+    if (stub.descriptor) {
+      Object.defineProperty(globalThis, stub.name, stub.descriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, stub.name);
+    }
+  }
+}
 
 describe("local ASR capture", () => {
   it("detects truly silent PCM before sending it to ASR", () => {
@@ -41,6 +71,35 @@ describe("local ASR capture", () => {
     expect(String.fromCharCode(...wav.slice(8, 12))).toBe("WAVE");
     expect(view.getUint32(24, true)).toBe(16000);
     expect(view.getUint32(40, true)).toBe(6);
+  });
+
+  it("encodes mono PCM16 WAV with a normalized 48 kHz header", () => {
+    const wav = encodeMonoPcm16Wav(new Float32Array([0, 0.25, -0.25]), 48000.4);
+    const view = new DataView(wav.buffer);
+
+    expect(String.fromCharCode(...wav.slice(0, 4))).toBe("RIFF");
+    expect(String.fromCharCode(...wav.slice(8, 12))).toBe("WAVE");
+    expect(String.fromCharCode(...wav.slice(12, 16))).toBe("fmt ");
+    expect(view.getUint16(20, true)).toBe(1);
+    expect(view.getUint16(22, true)).toBe(1);
+    expect(view.getUint32(24, true)).toBe(48000);
+    expect(view.getUint32(28, true)).toBe(96000);
+    expect(view.getUint16(32, true)).toBe(2);
+    expect(view.getUint16(34, true)).toBe(16);
+    expect(String.fromCharCode(...wav.slice(36, 40))).toBe("data");
+    expect(view.getUint32(40, true)).toBe(6);
+  });
+
+  it("keeps only the bounded PCM pre-roll immediately before speech", () => {
+    const preRoll = { chunks: [] as Float32Array[], sampleCount: 0 };
+    appendBoundedPcmPreRoll(preRoll, new Float32Array([1, 1, 1]), 5);
+    appendBoundedPcmPreRoll(preRoll, new Float32Array([2, 2, 2]), 5);
+    appendBoundedPcmPreRoll(preRoll, new Float32Array([3, 3]), 5);
+
+    expect(preRoll.sampleCount).toBe(5);
+    expect(Array.from(preRoll.chunks.flatMap((chunk) => Array.from(chunk)))).toEqual([
+      2, 2, 2, 3, 3,
+    ]);
   });
 
   it("ignores startup audio and stops after speech followed by silence", () => {
@@ -123,7 +182,7 @@ describe("local ASR capture", () => {
 
 describe("startLocalAsrRecorder resume failure", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreGlobals();
   });
 
   it("rejects and releases the mic when the AudioContext cannot resume", async () => {
@@ -134,7 +193,7 @@ describe("startLocalAsrRecorder resume failure", () => {
       getTracks: () => [{ stop: trackStop }],
     } as unknown as MediaStream;
     const getUserMedia = vi.fn().mockResolvedValue(stream);
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    stubGlobal("navigator", { mediaDevices: { getUserMedia } });
 
     const contextClose = vi.fn().mockResolvedValue(undefined);
     class FakeAudioContext {
@@ -142,7 +201,7 @@ describe("startLocalAsrRecorder resume failure", () => {
       resume = vi.fn().mockRejectedValue(new Error("autoplay policy"));
       close = contextClose;
     }
-    vi.stubGlobal("window", { AudioContext: FakeAudioContext });
+    stubGlobal("window", { AudioContext: FakeAudioContext });
 
     await expect(startLocalAsrRecorder()).rejects.toThrow(
       "AudioContext could not resume for local ASR capture",
@@ -162,7 +221,7 @@ describe("startLocalAsrRecorder resume failure", () => {
       getTracks: () => [{ stop: trackStop }],
     } as unknown as MediaStream;
     const getUserMedia = vi.fn().mockResolvedValue(stream);
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    stubGlobal("navigator", { mediaDevices: { getUserMedia } });
 
     const contextClose = vi.fn().mockResolvedValue(undefined);
     const resume = vi.fn().mockResolvedValue(undefined);
@@ -171,7 +230,9 @@ describe("startLocalAsrRecorder resume failure", () => {
       resume = resume;
       close = contextClose;
     }
-    vi.stubGlobal("window", { AudioContext: StuckSuspendedContext });
+    stubGlobal("window", {
+      AudioContext: StuckSuspendedContext,
+    });
 
     await expect(startLocalAsrRecorder()).rejects.toThrow(
       "AudioContext could not resume for local ASR capture",
@@ -191,7 +252,7 @@ describe("startLocalAsrRecorder resume failure", () => {
       getTracks: () => [{ stop: trackStop }],
     } as unknown as MediaStream;
     const getUserMedia = vi.fn().mockResolvedValue(stream);
-    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    stubGlobal("navigator", { mediaDevices: { getUserMedia } });
 
     let resumeCalls = 0;
     const fakeNode = {
@@ -218,7 +279,7 @@ describe("startLocalAsrRecorder resume failure", () => {
       createAnalyser = vi.fn().mockReturnValue({ ...fakeNode });
       destination = {};
     }
-    vi.stubGlobal("window", { AudioContext: RecoveringContext });
+    stubGlobal("window", { AudioContext: RecoveringContext });
 
     const recorder = await startLocalAsrRecorder();
     expect(recorder).toBeTruthy();
@@ -304,16 +365,102 @@ describe("DEFAULT_LOCAL_ASR_AUTO_STOP silence window (#voice-V6)", () => {
   it("defaults the trailing-silence window to the snappier 650ms", () => {
     expect(DEFAULT_LOCAL_ASR_AUTO_STOP.silenceMs).toBe(650);
   });
+
+  it("uses the default 650ms silence window before stopping", () => {
+    const detect = createLocalAsrAutoStopDetector(
+      { startGraceMs: 250, speechPeakThreshold: 0.01 },
+      0,
+    );
+    if (!detect) throw new Error("auto-stop detector was not created");
+    const speech = new Float32Array([0.02, -0.02]);
+    const silence = new Float32Array([0, 0]);
+
+    expect(detect(speech, 250)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(speech, 430)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(silence, 1079)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(silence, 1080)).toEqual({
+      shouldBuffer: false,
+      shouldStop: true,
+    });
+  });
+
+  it("defaults the max utterance cap to 4000ms", () => {
+    expect(DEFAULT_LOCAL_ASR_AUTO_STOP.maxSpeechMs).toBe(4000);
+    const detect = createLocalAsrAutoStopDetector(
+      { startGraceMs: 250, speechPeakThreshold: 0.01 },
+      0,
+    );
+    if (!detect) throw new Error("auto-stop detector was not created");
+    const speech = new Float32Array([0.02, -0.02]);
+
+    expect(detect(speech, 250)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(speech, 4249)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(speech, 4250)).toEqual({
+      shouldBuffer: true,
+      shouldStop: true,
+    });
+  });
+
+  it("does not emit duplicate stop decisions after the detector has stopped", () => {
+    const detect = createLocalAsrAutoStopDetector(
+      {
+        startGraceMs: 0,
+        minSpeechMs: 100,
+        silenceMs: 100,
+        speechPeakThreshold: 0.01,
+      },
+      0,
+    );
+    if (!detect) throw new Error("auto-stop detector was not created");
+    const speech = new Float32Array([0.02, -0.02]);
+    const silence = new Float32Array([0, 0]);
+
+    expect(detect(speech, 0)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(speech, 100)).toEqual({
+      shouldBuffer: true,
+      shouldStop: false,
+    });
+    expect(detect(silence, 200)).toEqual({
+      shouldBuffer: false,
+      shouldStop: true,
+    });
+    expect(detect(silence, 300)).toEqual({
+      shouldBuffer: false,
+      shouldStop: false,
+    });
+    expect(detect(speech, 400)).toEqual({
+      shouldBuffer: false,
+      shouldStop: false,
+    });
+  });
 });
 
 describe("queryMicrophonePermission", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreGlobals();
   });
 
   it("returns 'granted' when the Permissions API reports a live grant", async () => {
     const query = vi.fn().mockResolvedValue({ state: "granted" });
-    vi.stubGlobal("navigator", { permissions: { query } });
+    stubGlobal("navigator", { permissions: { query } });
 
     await expect(queryMicrophonePermission()).resolves.toBe("granted");
     expect(query).toHaveBeenCalledWith({ name: "microphone" });
@@ -321,14 +468,14 @@ describe("queryMicrophonePermission", () => {
 
   it("surfaces a revoked grant as 'denied' so the re-enable affordance shows", async () => {
     const query = vi.fn().mockResolvedValue({ state: "denied" });
-    vi.stubGlobal("navigator", { permissions: { query } });
+    stubGlobal("navigator", { permissions: { query } });
 
     await expect(queryMicrophonePermission()).resolves.toBe("denied");
   });
 
   it("passes 'prompt' through so getUserMedia is allowed to re-prompt", async () => {
     const query = vi.fn().mockResolvedValue({ state: "prompt" });
-    vi.stubGlobal("navigator", { permissions: { query } });
+    stubGlobal("navigator", { permissions: { query } });
 
     await expect(queryMicrophonePermission()).resolves.toBe("prompt");
   });
@@ -337,20 +484,20 @@ describe("queryMicrophonePermission", () => {
     // Safari/older iOS reject the `"microphone"` descriptor; the probe must
     // degrade to "unknown" so callers proceed normally instead of blocking.
     const query = vi.fn().mockRejectedValue(new TypeError("unsupported name"));
-    vi.stubGlobal("navigator", { permissions: { query } });
+    stubGlobal("navigator", { permissions: { query } });
 
     await expect(queryMicrophonePermission()).resolves.toBe("unknown");
   });
 
   it("returns 'unknown' when the Permissions API is entirely absent", async () => {
-    vi.stubGlobal("navigator", {});
+    stubGlobal("navigator", {} as Navigator);
 
     await expect(queryMicrophonePermission()).resolves.toBe("unknown");
   });
 
   it("maps an unrecognized permission state to 'unknown'", async () => {
     const query = vi.fn().mockResolvedValue({ state: "weird-future-state" });
-    vi.stubGlobal("navigator", { permissions: { query } });
+    stubGlobal("navigator", { permissions: { query } });
 
     await expect(queryMicrophonePermission()).resolves.toBe("unknown");
   });

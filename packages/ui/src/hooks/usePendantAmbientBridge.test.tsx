@@ -89,16 +89,21 @@ describe("usePendantAmbientBridge", () => {
   });
 
   it("the factory mints consent→ambient and arms the bridge on a good mint", async () => {
-    const fetch = vi.fn(async (url: string) => {
+    const fetch = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.endsWith("/consent")) return jsonResponse({ consentNonce: "nonce-1" });
       if (url.endsWith("/voice/session")) return jsonResponse(ambientMintBody());
       throw new Error(`unexpected url ${url}`);
     });
+    // A controllable fake WS: capture listeners so we can drive open → ready
+    // (start() now resolves true ONLY on the server `ready` event).
+    const listeners: Record<string, Array<(e?: unknown) => void>> = {};
     const ws = {
       binaryType: "blob",
       send: vi.fn(),
       close: vi.fn(),
-      addEventListener: vi.fn(),
+      addEventListener: (type: string, fn: (e?: unknown) => void) => {
+        (listeners[type] ??= []).push(fn);
+      },
     };
     const webSocketFactory = vi.fn(() => ws);
     const { result } = renderHook(() =>
@@ -113,7 +118,21 @@ describe("usePendantAmbientBridge", () => {
     const bridge = factory({ onSegment: vi.fn(), onTranscript: vi.fn() });
     let armed: boolean | undefined;
     await act(async () => {
-      armed = await bridge.start();
+      const armedP = bridge.start();
+      // Wait for the mint + WS construction, then drive open → ready.
+      for (let i = 0; i < 50 && !listeners.open; i++) await Promise.resolve();
+      listeners.open?.forEach((fn) => fn());
+      listeners.message?.forEach((fn) =>
+        fn({
+          data: JSON.stringify({
+            t: "ready",
+            sessionId: "s",
+            pendantSessionId: "p-1",
+            traceId: "t",
+          }),
+        }),
+      );
+      armed = await armedP;
     });
     expect(armed).toBe(true);
     // Consent was gathered, then the ambient mint sent mode:"ambient".

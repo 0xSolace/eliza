@@ -155,14 +155,13 @@ async function waitForWs(h: Harness): Promise<FakeWs> {
   return h.ws;
 }
 
-/** Bring a bridge fully live: start → open → hello → server ready. */
+/** Bring a bridge fully live: start → open → hello → server ready. start()
+ * resolves TRUE only once `ready` arrives (arming-on-ready). */
 async function bringLive(h: Harness): Promise<void> {
   const armedP = h.bridge.start();
   const ws = await waitForWs(h);
   ws.emitOpen();
-  const armed = await armedP;
-  expect(armed).toBe(true);
-  h.ws.emitMessage(
+  ws.emitMessage(
     JSON.stringify({
       t: "ready",
       sessionId: "sess-1",
@@ -170,6 +169,8 @@ async function bringLive(h: Harness): Promise<void> {
       traceId: "trace-1",
     }),
   );
+  const armed = await armedP;
+  expect(armed).toBe(true);
   expect(h.bridge.isReady).toBe(true);
 }
 
@@ -242,6 +243,27 @@ describe("PendantAmbientBridge", () => {
     expect(h.transcripts).toEqual(["what is the weather in denver"]);
   });
 
+  it("a revised final (same segmentId) updates the row but dispatches only once", async () => {
+    const h = makeBridge();
+    await bringLive(h);
+    const final = (text: string, revision: number) =>
+      JSON.stringify({
+        t: "stt_final",
+        text,
+        segmentId: "pendant-abc:segment:0",
+        ordinal: 0,
+        revision,
+        traceId: "t",
+      });
+    h.ws.emitMessage(final("weather in denver", 1));
+    h.ws.emitMessage(final("weather in denver today", 2)); // a correction
+    // Two resolved emits (the row is updated in place by the reducer via id),
+    // but the spoken dispatch fired exactly ONCE.
+    const resolved = h.segments.filter((s) => s.status === "resolved");
+    expect(resolved.length).toBe(2);
+    expect(h.transcripts).toEqual(["weather in denver"]);
+  });
+
   it("maps stt_partial → an interim pending segment, coalescing duplicates", async () => {
     const h = makeBridge();
     await bringLive(h);
@@ -252,6 +274,36 @@ describe("PendantAmbientBridge", () => {
     // Duplicate identical partial is coalesced → 2 pending emits, not 3.
     expect(pendings.length).toBe(2);
     expect(pendings[1]!.text).toBe("what is the");
+  });
+
+  it("retires the interim partial row when the canonical final lands (no orphan)", async () => {
+    const h = makeBridge();
+    await bringLive(h);
+    h.ws.emitMessage(JSON.stringify({ t: "stt_partial", text: "what is the", traceId: "t" }));
+    // The interim row is under the stable interim id.
+    const interim = h.segments.find((s) => s.status === "pending");
+    expect(interim!.id).toBe("pendant-ambient-partial");
+    h.ws.emitMessage(
+      JSON.stringify({
+        t: "stt_final",
+        text: "what is the weather",
+        segmentId: "pendant-abc:segment:0",
+        ordinal: 0,
+        revision: 1,
+        traceId: "t",
+      }),
+    );
+    // The interim id was discarded (removed) BEFORE the canonical resolved row.
+    const discardedInterim = h.segments.find(
+      (s) => s.id === "pendant-ambient-partial" && s.status === "discarded",
+    );
+    expect(discardedInterim).toBeDefined();
+    const resolved = h.segments.find((s) => s.status === "resolved");
+    expect(resolved!.id).toBe("pendant-abc:segment:0");
+    // Ordering: the discard of the interim precedes the resolved emit.
+    const discardIdx = h.segments.indexOf(discardedInterim!);
+    const resolvedIdx = h.segments.indexOf(resolved!);
+    expect(discardIdx).toBeLessThan(resolvedIdx);
   });
 
   it("an empty stt_final is a discarded segment, never a transcript dispatch", async () => {
@@ -366,16 +418,30 @@ describe("PendantAmbientBridge", () => {
     expect(h.ends).toEqual(["mint_failed"]);
   });
 
-  it("server rejects the hello (clean close before ready) → hello_rejected", async () => {
+  it("server rejects the hello (close before ready) → start() FALSE + hello_rejected", async () => {
     const h = makeBridge();
     const armedP = h.bridge.start();
     const ws = await waitForWs(h);
     ws.emitOpen();
-    await armedP; // start resolves true (WS opened); rejection comes async.
     // Server closes before sending `ready` (e.g. lease/claim/mode mismatch).
-    h.ws.emitServerClose(1000);
+    ws.emitServerClose(1000);
+    // start() resolves FALSE so the caller falls back to batch (the P1 fix).
+    const armed = await armedP;
+    expect(armed).toBe(false);
     expect(h.ends).toEqual(["hello_rejected"]);
     expect(h.bridge.isReady).toBe(false);
+  });
+
+  it("a socket error before ready ends without arming (start() FALSE)", async () => {
+    const h = makeBridge();
+    const armedP = h.bridge.start();
+    const ws = await waitForWs(h);
+    ws.emitOpen();
+    ws.emitError();
+    ws.emitServerClose(1006); // error is followed by a close
+    const armed = await armedP;
+    expect(armed).toBe(false);
+    expect(h.ends).toEqual(["hello_rejected"]);
   });
 
   it("audio pushed before ready is dropped (no uplink until server ready)", async () => {
@@ -383,10 +449,12 @@ describe("PendantAmbientBridge", () => {
     const armedP = h.bridge.start();
     const ws = await waitForWs(h);
     ws.emitOpen();
-    await armedP;
-    // hello sent but no ready yet.
+    // hello sent but no ready yet — push should be dropped.
     h.bridge.pushPcm(new Float32Array(3200).fill(0.5), 16000);
     expect(h.ws.uplinkFrameCount).toBe(0);
+    // Now go ready and confirm start() settles true.
+    ws.emitMessage(JSON.stringify({ t: "ready", sessionId: "sess-1", pendantSessionId: "pendant-abc", traceId: "t" }));
+    expect(await armedP).toBe(true);
   });
 });
 

@@ -157,6 +157,13 @@ export class PendantAmbientBridge {
   /** Accumulated resampled 16 kHz samples awaiting a full uplink frame cut. */
   private pending: Float32Array = new Float32Array(0);
 
+  /**
+   * Settles the {@link start} promise on the FIRST terminal outcome: `ready`
+   * (armed=true) or an end before ready (armed=false → the caller uses batch).
+   * Null once settled, so neither `ready` nor `finish` double-resolves.
+   */
+  private armResolve: ((armed: boolean) => void) | null = null;
+
   private readonly now: () => number;
 
   constructor(private readonly config: PendantAmbientBridgeConfig) {
@@ -173,31 +180,41 @@ export class PendantAmbientBridge {
   }
 
   /**
-   * Mint + connect. Resolves TRUE if the ambient session armed (mint ok + WS
-   * opening); resolves FALSE if the ambient path is unavailable and the caller
-   * must fall back to batch. Never throws — a mint/transport failure is
-   * translated into a FALSE result + an `onEnd(mint_*)` so the caller can pick
-   * the batch path deterministically.
+   * Mint + connect. Resolves TRUE ONLY once the server has ACCEPTED the ambient
+   * hello (the `ready` event) — i.e. the session is genuinely live and audio may
+   * stream. Resolves FALSE if the ambient path is unavailable OR the hello is
+   * rejected / the socket ends before `ready`, so the caller falls back to the
+   * batch ASR path deterministically (the non-regression law). Never throws.
+   *
+   * Arming ONLY on `ready` (not on WS-open) is the fix for the race where the
+   * socket opens but the server later rejects the hello: the caller must NOT
+   * store this bridge (and route BLE audio into a dead session) in that window.
    */
   async start(): Promise<boolean> {
-    if (this.phase !== "idle") return this.phase === "ready" || this.phase === "connecting";
+    if (this.phase !== "idle") return this.phase === "ready";
     this.phase = "connecting";
+    // The promise the caller awaits — settled by `ready` (true) or a pre-ready
+    // `finish` (false). Post-ready ends do NOT settle it (already true).
+    const armed = new Promise<boolean>((resolve) => {
+      this.armResolve = resolve;
+    });
+
     let minted: AmbientMintResponse;
     try {
       minted = await this.config.mint();
     } catch (error) {
       if (error instanceof AmbientMintUnavailableError) {
         this.finish("mint_unavailable");
-        return false;
+        return armed;
       }
       logger.warn({ error }, "[PendantAmbientBridge] ambient mint failed");
       this.finish("mint_failed");
-      return false;
+      return armed;
     }
     if (!isUsableAmbientMintResponse(minted)) {
       logger.warn("[PendantAmbientBridge] malformed ambient mint response");
       this.finish("mint_failed");
-      return false;
+      return armed;
     }
     this.minted = minted;
 
@@ -207,7 +224,7 @@ export class PendantAmbientBridge {
     } catch (error) {
       logger.warn({ error }, "[PendantAmbientBridge] WS construction failed");
       this.finish("mint_failed");
-      return false;
+      return armed;
     }
     socket.binaryType = "arraybuffer";
     this.ws = socket;
@@ -223,21 +240,22 @@ export class PendantAmbientBridge {
     });
     socket.addEventListener("close", (event) => {
       if (this.ended) return;
-      // A clean close (1000) before ready = the server rejected the hello
-      // (e.g. lease/mode/claim failure) → the caller falls back to batch. A
-      // non-clean or post-ready close is a transport/server end.
+      // A close before `ready` = the server rejected the hello (lease/mode/claim
+      // failure) or the transport dropped mid-handshake → the caller falls back
+      // to batch (`armed` resolves false). A post-ready close is a normal
+      // transport/server end of a live session.
       if (this.phase === "hello-sent" || this.phase === "connecting") {
         this.finish("hello_rejected");
         return;
       }
-      const clean = event.code === 1000;
-      this.finish(clean ? "server_close" : "server_close");
+      void event;
+      this.finish("server_close");
     });
     socket.addEventListener("error", () => {
       logger.debug("[PendantAmbientBridge] ambient WS error");
       // The close handler follows and drives the end; nothing to do here.
     });
-    return true;
+    return armed;
   }
 
   /**
@@ -327,6 +345,8 @@ export class PendantAmbientBridge {
     switch (event.t) {
       case "ready":
         this.phase = "ready";
+        // Settle start() TRUE: the server accepted the hello, the session is live.
+        this.settleArm(true);
         this.config.onReady?.();
         break;
       case "stt_partial":
@@ -369,24 +389,55 @@ export class PendantAmbientBridge {
   }
 
   /**
-   * Emit an interim (pending) segment for live partial text. Uses a stable
-   * per-utterance id so successive partials update the SAME row until the final
-   * lands with the canonical id. We derive nothing fake: the id is the pending
-   * marker, replaced by the canonical id on stt_final.
+   * Emit an interim (pending) segment for live partial text.
+   *
+   * The transcript reducer keys rows by `id`, so the live partial row must be
+   * REPLACED by the canonical final — not left as an orphan. Since the server
+   * only reveals the canonical `segmentId` on `stt_final` (never on partials),
+   * we hold the interim under a single stable per-turn id (`INTERIM_ID`) so
+   * successive partials update ONE row, and on the final we first `discarded`
+   * that interim row (removing it) before emitting the canonical resolved row.
+   * This mirrors the batch path's "one row per utterance" behavior without
+   * needing a server-provided id on the partial.
    */
+  private static readonly INTERIM_ID = "pendant-ambient-partial";
   private lastPartialText = "";
+  private hasInterim = false;
+  /**
+   * segmentIds we've already dispatched via {@link onTranscript}, so a server
+   * REVISION of an already-committed final (same segmentId, higher revision)
+   * updates the transcript row in place WITHOUT re-firing the spoken dispatch.
+   */
+  private readonly dispatchedSegmentIds = new Set<string>();
   private emitInterim(text: string): void {
     const trimmed = text.trim();
     if (!trimmed || trimmed === this.lastPartialText) return;
     this.lastPartialText = trimmed;
+    this.hasInterim = true;
     const at = this.now();
     this.config.onSegment({
-      id: `pendant-ambient-partial`,
+      id: PendantAmbientBridge.INTERIM_ID,
       status: "pending",
       text: trimmed,
       startedAt: at,
       endedAt: at,
       durationMs: 0,
+    });
+  }
+
+  /** Remove the live interim row (if any) so the canonical final replaces it. */
+  private clearInterim(): void {
+    if (!this.hasInterim) return;
+    this.hasInterim = false;
+    this.lastPartialText = "";
+    const at = this.now();
+    this.config.onSegment({
+      id: PendantAmbientBridge.INTERIM_ID,
+      status: "discarded",
+      startedAt: at,
+      endedAt: at,
+      durationMs: 0,
+      discardReason: "silence",
     });
   }
 
@@ -396,12 +447,16 @@ export class PendantAmbientBridge {
     ordinal: number;
     revision: number;
   }): void {
-    this.lastPartialText = "";
+    // Retire the live interim row first so it does not linger as an orphan
+    // pending row alongside the canonical resolved one.
+    this.clearInterim();
     const text = event.text.trim();
     const at = this.now();
     const detail: PendantTranscriptSegmentDetail = {
       // Canonical server id (pendant_sessions_v1 <sessionId>:segment:<ordinal>)
-      // is the stable id — the same id the durable store persisted.
+      // is the stable id — the same id the durable store persisted. On a
+      // revision (a corrected final) the server reuses the same segmentId, so
+      // the reducer updates the existing row in place.
       id: event.segmentId,
       status: text ? "resolved" : "discarded",
       startedAt: at,
@@ -414,7 +469,13 @@ export class PendantAmbientBridge {
       detail.discardReason = "silence";
     }
     this.config.onSegment(detail);
-    if (text) this.config.onTranscript?.(text);
+    // Fire the spoken dispatch ONCE per canonical segment (mirrors the batch
+    // path's one-dispatch-per-utterance), never again on a revision of the same
+    // committed segment.
+    if (text && !this.dispatchedSegmentIds.has(event.segmentId)) {
+      this.dispatchedSegmentIds.add(event.segmentId);
+      this.config.onTranscript?.(text);
+    }
   }
 
   private sendControl(payload: string): void {
@@ -437,9 +498,20 @@ export class PendantAmbientBridge {
     }
   }
 
+  /** Settle the start() arm promise exactly once. */
+  private settleArm(armed: boolean): void {
+    const resolve = this.armResolve;
+    this.armResolve = null;
+    resolve?.(armed);
+  }
+
   private finish(reason: AmbientBridgeEndReason): void {
     if (this.ended) return;
     this.ended = true;
+    // If start() has not yet been settled (an end BEFORE `ready`), it resolves
+    // FALSE so the caller uses the batch path. A post-ready end is a no-op here
+    // (already settled true).
+    this.settleArm(false);
     this.phase = "closed";
     const socket = this.ws;
     this.ws = null;

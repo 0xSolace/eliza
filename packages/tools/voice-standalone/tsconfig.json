@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "bun"],
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@harness-adapters/pendant-store-client.ts": [
+        "../../cloud/shared/src/lib/voice-session/pendant-store-client.ts"
+      ],
+      "@harness-adapters/pendant-contracts.ts": [
+        "../../shared/src/contracts/pendant-session-sync.ts"
+      ]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

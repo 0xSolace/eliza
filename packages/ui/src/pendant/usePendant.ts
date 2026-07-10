@@ -24,6 +24,15 @@ export interface UsePendantOptions {
   vadSpeechRmsThreshold?: number;
   onTranscript?: (text: string) => void;
   onSegment?: (detail: PendantTranscriptSegmentDetail) => void;
+  /**
+   * Optional ambient-mode ingest engine factory (from
+   * {@link usePendantAmbientBridge}). When supplied and it arms, decoded pendant
+   * audio streams to the ambient WS uplink (continuous cloud STT) instead of the
+   * batch ASR path; the server's canonical segments come back on the SAME
+   * {@link onSegment}/{@link onTranscript} callbacks. Absent/declined → batch
+   * path unchanged.
+   */
+  createAmbientBridge?: PendantConnectionOptions["createAmbientBridge"];
 }
 
 export interface UsePendantResult {
@@ -82,6 +91,7 @@ export function usePendant(options: UsePendantOptions = {}): UsePendantResult {
       onSegment: optionsRef.current.onSegment,
       vadSilenceMs: optionsRef.current.vadSilenceMs,
       vadSpeechRmsThreshold: optionsRef.current.vadSpeechRmsThreshold,
+      createAmbientBridge: optionsRef.current.createAmbientBridge,
     };
     const conn = new PendantConnection(opts);
     connectionRef.current = conn;

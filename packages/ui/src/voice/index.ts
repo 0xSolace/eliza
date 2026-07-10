@@ -150,6 +150,16 @@ export {
   type VoiceSessionMintResponse,
 } from "./voice-session-protocol";
 export {
+  AMBIENT_UPLINK_CODEC,
+  type AmbientClientControlFrame,
+  type AmbientMintResponse,
+  type AmbientServerFrame,
+  buildAmbientHello,
+  encodeAmbientClientControl,
+  isUsableAmbientMintResponse,
+  parseAmbientServerFrame,
+} from "./ambient-uplink-protocol";
+export {
   type DefaultVoiceProviderResult,
   type PickDefaultVoiceProviderInput,
   type PresetPlatform,

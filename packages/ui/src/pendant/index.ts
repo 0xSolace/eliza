@@ -24,10 +24,21 @@ export {
   type PendantAudioDecoder,
 } from "./opus-frame-decoder";
 export {
+  AMBIENT_UPLINK_SAMPLE_RATE_HZ,
+  AmbientMintUnavailableError,
+  type AmbientBridgeEndReason,
+  type AmbientWebSocketFactory,
+  type AmbientWebSocketLike,
+  PendantAmbientBridge,
+  type PendantAmbientBridgeConfig,
+  pendantCodecSampleRateHz,
+} from "./pendant-ambient-bridge";
+export {
   connectPendant,
   dispatchPendantVoiceTranscript,
   isPendantSupported,
   isWebBluetoothAvailable,
+  type PendantAmbientBridgeHooks,
   PENDANT_VOICE_TRANSCRIPT_EVENT,
   PendantConnection,
   type PendantConnectionOptions,

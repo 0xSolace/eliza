@@ -6,20 +6,22 @@
  * converges on the server revision rather than trusting local transcript state.
  */
 
-import type {
-  AcquirePendantLeaseRequest,
-  PatchPendantSegmentRequest,
-  PendantDeleteResponse,
-  PendantExportResponse,
-  PendantLeaseResponse,
-  PendantMutationResponse,
-  PendantSessionErrorResponse,
-  PendantSessionSnapshot,
-  PollPendantSessionResponse,
-  UpsertPendantInsightRefsRequest,
-  UpsertPendantSegmentRequest,
+import {
+  type AcquirePendantLeaseRequest,
+  type CreatePendantSessionRequest,
+  type PatchPendantSegmentRequest,
+  PENDANT_SESSION_SYNC_API_PREFIX,
+  type PendantDeleteResponse,
+  type PendantExportResponse,
+  type PendantLeaseResponse,
+  type PendantMutationResponse,
+  type PendantSessionErrorResponse,
+  type PendantSessionSnapshot,
+  type PollPendantSessionResponse,
+  pendantSegmentId,
+  type UpsertPendantInsightRefsRequest,
+  type UpsertPendantSegmentRequest,
 } from "@elizaos/shared/contracts";
-import { PENDANT_SESSION_SYNC_API_PREFIX } from "@elizaos/shared/contracts";
 import { fetchWithCsrf } from "../api/csrf-client";
 import { resolveApiUrl } from "../utils/asset-url";
 
@@ -29,6 +31,7 @@ export interface PendantSessionSyncClientOptions {
   fetcher?: Fetcher;
   pollMs?: number;
   onSnapshot?: (snapshot: PendantSessionSnapshot) => void;
+  onQueueChange?: (length: number) => void;
   onError?: (error: Error) => void;
 }
 
@@ -52,10 +55,14 @@ export class PendantSessionSyncClient {
   private readonly fetcher: Fetcher;
   private readonly pollMs: number;
   private readonly onSnapshot?: (snapshot: PendantSessionSnapshot) => void;
+  private readonly onQueueChange?: (length: number) => void;
   private readonly onError?: (error: Error) => void;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingGeneration = 0;
+  private invalidationGeneration = 0;
   private draining = false;
+  private snapshotNotificationHoldDepth = 0;
+  private deferredSnapshotNotification: PendantSessionSnapshot | null = null;
   private snapshot: PendantSessionSnapshot | null = null;
   readonly unsyncedQueue: QueuedPendantMutation[] = [];
 
@@ -63,6 +70,7 @@ export class PendantSessionSyncClient {
     this.fetcher = options.fetcher ?? fetchWithCsrf;
     this.pollMs = options.pollMs ?? 500;
     this.onSnapshot = options.onSnapshot;
+    this.onQueueChange = options.onQueueChange;
     this.onError = options.onError;
   }
 
@@ -103,12 +111,10 @@ export class PendantSessionSyncClient {
   }
 
   async createSession(
-    input: {
-      sessionId?: string;
-      processingLocation?: "on-device" | "cloud";
-    } = {},
+    input: CreatePendantSessionRequest = {},
   ): Promise<PendantSessionSnapshot> {
-    return this.requestSnapshot(PENDANT_SESSION_SYNC_API_PREFIX, {
+    const generation = this.invalidationGeneration;
+    return this.requestSnapshot(generation, PENDANT_SESSION_SYNC_API_PREFIX, {
       method: "POST",
       body: JSON.stringify(input),
     });
@@ -156,6 +162,15 @@ export class PendantSessionSyncClient {
     );
   }
 
+  async upsertSegmentLifecycle(
+    sessionId: string,
+    request: UpsertPendantSegmentRequest,
+  ): Promise<PendantSessionSnapshot> {
+    const key = `segment-lifecycle:${sessionId}:${request.segment.ordinal}`;
+    const run = () => this.runSegmentLifecycleUpsert(sessionId, request);
+    return this.enqueueOrRun(key, run, { coalesce: true });
+  }
+
   async pause(
     sessionId: string,
     revision?: number,
@@ -197,6 +212,7 @@ export class PendantSessionSyncClient {
   }
 
   async poll(sessionId: string): Promise<PendantSessionSnapshot | null> {
+    const generation = this.invalidationGeneration;
     const afterRevision =
       this.snapshot?.session.id === sessionId
         ? this.snapshot.session.revision
@@ -208,7 +224,7 @@ export class PendantSessionSyncClient {
       { method: "GET" },
     );
     if (!response.changed) return null;
-    this.acceptSnapshot(response.snapshot);
+    this.acceptSnapshot(response.snapshot, generation);
     return response.snapshot;
   }
 
@@ -221,14 +237,34 @@ export class PendantSessionSyncClient {
   }
 
   async deleteSession(sessionId: string): Promise<PendantDeleteResponse> {
+    const generation = this.invalidationGeneration;
     const response = await this.request<PendantDeleteResponse>(
       path(sessionId),
       {
         method: "DELETE",
       },
     );
-    if (this.snapshot?.session.id === sessionId) this.snapshot = null;
+    if (generation === this.invalidationGeneration) {
+      if (this.snapshot?.session.id === sessionId) this.snapshot = null;
+    }
     return response;
+  }
+
+  clearLocalSession(sessionId?: string): void {
+    this.invalidationGeneration += 1;
+    this.stopPolling();
+    if (!sessionId || this.snapshot?.session.id === sessionId) {
+      this.snapshot = null;
+    }
+    const previousLength = this.unsyncedQueue.length;
+    this.unsyncedQueue.length = 0;
+    this.emitQueueChange(previousLength);
+  }
+
+  clearUnsyncedCache(): void {
+    const previousLength = this.unsyncedQueue.length;
+    this.unsyncedQueue.length = 0;
+    this.emitQueueChange(previousLength);
   }
 
   async flushQueue(): Promise<void> {
@@ -240,9 +276,13 @@ export class PendantSessionSyncClient {
         if (!next) return;
         if (next.status === "conflict" && next.error) throw next.error;
         try {
-          const snapshot = await next.run();
-          this.acceptSnapshot(snapshot);
-          this.unsyncedQueue.shift();
+          this.snapshotNotificationHoldDepth += 1;
+          await next.run();
+          if (this.unsyncedQueue[0] === next) {
+            const previousLength = this.unsyncedQueue.length;
+            this.unsyncedQueue.shift();
+            this.emitQueueChange(previousLength);
+          }
         } catch (err) {
           if (
             err instanceof PendantSessionSyncError &&
@@ -252,6 +292,12 @@ export class PendantSessionSyncClient {
             next.error = err;
           }
           throw err;
+        } finally {
+          this.snapshotNotificationHoldDepth = Math.max(
+            0,
+            this.snapshotNotificationHoldDepth - 1,
+          );
+          this.flushDeferredSnapshotNotification();
         }
       }
     } finally {
@@ -264,32 +310,114 @@ export class PendantSessionSyncClient {
       (mutation) => mutation.id === id,
     );
     if (index < 0) return false;
+    const previousLength = this.unsyncedQueue.length;
     this.unsyncedQueue.splice(index, 1);
+    this.emitQueueChange(previousLength);
     return true;
   }
 
   private async enqueueOrRun(
     id: string,
     run: () => Promise<PendantSessionSnapshot>,
+    options: { coalesce?: boolean } = {},
   ): Promise<PendantSessionSnapshot> {
+    const generation = this.invalidationGeneration;
+    if (options.coalesce && this.replaceQueuedMutation(id, run)) {
+      if (this.snapshot) return this.snapshot;
+    }
     try {
       const snapshot = await run();
-      this.acceptSnapshot(snapshot);
+      if (generation !== this.invalidationGeneration) {
+        return snapshot;
+      }
       return snapshot;
     } catch (err) {
+      if (generation !== this.invalidationGeneration) throw err;
       if (!isOfflineError(err)) throw err;
-      this.unsyncedQueue.push({ id, status: "pending", run });
+      if (options.coalesce) {
+        this.replaceQueuedMutation(id, run) ||
+          this.unsyncedQueue.push({ id, status: "pending", run });
+      } else {
+        this.unsyncedQueue.push({ id, status: "pending", run });
+      }
+      this.emitQueueChange();
       if (this.snapshot) return this.snapshot;
       throw err;
     }
   }
 
+  private replaceQueuedMutation(
+    id: string,
+    run: () => Promise<PendantSessionSnapshot>,
+  ): boolean {
+    const index = this.unsyncedQueue.findIndex(
+      (mutation) => mutation.id === id,
+    );
+    if (index < 0) return false;
+    this.unsyncedQueue[index] = { id, status: "pending", run };
+    return true;
+  }
+
+  private emitQueueChange(previousLength?: number): void {
+    if (
+      previousLength !== undefined &&
+      previousLength === this.unsyncedQueue.length
+    ) {
+      return;
+    }
+    this.onQueueChange?.(this.unsyncedQueue.length);
+  }
+
+  private async runSegmentLifecycleUpsert(
+    sessionId: string,
+    request: UpsertPendantSegmentRequest,
+  ): Promise<PendantSessionSnapshot> {
+    const segmentId = pendantSegmentId(sessionId, request.segment.ordinal);
+    const existing =
+      this.snapshot?.session.id === sessionId
+        ? this.snapshot.segments.find((segment) => segment.id === segmentId)
+        : undefined;
+    if (!existing) {
+      return this.requestMutation(`${path(sessionId)}/segments`, {
+        method: "POST",
+        body: JSON.stringify(request),
+      });
+    }
+    if (
+      existing.status === "resolved" &&
+      request.segment.status !== "resolved" &&
+      this.snapshot
+    ) {
+      return this.snapshot;
+    }
+    return this.requestMutation(
+      `${path(sessionId)}/segments/${encodeURIComponent(segmentId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          leaseToken: request.leaseToken,
+          revision: existing.revision + 1,
+          status: request.segment.status,
+          text: request.segment.text,
+          words: request.segment.words,
+          speakerCluster: request.segment.speakerCluster,
+          speakerAlias: request.segment.speakerAlias,
+          confidence: request.segment.confidence,
+          error: request.segment.error,
+          startedAt: request.segment.startedAt,
+          endedAt: request.segment.endedAt,
+        } satisfies PatchPendantSegmentRequest),
+      },
+    );
+  }
+
   private async requestSnapshot(
+    generation: number,
     url: string,
     init: RequestInit,
   ): Promise<PendantSessionSnapshot> {
     const response = await this.request<PendantMutationResponse>(url, init);
-    this.acceptSnapshot(response.snapshot);
+    this.acceptSnapshot(response.snapshot, generation);
     return response.snapshot;
   }
 
@@ -297,8 +425,9 @@ export class PendantSessionSyncClient {
     url: string,
     init: RequestInit,
   ): Promise<PendantSessionSnapshot> {
+    const generation = this.invalidationGeneration;
     const response = await this.request<PendantMutationResponse>(url, init);
-    this.acceptSnapshot(response.snapshot);
+    this.acceptSnapshot(response.snapshot, generation);
     return response.snapshot;
   }
 
@@ -321,7 +450,11 @@ export class PendantSessionSyncClient {
     return body as T;
   }
 
-  private acceptSnapshot(snapshot: PendantSessionSnapshot): void {
+  private acceptSnapshot(
+    snapshot: PendantSessionSnapshot,
+    generation = this.invalidationGeneration,
+  ): void {
+    if (generation !== this.invalidationGeneration) return;
     if (
       this.snapshot &&
       this.snapshot.session.id === snapshot.session.id &&
@@ -330,6 +463,22 @@ export class PendantSessionSyncClient {
       return;
     }
     this.snapshot = snapshot;
+    if (this.snapshotNotificationHoldDepth > 0) {
+      this.deferredSnapshotNotification = snapshot;
+      return;
+    }
+    this.onSnapshot?.(snapshot);
+  }
+
+  private flushDeferredSnapshotNotification(): void {
+    if (
+      this.snapshotNotificationHoldDepth > 0 ||
+      !this.deferredSnapshotNotification
+    ) {
+      return;
+    }
+    const snapshot = this.deferredSnapshotNotification;
+    this.deferredSnapshotNotification = null;
     this.onSnapshot?.(snapshot);
   }
 }

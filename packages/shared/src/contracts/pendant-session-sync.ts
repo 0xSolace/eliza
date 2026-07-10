@@ -140,7 +140,6 @@ export type PendantSessionErrorResponse = z.infer<
 export const CreatePendantSessionRequestSchema = z
   .object({
     sessionId: z.string().min(1).optional(),
-    processingLocation: PendantProcessingLocationSchema.default("on-device"),
   })
   .strict();
 export type CreatePendantSessionRequest = z.infer<

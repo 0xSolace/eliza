@@ -1214,6 +1214,14 @@ function templateReport() {
           "Actual sol-dev browser logs, HAR/trace, screenshots/video, and bounded/redacted transcript/session artifacts. Does not prove physical pairing.",
       },
       {
+        id: "server-session-cascade-processing-location",
+        proof: "supplemental",
+        status: "unverified",
+        artifacts: [],
+        notes:
+          "Pendant session API evidence for server-derived processingLocation, cascade delete, tenant isolation, metadata-only invalidation, and content-free framing metrics. No transcript content in websocket evidence.",
+      },
+      {
         id: "desktop-sol-dev-manual-web-bluetooth",
         proof: "physical",
         status: "unverified",

@@ -1,10 +1,10 @@
 /**
  * Ambient-transcription segment events for the pendant transcript surface.
  *
- * The voice path still emits finalized text on `PENDANT_VOICE_TRANSCRIPT_EVENT`
- * so chat can send a spoken VOICE_DM. This channel is a passive transcript feed:
- * it announces each VAD utterance as pending, then resolves it with text and
- * word timings or drops it when no usable ASR result exists.
+ * The channel announces each VAD utterance as pending, then resolves it with
+ * text and word timings or drops it when no usable ASR result exists. Consumers
+ * must commit resolved text to the session-sync API before fan-out to chat or
+ * insights, keeping the server segment as the canonical utterance record.
  */
 
 /** Custom window event carrying an ambient-transcript segment lifecycle update. */

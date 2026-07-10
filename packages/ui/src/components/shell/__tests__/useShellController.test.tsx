@@ -18,6 +18,7 @@ import {
   type Mock,
   vi,
 } from "vitest";
+import { PENDANT_VOICE_TRANSCRIPT_EVENT } from "../../../pendant/pendant-connection";
 import { emitViewEvent } from "../../../views/view-event-bus";
 import {
   createVoiceCapture,
@@ -792,6 +793,38 @@ describe("useShellController — voice capture routing", () => {
     expect(appMock.value.sendChatText.mock.calls[0]?.[1]).toMatchObject({
       channelType: "VOICE_DM",
     });
+  });
+
+  it("pendant transcript events send VOICE_DM with canonical provenance", () => {
+    renderHook(() => useShellController());
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(PENDANT_VOICE_TRANSCRIPT_EVENT, {
+          detail: {
+            text: "accepted pendant text",
+            sessionId: "sess-a",
+            segmentId: "sess-a:segment:0",
+            ownerId: "owner-a",
+            agentId: "agent-a",
+          },
+        }),
+      );
+    });
+
+    expect(appMock.value.sendChatText).toHaveBeenCalledWith(
+      "accepted pendant text",
+      expect.objectContaining({
+        channelType: "VOICE_DM",
+        metadata: expect.objectContaining({
+          voiceSource: "pendant",
+          pendantSessionId: "sess-a",
+          pendantSegmentId: "sess-a:segment:0",
+          ownerId: "owner-a",
+          agentId: "agent-a",
+        }),
+      }),
+    );
   });
 
   it("engage does not open the mic when the mic grant is known-denied", async () => {

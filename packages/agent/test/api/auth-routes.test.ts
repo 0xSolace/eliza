@@ -11,6 +11,7 @@ type CapturedResponse = {
 function createAuthRouteHarness(options: {
   headers?: Record<string, string>;
   pathname?: string;
+  remoteAddress?: string;
 }): {
   captured: CapturedResponse;
   ctx: Parameters<typeof handleAuthRoutes>[0];
@@ -25,7 +26,7 @@ function createAuthRouteHarness(options: {
       ...options.headers,
     },
     socket: {
-      remoteAddress: "127.0.0.1",
+      remoteAddress: options.remoteAddress ?? "127.0.0.1",
     },
   } as http.IncomingMessage;
   const res = {} as http.ServerResponse;
@@ -70,6 +71,7 @@ describe("handleAuthRoutes", () => {
   });
 
   it("returns a local session for the authorized on-device agent token", async () => {
+    process.env.ELIZA_REQUIRE_LOCAL_AUTH = "0";
     const { ctx, captured } = createAuthRouteHarness({
       headers: {
         authorization: "Bearer native-token",
@@ -96,6 +98,58 @@ describe("handleAuthRoutes", () => {
         ownerConfigured: false,
       },
     });
+    expect(captured.body).toHaveProperty("identity");
+    expect(captured.body).toHaveProperty("session");
+    expect(captured.body).toHaveProperty("access.role", "OWNER");
+  });
+
+  it("returns the canonical bearer machine session shape for a per-boot mobile token", async () => {
+    const { ctx, captured } = createAuthRouteHarness({
+      headers: {
+        host: "10.0.0.7:31337",
+        authorization: "Bearer native-token",
+      },
+      remoteAddress: "10.0.0.9",
+    });
+
+    await expect(handleAuthRoutes(ctx)).resolves.toBe(true);
+
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({
+      identity: {
+        id: "bearer-agent",
+        displayName: "API User",
+        kind: "machine",
+      },
+      session: {
+        id: "bearer",
+        kind: "machine",
+        expiresAt: null,
+      },
+      access: {
+        mode: "bearer",
+        passwordConfigured: true,
+        ownerConfigured: false,
+        role: "OWNER",
+      },
+    });
+  });
+
+  it("serves real auth status separately from the canonical identity route", async () => {
+    const { ctx, captured } = createAuthRouteHarness({
+      pathname: "/api/auth/status",
+    });
+
+    await expect(handleAuthRoutes(ctx)).resolves.toBe(true);
+
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({
+      required: true,
+      pairingEnabled: false,
+      expiresAt: null,
+    });
+    expect(captured.body).not.toHaveProperty("identity");
+    expect(captured.body).not.toHaveProperty("session");
   });
 
   it("requires the bearer token when Android local auth is enforced", async () => {
@@ -110,6 +164,29 @@ describe("handleAuthRoutes", () => {
         mode: "local",
         passwordConfigured: true,
         ownerConfigured: false,
+      },
+    });
+  });
+
+  it("rejects an invalid per-boot mobile bearer token on a non-loopback host", async () => {
+    const { ctx, captured } = createAuthRouteHarness({
+      headers: {
+        host: "10.0.0.7:31337",
+        authorization: "Bearer wrong-token",
+      },
+      remoteAddress: "10.0.0.9",
+    });
+
+    await expect(handleAuthRoutes(ctx)).resolves.toBe(true);
+
+    expect(captured.status).toBe(401);
+    expect(captured.body).toMatchObject({
+      reason: "remote_auth_required",
+      access: {
+        mode: "local",
+        passwordConfigured: true,
+        ownerConfigured: false,
+        role: "GUEST",
       },
     });
   });

@@ -80,6 +80,7 @@ export async function generatePendantInsights(args: {
   try {
     raw = await args.runModel(built.prompt, args.signal);
   } catch (err) {
+    // error-policy:J1 model boundary returns an explicit failed insights result.
     if (args.signal?.aborted) return { ok: false, error: "cancelled" };
     return {
       ok: false,
@@ -128,17 +129,21 @@ export async function persistPendantInsights(args: {
   runtime: PendantInsightsMemoryRuntime;
   insights: PendantInsights;
   segmentIds: readonly string[];
+  ownerId: UUID;
+  sessionId: string;
 }): Promise<UUID | null> {
   if (isEmptyInsights(args.insights)) return null;
 
   const id = stringToUuid(
-    `pendant-insights:v${args.insights.schemaVersion}:${args.segmentIds.join("|")}`,
+    `pendant-insights:v${args.insights.schemaVersion}:${args.ownerId}:${args.sessionId}:${args.segmentIds.join("|")}`,
   );
   const memory: Memory = {
     id,
     agentId: args.runtime.agentId,
-    entityId: args.runtime.agentId,
-    roomId: args.runtime.agentId,
+    entityId: args.ownerId,
+    roomId: stringToUuid(
+      `pendant-insights-room:${args.ownerId}:${args.runtime.agentId}`,
+    ),
     worldId: args.runtime.agentId,
     createdAt: args.insights.generatedAt,
     unique: true,
@@ -150,11 +155,14 @@ export async function persistPendantInsights(args: {
       type: "custom",
       source: "pendant-insights",
       scope: "owner-private",
+      ownerId: args.ownerId,
+      sessionId: args.sessionId,
+      agentId: args.runtime.agentId,
       timestamp: args.insights.generatedAt,
       tags: ["pendant", "insights", "ambient-memory"],
       schemaVersion: args.insights.schemaVersion,
       insights: args.insights,
-      sourceSegmentIds: args.segmentIds,
+      sourceSegmentIds: [...args.segmentIds],
     },
   };
   const existing = await args.runtime.getMemoryById(id);
@@ -199,6 +207,50 @@ export function formatPendantInsightsMemory(insights: PendantInsights): string {
   return lines.join("\n");
 }
 
+export type InsightSessionProvenanceResult =
+  | { ok: true; sessionId: string }
+  | { ok: false; error: string };
+
+export function validateInsightSessionProvenance(
+  segments: ReadonlyArray<InsightSourceSegment>,
+): InsightSessionProvenanceResult {
+  const first = segments[0]?.id.trim();
+  const marker = ":segment:";
+  const markerIndex = first?.lastIndexOf(marker) ?? -1;
+  if (!first || markerIndex <= 0) {
+    return {
+      ok: false,
+      error: "Insight segment ids must use canonical pendant session prefixes",
+    };
+  }
+  const sessionId = first.slice(0, markerIndex);
+  for (const segment of segments) {
+    const id = segment.id.trim();
+    const index = id.lastIndexOf(marker);
+    if (index <= 0) {
+      return {
+        ok: false,
+        error:
+          "Insight segment ids must use canonical pendant session prefixes",
+      };
+    }
+    const currentSessionId = id.slice(0, index);
+    const ordinalText = id.slice(index + marker.length);
+    if (
+      currentSessionId !== sessionId ||
+      !/^(0|[1-9]\d*)$/.test(ordinalText) ||
+      Number(ordinalText) !== segment.ordinal
+    ) {
+      return {
+        ok: false,
+        error:
+          "Insight source segments must belong to one pendant session and match their canonical ordinals",
+      };
+    }
+  }
+  return { ok: true, sessionId };
+}
+
 /** Minimal context the HTTP handler needs (a subset of the misc-route context). */
 export interface PendantInsightsRouteContext {
   req: http.IncomingMessage;
@@ -209,6 +261,7 @@ export interface PendantInsightsRouteContext {
     runtime:
       | (PendantInsightsMemoryRuntime & { useModel: RunTextModel | unknown })
       | null;
+    adminEntityId?: UUID | null;
   };
   json: (res: http.ServerResponse, data: unknown, status?: number) => void;
   error: (res: http.ServerResponse, message: string, status?: number) => void;
@@ -246,11 +299,19 @@ export async function handlePendantInsightsRoutes(
   }
 
   const runtime = state.runtime;
+  const ownerId = state.adminEntityId;
   if (
     !runtime ||
-    typeof (runtime as { useModel?: unknown }).useModel !== "function"
+    typeof (runtime as { useModel?: unknown }).useModel !== "function" ||
+    !ownerId
   ) {
     json(res, { ok: false, reason: "runtime-unavailable" });
+    return true;
+  }
+
+  const provenance = validateInsightSessionProvenance(parsed.data.segments);
+  if (!provenance.ok) {
+    error(res, provenance.error, 400);
     return true;
   }
 
@@ -297,8 +358,11 @@ export async function handlePendantInsightsRoutes(
           runtime,
           insights: result.insights,
           segmentIds: parsed.data.segments.map((segment) => segment.id),
+          ownerId,
+          sessionId: provenance.sessionId,
         });
       } catch (err) {
+        // error-policy:J1 route boundary reports persistence failure to the caller.
         error(
           res,
           `failed to persist pendant insights: ${err instanceof Error ? err.message : String(err)}`,

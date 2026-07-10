@@ -19,15 +19,18 @@
 
 import {
   OMI_CODEC,
-  type OmiCodecId,
   OMI_OPUS_CHANNELS,
   OMI_OPUS_SAMPLE_RATE_HZ,
+  type OmiCodecId,
 } from "./omi-protocol";
 
 /** Minimal shape of the `opus-decoder` main-thread decoder we rely on. */
 interface OpusDecoderLike {
   ready: Promise<void>;
-  decodeFrame(frame: Uint8Array): { channelData: Float32Array[]; samplesDecoded: number };
+  decodeFrame(frame: Uint8Array): {
+    channelData: Float32Array[];
+    samplesDecoded: number;
+  };
   free(): void;
   reset(): Promise<void>;
 }
@@ -95,7 +98,8 @@ async function createOpusDecoder(): Promise<PendantAudioDecoder> {
     free() {
       try {
         decoder.free();
-      } catch {
+      } catch (err) {
+        void err;
         /* already freed */
       }
     },
@@ -108,7 +112,11 @@ function createPcm16Decoder(): PendantAudioDecoder {
     decodeFrame(frame: Uint8Array): Float32Array {
       const sampleCount = frame.length >> 1;
       if (sampleCount === 0) return EMPTY;
-      const view = new DataView(frame.buffer, frame.byteOffset, sampleCount * 2);
+      const view = new DataView(
+        frame.buffer,
+        frame.byteOffset,
+        sampleCount * 2,
+      );
       const out = new Float32Array(sampleCount);
       for (let i = 0; i < sampleCount; i++) {
         out[i] = view.getInt16(i * 2, true) / 0x8000;

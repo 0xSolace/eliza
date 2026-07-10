@@ -1709,6 +1709,48 @@ if (__shebangStripped !== bundleSrc) {
   bundleSrc = __shebangStripped;
 }
 
+function repairMalformedDeadReExport(src) {
+  const malformedReExportRegex =
+    /^\s*__reExport\(([A-Za-z_$][\w$]*),\s*__toESM\(\s*,\s*1\s*\)\);\s*$/gm;
+  const matches = [...src.matchAll(malformedReExportRegex)];
+  if (matches.length === 0) return src;
+  if (matches.length > 1) {
+    throw new Error(
+      `[build-mobile] FATAL: refusing to repair ${matches.length} malformed __toESM(, 1) statements`,
+    );
+  }
+
+  const match = matches[0];
+  const exportObjectName = match[1];
+  const matchIndex = match.index ?? -1;
+  const before = src.slice(0, matchIndex);
+  const exportObjectDeclared = new RegExp(
+    `\\bvar\\s+${exportObjectName}\\s*=\\s*\\{\\s*\\};`,
+  ).test(before);
+  const exportStart = before.lastIndexOf(`__export(${exportObjectName}, {`);
+  const exportEnd = before.lastIndexOf("\n});");
+  const exportedNamesBlock =
+    exportStart === -1 || exportEnd === -1 || exportEnd < exportStart
+      ? ""
+      : before.slice(exportStart, exportEnd);
+  const emittedNamedExports =
+    exportObjectDeclared &&
+    exportedNamesBlock.split("\n").some((line) => /^\s*[A-Za-z_$]/.test(line));
+
+  if (!emittedNamedExports) {
+    throw new Error(
+      `[build-mobile] FATAL: malformed __toESM(, 1) targets ${exportObjectName}, but named exports were not already emitted`,
+    );
+  }
+
+  console.log(
+    `[build-mobile] repaired dead malformed __reExport for ${exportObjectName}`,
+  );
+  return src.slice(0, matchIndex) + src.slice(matchIndex + match[0].length);
+}
+
+bundleSrc = repairMalformedDeadReExport(bundleSrc);
+
 function initSourceComment(src, initName, searchOffset) {
   const initOffset = src.indexOf(`var ${initName} = __esm`, searchOffset);
   if (initOffset === -1) return "(definition not found)";
@@ -1834,6 +1876,15 @@ console.log(
     `${renames.undeclaredApplies.size} apply*, ` +
     `${renames.undeclaredServices.size} *Service* identifiers covered`,
 );
+const requiredRouteMarkers = ["/api/auth/me", "/api/auth/status"];
+for (const marker of requiredRouteMarkers) {
+  if (!bundleSrc.includes(marker)) {
+    console.error(
+      `[build-mobile] FATAL: mobile bundle is missing required auth route marker ${marker}`,
+    );
+    process.exit(1);
+  }
+}
 const polyfillHeader = `${polyfillLines.join("\n")}\n`;
 const polyfillFooter = "";
 

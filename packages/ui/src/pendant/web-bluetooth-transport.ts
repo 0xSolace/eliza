@@ -32,6 +32,39 @@ import {
   PendantUserCancelledError,
 } from "./pendant-transport";
 
+interface PendantBluetooth {
+  requestDevice(options: {
+    filters: Array<{ namePrefix?: string; services?: string[] }>;
+    optionalServices: string[];
+  }): Promise<PendantBluetoothDevice>;
+}
+
+interface PendantBluetoothDevice extends EventTarget {
+  readonly name?: string;
+  readonly gatt?: PendantBluetoothRemoteGATTServer;
+}
+
+interface PendantBluetoothRemoteGATTServer {
+  connect(): Promise<PendantBluetoothRemoteGATTServer>;
+  disconnect(): void;
+  getPrimaryService(
+    service: string,
+  ): Promise<PendantBluetoothRemoteGATTService>;
+}
+
+interface PendantBluetoothRemoteGATTService {
+  getCharacteristic(
+    characteristic: string,
+  ): Promise<PendantBluetoothRemoteGATTCharacteristic>;
+}
+
+interface PendantBluetoothRemoteGATTCharacteristic extends EventTarget {
+  readonly value?: DataView;
+  readValue(): Promise<DataView>;
+  startNotifications(): Promise<PendantBluetoothRemoteGATTCharacteristic>;
+  stopNotifications(): Promise<PendantBluetoothRemoteGATTCharacteristic>;
+}
+
 /** True when the browser exposes the Web Bluetooth API. */
 export function isWebBluetoothAvailable(): boolean {
   return (
@@ -46,18 +79,18 @@ export function isWebBluetoothAvailable(): boolean {
 export class WebBluetoothPendantTransport implements PendantTransport {
   readonly kind = "web-bluetooth" as const;
 
-  private device: BluetoothDevice | null = null;
-  private server: BluetoothRemoteGATTServer | null = null;
-  private audioService: BluetoothRemoteGATTService | null = null;
-  private audioChar: BluetoothRemoteGATTCharacteristic | null = null;
-  private batteryChar: BluetoothRemoteGATTCharacteristic | null = null;
+  private device: PendantBluetoothDevice | null = null;
+  private server: PendantBluetoothRemoteGATTServer | null = null;
+  private audioService: PendantBluetoothRemoteGATTService | null = null;
+  private audioChar: PendantBluetoothRemoteGATTCharacteristic | null = null;
+  private batteryChar: PendantBluetoothRemoteGATTCharacteristic | null = null;
 
   private audioListener: PendantAudioListener | null = null;
   private batteryListener: PendantBatteryListener | null = null;
   private disconnectedHandler: (() => void) | null = null;
 
   private readonly onAudioNotify = (event: Event): void => {
-    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const target = event.target as PendantBluetoothRemoteGATTCharacteristic;
     const value = target.value;
     if (!value || !this.audioListener) return;
     // Respect the DataView's window into its ArrayBuffer — a bare
@@ -69,7 +102,7 @@ export class WebBluetoothPendantTransport implements PendantTransport {
   };
 
   private readonly onBatteryNotify = (event: Event): void => {
-    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const target = event.target as PendantBluetoothRemoteGATTCharacteristic;
     const pct = target.value?.getUint8(0);
     if (typeof pct === "number") this.batteryListener?.(pct);
   };
@@ -82,9 +115,9 @@ export class WebBluetoothPendantTransport implements PendantTransport {
     if (!isWebBluetoothAvailable()) {
       throw new Error("Web Bluetooth is not available in this browser.");
     }
-    const bluetooth = (navigator as Navigator & { bluetooth: Bluetooth })
+    const bluetooth = (navigator as Navigator & { bluetooth: PendantBluetooth })
       .bluetooth;
-    let device: BluetoothDevice;
+    let device: PendantBluetoothDevice;
     try {
       device = await bluetooth.requestDevice({
         // Accept by advertised name prefix ("Friend" today, "eliza" soon) AND
@@ -143,16 +176,13 @@ export class WebBluetoothPendantTransport implements PendantTransport {
     await audioChar.startNotifications();
   }
 
-  async startBattery(
-    listener: PendantBatteryListener,
-  ): Promise<number | null> {
+  async startBattery(listener: PendantBatteryListener): Promise<number | null> {
     const server = this.server;
     if (!server) return null;
     this.batteryListener = listener;
     try {
-      const batteryService = await server.getPrimaryService(
-        BATTERY_SERVICE_UUID,
-      );
+      const batteryService =
+        await server.getPrimaryService(BATTERY_SERVICE_UUID);
       const batteryChar = await batteryService.getCharacteristic(
         BATTERY_LEVEL_CHAR_UUID,
       );
@@ -190,12 +220,14 @@ export class WebBluetoothPendantTransport implements PendantTransport {
     );
     try {
       await this.audioChar?.stopNotifications();
-    } catch {
+    } catch (err) {
+      void err;
       /* already gone */
     }
     try {
       this.device?.gatt?.disconnect();
-    } catch {
+    } catch (err) {
+      void err;
       /* already disconnected */
     }
     this.audioListener = null;

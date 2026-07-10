@@ -13,9 +13,9 @@
  *                                                  (the SAME ASR client + route
  *                                                   the composer/hands-free mic
  *                                                   surfaces post to)
- *     → dispatchPendantVoiceTranscript           → useShellController sends it as
- *                                                  a VOICE_DM so the reply is
- *                                                  spoken back: full voice loop.
+ *     → session-sync commit                      → follower transcript +
+ *                                                  capturer fan-out from the
+ *                                                  accepted server record.
  *
  * The BLE layer is abstracted behind {@link PendantTransport} so this whole
  * pipeline is platform-agnostic: {@link WebBluetoothPendantTransport} on Chrome
@@ -108,7 +108,7 @@ export interface PendantConnectionOptions {
   /**
    * Called for each ambient-transcript segment as it moves through its
    * lifecycle (pending → resolved/dropped). Distinct from {@link onTranscript},
-   * which only fires on a resolved turn (and drives the VOICE_DM send). The
+   * which only fires on a resolved turn for local listeners. The
    * transcript surface listens to this for interim state; if omitted the
    * segment window events are still dispatched globally.
    */
@@ -129,6 +129,10 @@ export const PENDANT_VOICE_TRANSCRIPT_EVENT =
 
 export interface PendantVoiceTranscriptDetail {
   text: string;
+  sessionId?: string;
+  segmentId?: string;
+  ownerId?: string;
+  agentId?: string;
 }
 
 function formatPendantAsrError(err: unknown): string {
@@ -137,14 +141,22 @@ function formatPendantAsrError(err: unknown): string {
 }
 
 /** Dispatch a finalized pendant transcript for the shell to send as VOICE_DM. */
-export function dispatchPendantVoiceTranscript(text: string): void {
+export function dispatchPendantVoiceTranscript(
+  text: string,
+  provenance: {
+    sessionId?: string;
+    segmentId?: string;
+    ownerId?: string;
+    agentId?: string;
+  } = {},
+): void {
   if (typeof window === "undefined") return;
   const trimmed = text.trim();
   if (!trimmed) return;
   window.dispatchEvent(
     new CustomEvent<PendantVoiceTranscriptDetail>(
       PENDANT_VOICE_TRANSCRIPT_EVENT,
-      { detail: { text: trimmed } },
+      { detail: { text: trimmed, ...provenance } },
     ),
   );
 }
@@ -180,6 +192,16 @@ export class PendantConnection {
   private paused = false;
   /** Tie-breaker for segment ids that already include wall-clock timing. */
   private segmentSeq = 0;
+  private captureGeneration = 0;
+  private readonly pendingSegments = new Map<
+    string,
+    {
+      segment: PendantTranscriptSegmentDetail;
+      generation: number;
+      terminal: boolean;
+    }
+  >();
+  private readonly activeAsrControllers = new Set<AbortController>();
   private state: PendantState = {
     status: "idle",
     connectStep: "idle",
@@ -212,6 +234,7 @@ export class PendantConnection {
     this.reassembler.reset();
     this.accountedDroppedPackets = 0;
     this.paused = false;
+    this.abortPendingFinalizations();
     this.resetDetector();
     if (this.state.status !== "error") {
       this.patch({
@@ -245,6 +268,31 @@ export class PendantConnection {
   private emitSegment(detail: PendantTranscriptSegmentDetail): void {
     dispatchPendantTranscriptSegment(detail);
     this.opts.onSegment?.(detail);
+  }
+
+  private emitTerminalDropOnce(segmentId: string): void {
+    const pending = this.pendingSegments.get(segmentId);
+    if (!pending || pending.terminal) return;
+    pending.terminal = true;
+    this.emitSegment({ ...pending.segment, status: "dropped" });
+  }
+
+  private dropPendingSegment(segmentId: string): void {
+    this.emitTerminalDropOnce(segmentId);
+    if (this.pendingSegments.get(segmentId)?.terminal) {
+      this.pendingSegments.delete(segmentId);
+    }
+  }
+
+  private abortPendingFinalizations(): void {
+    this.captureGeneration++;
+    for (const controller of this.activeAsrControllers) {
+      if (!controller.signal.aborted)
+        controller.abort("pendant-capture-stopped");
+    }
+    for (const [segmentId] of this.pendingSegments) {
+      this.emitTerminalDropOnce(segmentId);
+    }
   }
 
   private resetDetector(): void {
@@ -326,8 +374,14 @@ export class PendantConnection {
           `[pendant] ${err.message}: disconnecting and retrying once`,
         );
         await this.partialTeardown();
+        if (transport.canRetryAfterTimeout?.() === false) {
+          throw err;
+        }
         // Give the stack a beat to fully drop the link before reconnecting.
         await new Promise((r) => setTimeout(r, 400));
+        if (transport.canRetryAfterTimeout?.() === false) {
+          throw err;
+        }
         const retryTransport = (
           this.opts.createTransport ?? selectPendantTransport
         )();
@@ -412,7 +466,8 @@ export class PendantConnection {
   private async partialTeardown(): Promise<void> {
     try {
       await this.transport?.disconnect();
-    } catch {
+    } catch (err) {
+      void err;
       /* best-effort */
     }
     this.decoder?.free();
@@ -468,7 +523,14 @@ export class PendantConnection {
       const chunks = this.utterance;
       const total = this.utteranceSamples;
       const segment = this.createPendingSegment(total);
-      if (segment) this.emitSegment(segment);
+      if (segment) {
+        this.pendingSegments.set(segment.id, {
+          segment,
+          generation: this.captureGeneration,
+          terminal: false,
+        });
+        this.emitSegment(segment);
+      }
       this.resetDetector();
       if (segment) {
         this.finalizing = this.finalizing.then(() =>
@@ -502,6 +564,16 @@ export class PendantConnection {
     segment: PendantTranscriptSegmentDetail,
   ): Promise<void> {
     if (total === 0) return;
+    const pending = this.pendingSegments.get(segment.id);
+    if (
+      !pending ||
+      pending.terminal ||
+      pending.generation !== this.captureGeneration ||
+      this.paused
+    ) {
+      this.dropPendingSegment(segment.id);
+      return;
+    }
     const pcm = new Float32Array(total);
     let off = 0;
     for (const c of chunks) {
@@ -509,17 +581,26 @@ export class PendantConnection {
       off += c.length;
     }
     if (isSilentPcmAudio(pcm)) {
-      this.emitSegment({ ...segment, status: "dropped" });
+      this.dropPendingSegment(segment.id);
       return;
     }
 
     const wav = encodeMonoPcm16Wav(pcm, OMI_OPUS_SAMPLE_RATE_HZ);
     const wasStatus = this.state.status;
+    const generation = this.captureGeneration;
+    const controller = new AbortController();
+    this.activeAsrControllers.add(controller);
     this.patch({ status: "transcribing" });
     try {
-      const { text, words } = await transcribeLocalInferenceWav(wav);
-      dispatchPendantVoiceTranscript(text);
+      const { text, words } = await transcribeLocalInferenceWav(wav, {
+        signal: controller.signal,
+      });
+      if (generation !== this.captureGeneration || this.paused) {
+        this.dropPendingSegment(segment.id);
+        return;
+      }
       this.patch({ lastTranscript: text, error: null });
+      pending.terminal = true;
       this.emitSegment({
         ...segment,
         status: "resolved",
@@ -528,11 +609,19 @@ export class PendantConnection {
       });
       this.opts.onTranscript?.(text);
     } catch (err) {
+      if (generation !== this.captureGeneration || controller.signal.aborted) {
+        this.dropPendingSegment(segment.id);
+        return;
+      }
       // ASR failure is non-fatal for ambient capture, but it must stay visible
       // so the transcript surface does not look healthy while segments drop.
       this.patch({ error: formatPendantAsrError(err) });
-      this.emitSegment({ ...segment, status: "dropped" });
+      this.dropPendingSegment(segment.id);
     } finally {
+      this.activeAsrControllers.delete(controller);
+      if (this.pendingSegments.get(segment.id)?.terminal) {
+        this.pendingSegments.delete(segment.id);
+      }
       // Return to the ambient listening state (or hearing if speech already
       // resumed while we were transcribing).
       const next =
@@ -551,6 +640,7 @@ export class PendantConnection {
   pause(): void {
     if (this.paused) return;
     this.paused = true;
+    this.abortPendingFinalizations();
     this.reassembler.reset();
     this.resetDetector();
     this.patch({ paused: true, status: "paused" });
@@ -570,6 +660,7 @@ export class PendantConnection {
 
   /** Tear down: stop notifications, disconnect GATT, free the decoder. */
   async disconnect(): Promise<void> {
+    this.abortPendingFinalizations();
     // Finalize reassembly diagnostics. The wire has no end marker, so flush
     // conservatively drops an unconfirmed tail instead of decoding partial audio.
     if (this.decoder) {
@@ -577,7 +668,8 @@ export class PendantConnection {
     }
     try {
       await this.transport?.disconnect();
-    } catch {
+    } catch (err) {
+      void err;
       /* already disconnected */
     }
     this.decoder?.free();

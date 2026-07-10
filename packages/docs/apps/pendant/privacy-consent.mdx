@@ -10,7 +10,7 @@ The pendant is an ambient microphone. Operators must get consent from people who
 
 Ambient capture starts only after the user explicitly selects Connect and completes the BLE chooser or native Android device picker. Once connected, the base branch keeps listening while connected.
 
-On this branch, disconnect is the only pause control. There is no dedicated pendant pause UI in the base implementation.
+The transcript surface includes pause and resume. Pause drops new BLE audio before VAD, resets the local frame/VAD buffers, invalidates any in-flight ASR tail so late results cannot commit after pause, and records the paused state on the server session. Future continuous vendor streams must wire pause to the network boundary by closing or muting the stream.
 
 ## Device Emission Boundary
 
@@ -27,29 +27,26 @@ The app decodes Opus and segments utterances locally in the app process:
 - VAD segments utterances in the app.
 - The utterance is encoded into a WAV payload in the app.
 
-ASR is not performed by the browser itself in this branch. `transcribeLocalInferenceWav` posts the WAV as base64 JSON to `/api/asr/local-inference`. Locality depends on where the operator runs that backend:
+ASR is not performed by the browser itself in this branch. `transcribeLocalInferenceWav` posts the WAV as base64 JSON to `/api/asr/local-inference`. A loopback backend URL on the agent host does not prove ASR ran on the Light Phone or client device, especially when the agent itself is remote. The session UI therefore reports cloud/remote ASR until a future ASR response includes authenticated end-device provenance.
 
-- If the backend is an on-device or local machine runtime, ASR can be local to that deployment.
-- If the backend is remote, the audio payload is sent to that remote backend.
-
-Verify the actual deployment policy, network route, model provider, and logs before making privacy claims.
+Verify the actual deployment policy, network route, model provider, response provenance, and logs before making privacy claims.
 
 ## Agent and Storage Path
 
-The final transcript is dispatched as a `VOICE_DM` into the same Eliza agent. From that point onward, it follows the configured agent, model, logging, memory, conversation, and storage path for that deployment.
+The server-accepted resolved segment is the canonical utterance. That committed segment can fan out to the follower transcript, a session-tagged `VOICE_DM` turn in the same Eliza agent, and opt-in insights. From that point onward, the agent turn follows the configured model, logging, memory, conversation, and storage path for that deployment.
 
-There are no pendant-specific retention, export, or delete controls on this branch. Use the app conversation and storage controls available in your deployment, disconnect the pendant when capture should stop, and verify deployment retention policy before collecting real speech. Do not describe a local UI clear action as server-side deletion unless the authoritative records and documented derivatives are actually removed.
+Pendant session delete removes the authoritative session record and cascades to pendant insight memories that cite the session's source segment IDs plus session-tagged pendant `VOICE_DM` turns. A local Clear action only removes the offline optimistic browser cache and must not be described as server-side deletion. Verify deployment retention policy before collecting real speech.
 
 ## Error Visibility
 
-Pendant ASR errors and empty transcripts are currently dropped silently while listening resumes. This avoids interrupting ambient capture, but it also means an operator may not see a visible ASR failure for a missed utterance. Capture frontend logs and backend ASR logs during tests.
+Pendant ASR errors and discarded silence are distinct states. ASR failures surface as dropped/error segments while listening resumes; silence discard does not imply backend failure. Capture frontend status, content-free framing metrics such as packet/frame counts and dropped-tail counts, server route logs, and backend ASR logs during tests without logging transcript content.
 
 ## Operating Rules
 
 - Tell participants when the pendant is connected and listening.
-- Disconnect when capture should stop.
+- Pause or disconnect when capture should stop.
 - Do not use a pendant in places where recording is prohibited.
 - Do not test with sensitive speech unless the deployment retention and ASR backend are verified.
 - Treat transcripts as agent messages governed by the same model and storage policy as other voice turns.
 - Do not claim anonymous voice clusters identify people. Any speaker alias must be explicitly assigned by a user.
-- Do not claim cross-device session synchronization on this branch. See [Continuity and Public Language](/apps/pendant/continuity-language).
+- Treat follower views as read-only displays of server snapshots unless the UI explicitly exposes a mutation.

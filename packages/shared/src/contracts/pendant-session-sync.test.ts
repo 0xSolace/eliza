@@ -20,10 +20,16 @@ describe("pendant session sync contract", () => {
     expect(pendantSegmentId("sess-a", 7)).toBe(pendantSegmentId("sess-a", 7));
   });
 
-  it("defaults processing location without accepting unknown fields", () => {
-    expect(CreatePendantSessionRequestSchema.parse({})).toEqual({
-      processingLocation: "on-device",
-    });
+  it("accepts only client session id because processing location is server-derived", () => {
+    expect(CreatePendantSessionRequestSchema.parse({})).toEqual({});
+    expect(
+      CreatePendantSessionRequestSchema.parse({ sessionId: "sess-a" }),
+    ).toEqual({ sessionId: "sess-a" });
+    expect(() =>
+      CreatePendantSessionRequestSchema.parse({
+        processingLocation: "on-device",
+      }),
+    ).toThrow();
     expect(() =>
       CreatePendantSessionRequestSchema.parse({ ownerId: "client" }),
     ).toThrow();

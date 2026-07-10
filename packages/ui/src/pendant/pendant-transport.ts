@@ -84,6 +84,13 @@ export interface PendantTransport {
   onDisconnected(handler: () => void): void;
 
   /**
+   * Return false when a timed-out attempt has been superseded by another
+   * transport over the same native singleton. Web transports omit this hook and
+   * preserve the existing one-retry behavior.
+   */
+  canRetryAfterTimeout?(): boolean;
+
+  /**
    * Tear down: stop notifications, disconnect GATT, release native handles.
    * Idempotent + best-effort (never throws).
    */
@@ -99,7 +106,9 @@ export class PendantUserCancelledError extends Error {
 }
 
 /** True when an error is a user-cancelled device chooser (→ land in idle). */
-export function isUserCancelled(err: unknown): err is PendantUserCancelledError {
+export function isUserCancelled(
+  err: unknown,
+): err is PendantUserCancelledError {
   if (err instanceof PendantUserCancelledError) return true;
   // Web Bluetooth surfaces a cancelled chooser as DOMException NotFoundError.
   return err instanceof DOMException && err.name === "NotFoundError";

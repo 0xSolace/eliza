@@ -2,10 +2,9 @@
  * React hook wrapping {@link PendantConnection} for UI surfaces.
  *
  * Owns one connection instance across its lifetime, mirrors its state into
- * React state, and exposes connect/disconnect. The connection dispatches
- * finalized transcripts as `PENDANT_VOICE_TRANSCRIPT_EVENT`, which the shell
- * routes into a spoken VOICE_DM — so this hook itself does not need to touch the
- * chat send path.
+ * React state, and exposes connect/disconnect. Transcript views commit resolved
+ * segments to the server-authoritative session before anything else consumes
+ * the text, so this hook only mirrors transport state.
  */
 
 import * as React from "react";

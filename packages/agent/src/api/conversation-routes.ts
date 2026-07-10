@@ -1212,6 +1212,24 @@ function extractConversationMetaString(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function withServerPendantOwnerMetadata(
+  metadata: Record<string, unknown> | undefined,
+  ownerId: UUID | null,
+): Record<string, unknown> | undefined {
+  if (
+    metadata?.voiceSource !== "pendant" ||
+    typeof metadata.pendantSessionId !== "string" ||
+    typeof metadata.pendantSegmentId !== "string" ||
+    !ownerId
+  ) {
+    return metadata;
+  }
+  return {
+    ...metadata,
+    ownerId,
+  };
+}
+
 // Attachment DTO shaping + per-viewer disclosure selection live in the
 // use-case module (#14781); the serializer is re-exported for existing
 // importers of this route module.
@@ -2593,7 +2611,10 @@ export async function handleConversationRoutes(
       roomId: conv.roomId,
       channelType,
       messageSource: source,
-      metadata: chatMetadata,
+      metadata: withServerPendantOwnerMetadata(
+        chatMetadata,
+        state.adminEntityId,
+      ),
     });
 
     try {
@@ -3034,7 +3055,10 @@ export async function handleConversationRoutes(
       roomId: conv.roomId,
       channelType,
       messageSource: source,
-      metadata: restMetadata,
+      metadata: withServerPendantOwnerMetadata(
+        restMetadata,
+        state.adminEntityId,
+      ),
     });
 
     try {

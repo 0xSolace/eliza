@@ -65,4 +65,32 @@ describe("mobile bundle anchors (no write-only globalThis pinning)", () => {
       /"@elizaos\/plugin-aosp-local-inference"\s*:\s*path\.join\(\s*stubsDir\s*,\s*"null-plugin\.cjs"\s*\)/,
     );
   });
+
+  it("keeps auth routes eagerly imported and build-guarded in the mobile bundle", () => {
+    const serverSource = read("api/server.ts");
+    expect(serverSource).toContain(
+      'import { handleAuthRoutes } from "./auth-routes.ts";',
+    );
+    expect(serverSource).not.toMatch(
+      /handleAuthRoutes,\n[\s\S]*from "\.\/server-lazy-routes\.ts"/,
+    );
+    expect(mobileBuildScript).toContain('"/api/auth/me"');
+    expect(mobileBuildScript).toContain('"/api/auth/status"');
+    expect(mobileBuildScript).toContain(
+      "mobile bundle is missing required auth route marker",
+    );
+  });
+
+  it("repairs only the known dead malformed Bun re-export after named exports exist", () => {
+    expect(mobileBuildScript).toContain("repairMalformedDeadReExport");
+    expect(mobileBuildScript).toContain("__toESM\\(\\s*,\\s*1\\s*\\)");
+    expect(mobileBuildScript).toMatch(
+      /refusing to repair \$\{matches\.length\} malformed __toESM\(, 1\) statements/,
+    );
+    expect(mobileBuildScript).toContain(
+      "named exports were not already emitted",
+    );
+    expect(mobileBuildScript).not.toContain("new Function(bundleSrc)");
+    expect(mobileBuildScript).not.toContain("catch (err) {");
+  });
 });

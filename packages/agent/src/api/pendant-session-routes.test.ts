@@ -33,6 +33,7 @@ const { handlePendantSessionRoutes, subscribePendantCommittedSegments } =
 class TestRuntime {
   readonly agentId: UUID;
   readonly adapter: InMemoryDatabaseAdapter;
+  private readonly memoryIds = new Set<UUID>();
   createMemoryThrows = false;
   updateMemorySucceeds = true;
 
@@ -58,6 +59,7 @@ class TestRuntime {
     ]);
     const id = ids[0];
     if (!id) throw new Error("adapter did not return memory id");
+    this.memoryIds.add(id);
     return id;
   }
 
@@ -69,6 +71,25 @@ class TestRuntime {
 
   async deleteMemory(memoryId: UUID): Promise<void> {
     await this.adapter.deleteMemories([memoryId]);
+    this.memoryIds.delete(memoryId);
+  }
+
+  async deleteMemories(memoryIds: UUID[]): Promise<void> {
+    await this.adapter.deleteMemories(memoryIds);
+    for (const id of memoryIds) this.memoryIds.delete(id);
+  }
+
+  async getMemories(params: {
+    roomId?: UUID;
+    tableName: string;
+    limit?: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<Memory[]> {
+    return this.adapter.getMemories(params);
+  }
+
+  async getAllMemories(): Promise<Memory[]> {
+    return this.adapter.getMemoriesByIds([...this.memoryIds]);
   }
 }
 
@@ -198,6 +219,61 @@ describe("handlePendantSessionRoutes", () => {
     expect(resumed.snapshot.session.state).toBe("active");
   });
 
+  it("defaults processing location to cloud and rejects client labels", async () => {
+    const original = process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION;
+    const originalAsrBase = process.env.ELIZA_ASR_BASE_URL;
+    process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION = "cloud";
+    delete process.env.ELIZA_ASR_BASE_URL;
+    const h = makeHarness();
+    try {
+      const rejected = await h.request("POST", "/api/pendant/sessions", {
+        sessionId: "sess-location-reject",
+        processingLocation: "on-device",
+      });
+      expect(rejected.status).toBe(400);
+      const created = okBody<{
+        snapshot: { session: { processingLocation: string } };
+      }>(
+        await h.request("POST", "/api/pendant/sessions", {
+          sessionId: "sess-location",
+        }),
+      );
+      expect(created.snapshot.session.processingLocation).toBe("cloud");
+
+      delete process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION;
+      process.env.ELIZA_ASR_BASE_URL = "http://127.0.0.1:3000";
+      const loopback = okBody<{
+        snapshot: { session: { processingLocation: string } };
+      }>(
+        await h.request("POST", "/api/pendant/sessions", {
+          sessionId: "sess-location-local",
+        }),
+      );
+      expect(loopback.snapshot.session.processingLocation).toBe("cloud");
+
+      process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION = "on-device";
+      const explicit = okBody<{
+        snapshot: { session: { processingLocation: string } };
+      }>(
+        await h.request("POST", "/api/pendant/sessions", {
+          sessionId: "sess-location-explicit",
+        }),
+      );
+      expect(explicit.snapshot.session.processingLocation).toBe("cloud");
+    } finally {
+      if (original === undefined) {
+        delete process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION;
+      } else {
+        process.env.ELIZA_PENDANT_ASR_PROCESSING_LOCATION = original;
+      }
+      if (originalAsrBase === undefined) {
+        delete process.env.ELIZA_ASR_BASE_URL;
+      } else {
+        process.env.ELIZA_ASR_BASE_URL = originalAsrBase;
+      }
+    }
+  });
+
   it("notifies post-commit consumers from the canonical durable segment only once", async () => {
     const h = makeHarness();
     await h.request("POST", "/api/pendant/sessions", {
@@ -237,6 +313,35 @@ describe("handlePendantSessionRoutes", () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it("broadcasts only invalidation metadata, never transcript or snapshots", async () => {
+    const h = makeHarness();
+    await h.request("POST", "/api/pendant/sessions", {
+      sessionId: "sess-broadcast",
+    });
+    const lease = okBody<{ leaseToken: string }>(
+      await h.request("POST", "/api/pendant/sessions/sess-broadcast/lease", {
+        holder: "capturer",
+      }),
+    );
+    await h.request("POST", "/api/pendant/sessions/sess-broadcast/segments", {
+      leaseToken: lease.leaseToken,
+      segment: segment("sess-broadcast", 0, 0, "private words"),
+    });
+    const frame = h.broadcastWs.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(frame).toMatchObject({
+      type: "pendant-session:updated",
+      sessionId: "sess-broadcast",
+      agentId: h.runtime.agentId,
+    });
+    expect(JSON.stringify(frame)).not.toContain("private words");
+    expect(frame).not.toHaveProperty("segments");
+    expect(frame).not.toHaveProperty("snapshot");
+    expect(frame).not.toHaveProperty("text");
   });
 
   it("keeps exact duplicate replay idempotent and conflicts altered same-revision content", async () => {
@@ -536,6 +641,229 @@ describe("handlePendantSessionRoutes", () => {
     });
     const afterDelete = await h.request("GET", "/api/pendant/sessions/sess-d");
     expect(afterDelete.status).toBe(404);
+  });
+
+  it("enforces two-tenant isolation on a shared adapter", async () => {
+    const adapter = new InMemoryDatabaseAdapter();
+    const agent = uuid();
+    const tenantA = makeHarness(uuid(), adapter, agent);
+    const tenantB = makeHarness(uuid(), adapter, agent);
+    await tenantA.request("POST", "/api/pendant/sessions", {
+      sessionId: "shared-known-id",
+    });
+    const blocked = await tenantB.request(
+      "GET",
+      "/api/pendant/sessions/shared-known-id",
+    );
+    expect(blocked.status).toBe(404);
+    const deleteBlocked = await tenantB.request(
+      "DELETE",
+      "/api/pendant/sessions/shared-known-id",
+    );
+    expect(deleteBlocked.status).toBe(404);
+    const fanoutBlocked = await tenantB.request(
+      "POST",
+      "/api/pendant/sessions/shared-known-id/segments",
+      {
+        leaseToken: "known-token",
+        segment: segment("shared-known-id", 0),
+      },
+    );
+    expect(fanoutBlocked.status).toBe(404);
+  });
+
+  it("cascades delete to pendant insight memories and session-tagged VOICE_DM turns", async () => {
+    const h = makeHarness();
+    await h.request("POST", "/api/pendant/sessions", { sessionId: "sess-del" });
+    const lease = okBody<{ leaseToken: string }>(
+      await h.request("POST", "/api/pendant/sessions/sess-del/lease", {
+        holder: "capturer",
+      }),
+    );
+    const appended = okBody<{
+      snapshot: { segments: Array<{ id: string }> };
+    }>(
+      await h.request("POST", "/api/pendant/sessions/sess-del/segments", {
+        leaseToken: lease.leaseToken,
+        segment: segment("sess-del", 0),
+      }),
+    );
+    const segmentId = appended.snapshot.segments[0]?.id;
+    expect(segmentId).toBeTruthy();
+    const insightId = uuid();
+    const voiceId = uuid();
+    await h.runtime.createMemory(
+      {
+        id: insightId,
+        agentId: h.runtime.agentId,
+        entityId: h.runtime.agentId,
+        roomId: h.runtime.agentId,
+        content: { text: "insight", source: "pendant-insights" },
+        metadata: {
+          source: "pendant-insights",
+          ownerId: h.state.adminEntityId,
+          sessionId: "sess-del",
+          sourceSegmentIds: [segmentId],
+        },
+      } as Memory,
+      "messages",
+      true,
+    );
+    await h.runtime.createMemory(
+      {
+        id: voiceId,
+        agentId: h.runtime.agentId,
+        entityId: uuid(),
+        roomId: uuid(),
+        content: {
+          text: "segment 0",
+          channelType: "VOICE_DM",
+          metadata: {
+            voiceSource: "pendant",
+            ownerId: h.state.adminEntityId,
+            pendantSessionId: "sess-del",
+            pendantSegmentId: segmentId,
+          },
+        },
+        metadata: { type: "message" },
+      } as Memory,
+      "messages",
+      true,
+    );
+    await h.request("DELETE", "/api/pendant/sessions/sess-del");
+    expect(await h.runtime.getMemoryById(insightId)).toBeNull();
+    expect(await h.runtime.getMemoryById(voiceId)).toBeNull();
+  });
+
+  it("does not cascade-delete another tenant's derived memories for the same known session id", async () => {
+    const adapter = new InMemoryDatabaseAdapter();
+    const agent = uuid();
+    const tenantA = makeHarness(uuid(), adapter, agent);
+    const tenantB = makeHarness(uuid(), adapter, agent);
+    await tenantA.request("POST", "/api/pendant/sessions", {
+      sessionId: "known-shared-session",
+    });
+    await tenantB.request("POST", "/api/pendant/sessions", {
+      sessionId: "known-shared-session",
+    });
+    const leaseA = okBody<{ leaseToken: string }>(
+      await tenantA.request(
+        "POST",
+        "/api/pendant/sessions/known-shared-session/lease",
+        { holder: "capturer" },
+      ),
+    );
+    const leaseB = okBody<{ leaseToken: string }>(
+      await tenantB.request(
+        "POST",
+        "/api/pendant/sessions/known-shared-session/lease",
+        { holder: "capturer" },
+      ),
+    );
+    const segmentA = okBody<{ snapshot: { segments: Array<{ id: string }> } }>(
+      await tenantA.request(
+        "POST",
+        "/api/pendant/sessions/known-shared-session/segments",
+        { leaseToken: leaseA.leaseToken, segment: segment("known", 0) },
+      ),
+    ).snapshot.segments[0]?.id;
+    const segmentB = okBody<{ snapshot: { segments: Array<{ id: string }> } }>(
+      await tenantB.request(
+        "POST",
+        "/api/pendant/sessions/known-shared-session/segments",
+        { leaseToken: leaseB.leaseToken, segment: segment("known", 0) },
+      ),
+    ).snapshot.segments[0]?.id;
+    const aInsight = uuid();
+    const bInsight = uuid();
+    const bVoice = uuid();
+    await tenantA.runtime.createMemory(
+      {
+        id: aInsight,
+        agentId: tenantA.runtime.agentId,
+        entityId: tenantA.state.adminEntityId as UUID,
+        roomId: uuid(),
+        content: { text: "tenant a insight", source: "pendant-insights" },
+        metadata: {
+          source: "pendant-insights",
+          ownerId: tenantA.state.adminEntityId,
+          sessionId: "known-shared-session",
+          sourceSegmentIds: [segmentA],
+        },
+      } as Memory,
+      "messages",
+      true,
+    );
+    await tenantB.runtime.createMemory(
+      {
+        id: bInsight,
+        agentId: tenantB.runtime.agentId,
+        entityId: tenantB.state.adminEntityId as UUID,
+        roomId: uuid(),
+        content: { text: "tenant b insight", source: "pendant-insights" },
+        metadata: {
+          source: "pendant-insights",
+          ownerId: tenantB.state.adminEntityId,
+          sessionId: "known-shared-session",
+          sourceSegmentIds: [segmentB],
+        },
+      } as Memory,
+      "messages",
+      true,
+    );
+    await tenantB.runtime.createMemory(
+      {
+        id: bVoice,
+        agentId: tenantB.runtime.agentId,
+        entityId: tenantB.state.adminEntityId as UUID,
+        roomId: uuid(),
+        content: {
+          text: "tenant b voice",
+          channelType: "VOICE_DM",
+          metadata: {
+            voiceSource: "pendant",
+            ownerId: tenantB.state.adminEntityId,
+            pendantSessionId: "known-shared-session",
+            pendantSegmentId: segmentB,
+          },
+        },
+        metadata: { type: "message" },
+      } as Memory,
+      "messages",
+      true,
+    );
+
+    await tenantA.request(
+      "DELETE",
+      "/api/pendant/sessions/known-shared-session",
+    );
+
+    expect(await tenantA.runtime.getMemoryById(aInsight)).toBeNull();
+    expect(await tenantB.runtime.getMemoryById(bInsight)).not.toBeNull();
+    expect(await tenantB.runtime.getMemoryById(bVoice)).not.toBeNull();
+  });
+
+  it("fails delete explicitly when derived-memory cascade cannot run", async () => {
+    const h = makeHarness();
+    await h.request("POST", "/api/pendant/sessions", {
+      sessionId: "sess-cascade-unavailable",
+    });
+    (h.state.runtime as { deleteMemories?: unknown }).deleteMemories =
+      undefined;
+
+    const result = await h.request(
+      "DELETE",
+      "/api/pendant/sessions/sess-cascade-unavailable",
+    );
+    expect(result.status).toBe(503);
+    expect((result.body as { error?: { code?: string } }).error?.code).toBe(
+      "store_unavailable",
+    );
+    const stillPresent = await h.request(
+      "GET",
+      "/api/pendant/sessions/sess-cascade-unavailable",
+    );
+    expect(stillPresent.status).toBe(200);
   });
 
   it("requires authenticated admin identity", async () => {

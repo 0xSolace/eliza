@@ -205,6 +205,10 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function deriveProcessingLocation(): "on-device" | "cloud" {
+  return "cloud";
+}
+
 function sessionMemoryId(
   ownerId: string,
   agentId: string,
@@ -310,6 +314,7 @@ async function persistStored(params: {
     try {
       await params.runtime.createMemory(memory, TABLE_NAME, true);
     } catch {
+      // error-policy:J1 storage boundary reports an explicit route failure.
       throw routeError(
         "store_unavailable",
         "Pendant session store is unavailable",
@@ -493,6 +498,79 @@ function broadcastDelete(
   });
 }
 
+function metadataRecord(memory: Memory): Record<string, unknown> {
+  return memory.metadata && typeof memory.metadata === "object"
+    ? (memory.metadata as Record<string, unknown>)
+    : {};
+}
+
+function contentMetadataRecord(memory: Memory): Record<string, unknown> {
+  const metadata = (memory.content as { metadata?: unknown }).metadata;
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {};
+}
+
+function hasIntersectingSourceSegment(
+  memory: Memory,
+  segmentIds: Set<string>,
+): boolean {
+  const ids = metadataRecord(memory).sourceSegmentIds;
+  return Array.isArray(ids)
+    ? ids.some((id) => typeof id === "string" && segmentIds.has(id))
+    : false;
+}
+
+async function deletePendantDerivedMemories(params: {
+  runtime: AgentRuntime;
+  ownerId: string;
+  sessionId: string;
+  agentId: string;
+  segmentIds: Set<string>;
+}): Promise<void> {
+  const runtimeWithAll = params.runtime as AgentRuntime & {
+    getAllMemories?: () => Promise<Memory[]>;
+    deleteMemories?: (memoryIds: UUID[]) => Promise<void>;
+  };
+  if (
+    typeof runtimeWithAll.getAllMemories !== "function" ||
+    typeof runtimeWithAll.deleteMemories !== "function"
+  ) {
+    throw routeError(
+      "store_unavailable",
+      "Pendant derived-memory cascade is unavailable",
+      503,
+    );
+  }
+  const candidates = (await runtimeWithAll.getAllMemories()).filter(
+    (memory) => memory.agentId === params.agentId,
+  );
+  const ids: UUID[] = [
+    sessionMemoryId(params.ownerId, params.agentId, params.sessionId),
+  ];
+  for (const memory of candidates) {
+    const metadata = metadataRecord(memory);
+    const contentMetadata = contentMetadataRecord(memory);
+    const ownerMatches =
+      metadata.ownerId === params.ownerId ||
+      contentMetadata.ownerId === params.ownerId;
+    const isInsight =
+      metadata.source === "pendant-insights" &&
+      ownerMatches &&
+      (metadata.sessionId === params.sessionId ||
+        hasIntersectingSourceSegment(memory, params.segmentIds));
+    const isPendantVoiceTurn =
+      memory.content?.channelType === "VOICE_DM" &&
+      contentMetadata.voiceSource === "pendant" &&
+      contentMetadata.ownerId === params.ownerId &&
+      contentMetadata.pendantSessionId === params.sessionId;
+    if ((isInsight || isPendantVoiceTurn) && memory.id) {
+      ids.push(memory.id as UUID);
+    }
+  }
+  await runtimeWithAll.deleteMemories(ids);
+}
+
 function sendTypedError(ctx: PendantSessionRouteContext, err: unknown): void {
   // error-policy:J1 route boundary translates pendant domain failures into typed wire errors.
   if (err instanceof PendantSessionRouteError) {
@@ -543,6 +621,7 @@ function parseSessionPath(pathname: string): {
       tail: parts.map((part) => decodeURIComponent(part)),
     };
   } catch {
+    // error-policy:J3 malformed URL path is an explicit invalid request.
     throw routeError("validation", "Malformed URL encoding", 400);
   }
 }
@@ -587,7 +666,7 @@ export async function handlePendantSessionRoutes(
           endedAt: null,
           state: "active",
           captureLease: null,
-          processingLocation: parsed.data.processingLocation,
+          processingLocation: deriveProcessingLocation(),
           revision: 0,
         },
         segments: [],
@@ -604,6 +683,7 @@ export async function handlePendantSessionRoutes(
             stored.insightRefs = existing.insightRefs;
             return;
           } catch (err) {
+            // error-policy:J1 create-or-load boundary treats only not_found as create intent.
             if (
               !(err instanceof PendantSessionRouteError) ||
               err.code !== "not_found"
@@ -653,10 +733,14 @@ export async function handlePendantSessionRoutes(
 
     if (method === "DELETE" && tail.length === 0) {
       await withSessionLock(lockKey, async () => {
-        await loadStored({ ...identity, sessionId });
-        await identity.runtime.deleteMemory(
-          sessionMemoryId(identity.ownerId, identity.agentId, sessionId),
-        );
+        const stored = await loadStored({ ...identity, sessionId });
+        await deletePendantDerivedMemories({
+          runtime: identity.runtime,
+          ownerId: identity.ownerId,
+          sessionId,
+          agentId: identity.agentId,
+          segmentIds: new Set(stored.segments.map((segment) => segment.id)),
+        });
       });
       broadcastDelete(ctx, sessionId, identity.agentId);
       json(res, { ok: true, deleted: true });
@@ -966,6 +1050,7 @@ export async function handlePendantSessionRoutes(
 
     throw routeError("not_found", "Pendant session route was not found", 404);
   } catch (err) {
+    // error-policy:J1 route boundary translates pendant failures into typed wire errors.
     sendTypedError(ctx, err);
     return true;
   }

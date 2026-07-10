@@ -61,9 +61,9 @@ export async function handleAuthRoutes(
 
   if (method === "GET" && pathname === "/api/auth/me") {
     const authorized = isAuthorized(req);
-    const localAccess =
-      process.env.ELIZA_REQUIRE_LOCAL_AUTH === "1" ||
-      isTrustedLocalRequest(req);
+    const trustedLocal = isTrustedLocalRequest(req);
+    const unauthenticatedLocalAccess =
+      process.env.ELIZA_REQUIRE_LOCAL_AUTH === "1" || trustedLocal;
     if (!authorized) {
       json(
         res,
@@ -72,7 +72,7 @@ export async function handleAuthRoutes(
             ? "remote_auth_required"
             : "remote_password_not_configured",
           access: {
-            mode: localAccess ? "local" : "remote",
+            mode: unauthenticatedLocalAccess ? "local" : "remote",
             passwordConfigured: Boolean(getConfiguredApiToken()),
             ownerConfigured: false,
             // #9948 / #12087 Item 13: server-authoritative boundary role from the
@@ -85,6 +85,7 @@ export async function handleAuthRoutes(
       return true;
     }
 
+    const localAccess = trustedLocal;
     json(res, {
       identity: {
         id: localAccess ? "local-agent" : "bearer-agent",

@@ -6,7 +6,7 @@ description: Open reference implementation for an Omi-compatible BLE audio penda
 
 The Eliza pendant is an open reference implementation for a wearable microphone path into elizaOS. It is not a proprietary hardware SKU. The current reference target is an Omi DevKit1 style board, specifically the Seeed XIAO nRF52840 Sense, running firmware that advertises as `eliza` and streams Omi-compatible BLE audio.
 
-The mental model is one persistent agent across devices. A pendant can capture speech, a desktop browser or packaged Android app can transport and transcribe it, and the final transcript is sent into the same agent as a `VOICE_DM` turn. The architecture is local-first and cloud-optional: the BLE audio decode and utterance segmentation happen in the app, while ASR locality depends on where the operator runs the `/api/asr/local-inference` backend.
+The mental model is one persistent agent across devices. A pendant can capture speech, a desktop browser or packaged Android app can transport and transcribe it, and the accepted server session segment can then feed the follower transcript, the same agent as a `VOICE_DM` turn, and opt-in insights. BLE audio decode and utterance segmentation happen in the app. The current session API reports ASR as cloud/remote because session creation happens before any ASR response carries end-device provenance. Do not call transcription on-device until that provenance is implemented and verified.
 
 ```mermaid
 flowchart LR
@@ -16,7 +16,10 @@ flowchart LR
   Transport --> Decode["Opus decode<br/>Float32 PCM"]
   Decode --> Vad["VAD utterance segmentation"]
   Vad --> Asr["POST /api/asr/local-inference"]
-  Asr --> VoiceDm["VOICE_DM transcript"]
+  Asr --> Session["Server session segment"]
+  Session --> VoiceDm["VOICE_DM transcript"]
+  Session --> Followers["Follower transcript views"]
+  Session --> Insights["Opt-in insights"]
   VoiceDm --> Agent["Same persistent Eliza agent"]
 ```
 
@@ -31,7 +34,7 @@ flowchart LR
 
 The app transport selection lives in `packages/ui/src/pendant/select-transport.ts`: native Android first, then Web Bluetooth, then unsupported. The shared audio pipeline lives in `packages/ui/src/pendant/pendant-connection.ts` and is reused by both supported transports.
 
-The current bridge feeds the same configured agent, but it does not yet implement a server-authoritative pendant session or live follower views across devices. See [Continuity and Public Language](/apps/pendant/continuity-language) for the capturer/follower integration contract and the claims that remain unsupported.
+The transcript route uses a server-authoritative pendant session. localStorage is only an offline optimistic cache for unsynced segments; follower views render authenticated server snapshots. See [Continuity and Public Language](/apps/pendant/continuity-language) for the claims that still require deployment evidence.
 
 ## What Is Stable
 

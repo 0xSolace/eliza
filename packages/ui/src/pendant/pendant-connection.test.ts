@@ -19,6 +19,7 @@ import { PendantUserCancelledError } from "./pendant-transport";
 const asrControl = vi.hoisted(() => ({
   mode: "immediate" as "immediate" | "deferred" | "reject",
   calls: 0,
+  signals: [] as AbortSignal[],
   resolvers: [] as Array<
     (value: {
       text: string;
@@ -41,24 +42,27 @@ vi.mock("./opus-frame-decoder", () => ({
 }));
 
 vi.mock("../voice/local-asr-transcribe", () => ({
-  transcribeLocalInferenceWav: vi.fn(async () => {
-    asrControl.calls += 1;
-    if (asrControl.mode === "reject") {
-      throw new Error("ASR route unavailable");
-    }
-    if (asrControl.mode === "deferred") {
-      return new Promise((resolve) => {
-        asrControl.resolvers.push(resolve);
-      });
-    }
-    return {
-      text: "hello world",
-      words: [
-        { text: "hello", startMs: 0, endMs: 80 },
-        { text: "world", startMs: 90, endMs: 120 },
-      ],
-    };
-  }),
+  transcribeLocalInferenceWav: vi.fn(
+    async (_audio: Uint8Array, options?: { signal?: AbortSignal }) => {
+      asrControl.calls += 1;
+      if (options?.signal) asrControl.signals.push(options.signal);
+      if (asrControl.mode === "reject") {
+        throw new Error("ASR route unavailable");
+      }
+      if (asrControl.mode === "deferred") {
+        return new Promise((resolve) => {
+          asrControl.resolvers.push(resolve);
+        });
+      }
+      return {
+        text: "hello world",
+        words: [
+          { text: "hello", startMs: 0, endMs: 80 },
+          { text: "world", startMs: 90, endMs: 120 },
+        ],
+      };
+    },
+  ),
 }));
 
 // Keep the real capture module for VAD, but force it to segment on demand via a
@@ -92,7 +96,7 @@ import type { PendantTranscriptSegmentDetail } from "./transcript-segment-event"
 
 /** A fully controllable fake transport implementing the interface. */
 class FakeTransport implements PendantTransport {
-  readonly kind = "web-bluetooth" as const;
+  readonly kind: PendantTransport["kind"];
   audioListener: PendantAudioListener | null = null;
   batteryListener: PendantBatteryListener | null = null;
   disconnectedHandler: (() => void) | null = null;
@@ -100,13 +104,16 @@ class FakeTransport implements PendantTransport {
 
   constructor(
     private readonly opts: {
+      kind?: PendantTransport["kind"];
       deviceName?: string | null;
       codec?: OmiCodecId;
       battery?: number | null;
       requestThrows?: unknown;
       startAudioThrows?: unknown;
     } = {},
-  ) {}
+  ) {
+    this.kind = opts.kind ?? "web-bluetooth";
+  }
 
   async requestAndConnect(): Promise<{ deviceName: string | null }> {
     if (this.opts.requestThrows !== undefined) throw this.opts.requestThrows;
@@ -164,6 +171,7 @@ afterEach(() => {
   silentAudio = false;
   asrControl.mode = "immediate";
   asrControl.calls = 0;
+  asrControl.signals = [];
   asrControl.resolvers = [];
   vi.clearAllMocks();
 });
@@ -230,6 +238,73 @@ describe("PendantConnection connect orchestration", () => {
     expect(conn.getState().status).toBe("error");
     expect(conn.getState().error).toBe("boom");
     expect(transport.disconnectCalls).toBeGreaterThan(0);
+  });
+
+  it("does not launch a timeout retry for native BLE even when no newer owner appears", async () => {
+    let requestAttempts = 0;
+    class NativeTimeoutTransport extends FakeTransport {
+      constructor() {
+        super({ kind: "native-ble" });
+      }
+
+      canRetryAfterTimeout(): boolean {
+        return false;
+      }
+
+      async requestAndConnect(): Promise<{ deviceName: string | null }> {
+        requestAttempts += 1;
+        return new Promise(() => {});
+      }
+    }
+
+    const createTransport = vi.fn(() => new NativeTimeoutTransport());
+    const { onState } = collectStates();
+    const conn = new PendantConnection({
+      onState,
+      createTransport,
+      stepTimeoutMs: 1,
+    });
+
+    await conn.connect();
+
+    expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(requestAttempts).toBe(1);
+    expect(conn.getState().status).toBe("error");
+    expect(conn.getState().error).toContain("timed out");
+  });
+
+  it("retains one timeout retry for web transports", async () => {
+    let requestAttempts = 0;
+    class FirstWebTimeoutTransport extends FakeTransport {
+      async requestAndConnect(): Promise<{ deviceName: string | null }> {
+        requestAttempts += 1;
+        return new Promise(() => {});
+      }
+    }
+    class SecondWebTransport extends FakeTransport {
+      async requestAndConnect(): Promise<{ deviceName: string | null }> {
+        requestAttempts += 1;
+        return { deviceName: "retry pendant" };
+      }
+    }
+
+    const createTransport = vi
+      .fn()
+      .mockImplementationOnce(() => new FirstWebTimeoutTransport())
+      .mockImplementationOnce(() => new SecondWebTransport());
+    const { onState } = collectStates();
+    const conn = new PendantConnection({
+      onState,
+      createTransport,
+      stepTimeoutMs: 1,
+    });
+
+    await conn.connect();
+
+    expect(createTransport).toHaveBeenCalledTimes(2);
+    expect(requestAttempts).toBe(2);
+    expect(conn.getState().status).toBe("listening");
+    expect(conn.getState().deviceName).toBe("retry pendant");
   });
 
   it("runs the audio pipeline: notification → transcript dispatched", async () => {
@@ -440,6 +515,129 @@ describe("PendantConnection connect orchestration", () => {
     conn.resume();
     expect(conn.getState().status).toBe("listening");
     expect(conn.getState().paused).toBe(false);
+  });
+
+  it("aborts active ASR on pause and emits one terminal drop without late transcript", async () => {
+    asrControl.mode = "deferred";
+    const transport = new FakeTransport({});
+    const { onState } = collectStates();
+    const transcripts: string[] = [];
+    const segments: PendantTranscriptSegmentDetail[] = [];
+    const conn = new PendantConnection({
+      onState,
+      createTransport: () => transport,
+      onTranscript: (text) => transcripts.push(text),
+      onSegment: (detail) => segments.push(detail),
+    });
+    await conn.connect();
+
+    emitStoppedUtterance(transport, 0);
+    await flushMicrotasks();
+    expect(asrControl.signals).toHaveLength(1);
+    expect(asrControl.signals[0]?.aborted).toBe(false);
+
+    conn.pause();
+
+    expect(asrControl.signals[0]?.aborted).toBe(true);
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "dropped",
+    ]);
+    asrControl.resolvers.shift()?.({
+      text: "late text",
+      words: [{ text: "late", startMs: 0, endMs: 10 }],
+    });
+    await flushMicrotasks();
+
+    expect(transcripts).toEqual([]);
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "dropped",
+    ]);
+  });
+
+  it("drops queued finalizations on pause before they start ASR", async () => {
+    asrControl.mode = "deferred";
+    const transport = new FakeTransport({});
+    const { onState } = collectStates();
+    const segments: PendantTranscriptSegmentDetail[] = [];
+    const conn = new PendantConnection({
+      onState,
+      createTransport: () => transport,
+      onSegment: (detail) => segments.push(detail),
+    });
+    await conn.connect();
+
+    emitStoppedUtterance(transport, 0);
+    await flushMicrotasks();
+    emitStoppedUtterance(transport, 2);
+    expect(asrControl.calls).toBe(1);
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "pending",
+    ]);
+
+    conn.pause();
+
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "pending",
+      "dropped",
+      "dropped",
+    ]);
+    asrControl.resolvers.shift()?.({
+      text: "late first",
+      words: [{ text: "late", startMs: 0, endMs: 10 }],
+    });
+    await flushMicrotasks();
+
+    expect(asrControl.calls).toBe(1);
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "pending",
+      "dropped",
+      "dropped",
+    ]);
+
+    conn.resume();
+    asrControl.mode = "immediate";
+    emitStoppedUtterance(transport, 4);
+    await flushMicrotasks();
+
+    expect(asrControl.calls).toBe(2);
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "pending",
+      "dropped",
+      "dropped",
+      "pending",
+      "resolved",
+    ]);
+  });
+
+  it("aborts active ASR on remote disconnect without surfacing an ASR error", async () => {
+    asrControl.mode = "deferred";
+    const transport = new FakeTransport({});
+    const { onState } = collectStates();
+    const segments: PendantTranscriptSegmentDetail[] = [];
+    const conn = new PendantConnection({
+      onState,
+      createTransport: () => transport,
+      onSegment: (detail) => segments.push(detail),
+    });
+    await conn.connect();
+
+    emitStoppedUtterance(transport, 0);
+    await flushMicrotasks();
+    transport.disconnectedHandler?.();
+
+    expect(asrControl.signals[0]?.aborted).toBe(true);
+    expect(conn.getState().status).toBe("idle");
+    expect(conn.getState().error).toBeNull();
+    expect(segments.map((segment) => segment.status)).toEqual([
+      "pending",
+      "dropped",
+    ]);
   });
 
   it("does not emit a frame buffered before or during pause into VAD after resume", async () => {

@@ -31,6 +31,10 @@ import {
   type VoiceControlEventDetail,
 } from "../../events";
 import { useViewEvent } from "../../hooks/useViewEvent";
+import {
+  PENDANT_VOICE_TRANSCRIPT_EVENT,
+  type PendantVoiceTranscriptDetail,
+} from "../../pendant/pendant-connection";
 import type { HomeModelStatus } from "../../services/local-inference/home-model-status";
 import {
   useChatComposer,
@@ -67,10 +71,6 @@ import {
   type VoiceCaptureHandle,
   type VoiceCaptureState,
 } from "../../voice/voice-capture-factory";
-import {
-  PENDANT_VOICE_TRANSCRIPT_EVENT,
-  type PendantVoiceTranscriptDetail,
-} from "../../pendant/pendant-connection";
 import {
   VOICE_CONTINUOUS_MODES,
   type VoiceContinuousMode,
@@ -1696,11 +1696,10 @@ export function useShellController(): ShellController {
       window.removeEventListener(VOICE_CONTROL_EVENT, onVoiceControl);
   }, []);
 
-  // omi pendant → chat. The pendant module (packages/ui/src/pendant) runs its
-  // own Web Bluetooth capture + VAD + ASR loop and dispatches each finalized
-  // transcript as PENDANT_VOICE_TRANSCRIPT_EVENT. Route it through the same
-  // VOICE_DM send the mic surfaces use so the reply is spoken back — the pendant
-  // gets the full voice loop for free without touching the capture state machine.
+  // omi pendant → chat. The transcript view dispatches this event only after
+  // the server accepts a resolved pendant segment. Route that canonical text
+  // through the same VOICE_DM send the mic surfaces use so the reply is spoken
+  // back without touching the capture state machine.
   React.useEffect(() => {
     const onPendantTranscript = (e: Event) => {
       const detail = (e as CustomEvent<PendantVoiceTranscriptDetail>).detail;
@@ -1710,6 +1709,10 @@ export function useShellController(): ShellController {
         channelType: "VOICE_DM",
         metadata: {
           voiceSource: "pendant",
+          pendantSessionId: detail.sessionId,
+          pendantSegmentId: detail.segmentId,
+          ownerId: detail.ownerId,
+          agentId: detail.agentId,
           voiceTurnSignal: buildVoiceTurnSignal(text, {
             recentAgentReply: latestAgentReplyRef.current.text,
             replyAgeMs: latestAgentReplyRef.current.at

@@ -385,6 +385,7 @@ import {
 } from "../triggers/scheduling.ts";
 import { resolveAbsentPluginRouteStub } from "./absent-plugin-route-stubs.ts";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.ts";
+import { handleAuthRoutes } from "./auth-routes.ts";
 import { persistConfigEnv } from "./config-env.ts";
 import { restoreConversationsFromDb as restoreConversationsFromDbImpl } from "./conversation-restore.ts";
 import { wireCoordinatorBridgesWhenReady } from "./coordinator-wiring.ts";
@@ -425,7 +426,6 @@ import {
   handleAgentStatusRoutes,
   handleAgentTransferRoutes,
   handleAppPackageRoutes,
-  handleAuthRoutes,
   handleAvatarRoutes,
   handleBackgroundTasksRoute,
   handleBugReportRoutes,

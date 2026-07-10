@@ -26,6 +26,7 @@ const baseState: UsePendantResult["state"] = {
   lastTranscript: null,
   droppedPackets: 0,
   error: null,
+  paused: false,
 };
 
 function renderWithPendant(overrides: Partial<UsePendantResult>) {
@@ -34,6 +35,8 @@ function renderWithPendant(overrides: Partial<UsePendantResult>) {
     supported: true,
     connect: vi.fn(),
     disconnect: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
     ...overrides,
   });
   return render(<PendantSettingsCard />);

@@ -175,6 +175,38 @@ export class PendantInsightsScheduler {
     return id;
   }
 
+  addCommittedSegment(segment: {
+    id: string;
+    ordinal: number;
+    text: string;
+    atMs?: number;
+    speakerLabel?: string;
+  }): string | null {
+    if (!this.enabled || this.paused || this.disposed) return null;
+    const trimmed = segment.text.trim();
+    if (!trimmed) return null;
+
+    const hash = fnv1a32(normalizeForDedupe(trimmed));
+    if (this.recentHashSet.has(hash)) return null;
+
+    const seg: InternalSegment = {
+      id: segment.id,
+      ordinal: segment.ordinal,
+      text: trimmed,
+      hash,
+      ...(segment.speakerLabel ? { speakerLabel: segment.speakerLabel } : {}),
+      ...(segment.atMs ? { atMs: segment.atMs } : {}),
+    };
+    this.window.push(seg);
+    this.ordinal = Math.max(this.ordinal, segment.ordinal + 1);
+    this.newSinceLastRun++;
+    this.rememberHash(hash);
+    this.trimWindow();
+
+    void this.maybeGenerate();
+    return segment.id;
+  }
+
   /** Snapshot the current retained window (defensive copy) for inspection/UI. */
   getWindow(): PendantInsightSegmentInput[] {
     return this.window.map(({ hash: _hash, ...rest }) => ({ ...rest }));

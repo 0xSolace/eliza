@@ -102,12 +102,41 @@ async function loadRealBleClient(): Promise<BleClientLike> {
   return mod.BleClient;
 }
 
+class NativeBleOperationSupersededError extends Error {
+  constructor() {
+    super("Native BLE operation was superseded");
+    this.name = "NativeBleOperationSupersededError";
+  }
+}
+
+interface NativeBleOperation {
+  readonly token: symbol;
+  readonly transport: NativeBlePendantTransport;
+  cancelled: boolean;
+}
+
+const nativeBleOwners = new WeakMap<BleClientLike, NativeBleOperation>();
+
+function isSameOperation(
+  client: BleClientLike,
+  operation: NativeBleOperation,
+): boolean {
+  const owner = nativeBleOwners.get(client);
+  return (
+    owner?.token === operation.token &&
+    owner.transport === operation.transport &&
+    !operation.cancelled
+  );
+}
+
 export class NativeBlePendantTransport implements PendantTransport {
   readonly kind = "native-ble" as const;
 
   private readonly loadClient: () => Promise<BleClientLike>;
   private client: BleClientLike | null = null;
   private deviceId: string | null = null;
+  private operation: NativeBleOperation | null = null;
+  private connectIntentGeneration = 0;
 
   private audioSubscribed = false;
   private batterySubscribed = false;
@@ -117,17 +146,81 @@ export class NativeBlePendantTransport implements PendantTransport {
     this.loadClient = deps?.loadClient ?? loadRealBleClient;
   }
 
-  private async ensureClient(): Promise<BleClientLike> {
-    if (!this.client) this.client = await this.loadClient();
-    return this.client;
+  private async ensureClient(intent: number): Promise<BleClientLike> {
+    if (this.client) return this.client;
+    const client = await this.loadClient();
+    this.assertConnectIntentCurrent(intent);
+    this.client = client;
+    return client;
+  }
+
+  private beginOperation(client: BleClientLike): NativeBleOperation {
+    const operation: NativeBleOperation = {
+      token: Symbol("native-ble-pendant-operation"),
+      transport: this,
+      cancelled: false,
+    };
+    const previousOwner = nativeBleOwners.get(client);
+    if (previousOwner) {
+      previousOwner.cancelled = true;
+    }
+    nativeBleOwners.set(client, operation);
+    this.operation = operation;
+    return operation;
+  }
+
+  private beginConnectIntent(): number {
+    this.connectIntentGeneration += 1;
+    return this.connectIntentGeneration;
+  }
+
+  private invalidateConnectIntent(): void {
+    this.connectIntentGeneration += 1;
+  }
+
+  private assertConnectIntentCurrent(intent: number): void {
+    if (this.connectIntentGeneration !== intent) {
+      throw new NativeBleOperationSupersededError();
+    }
+  }
+
+  private assertOperationCurrent(operation: NativeBleOperation): void {
+    const client = this.client;
+    if (!client || !isSameOperation(client, operation)) {
+      throw new NativeBleOperationSupersededError();
+    }
+  }
+
+  private isOperationCurrent(operation: NativeBleOperation | null): boolean {
+    const client = this.client;
+    return Boolean(client && operation && isSameOperation(client, operation));
+  }
+
+  private currentOperation(): NativeBleOperation {
+    const operation = this.operation;
+    if (!operation) throw new NativeBleOperationSupersededError();
+    this.assertOperationCurrent(operation);
+    return operation;
   }
 
   async requestAndConnect(): Promise<{ deviceName: string | null }> {
-    const client = await this.ensureClient();
+    const intent = this.beginConnectIntent();
+    let client: BleClientLike;
+    try {
+      client = await this.ensureClient(intent);
+    } catch (err) {
+      this.assertConnectIntentCurrent(intent);
+      throw err;
+    }
+    this.assertConnectIntentCurrent(intent);
+    const operation = this.beginOperation(client);
     // `androidNeverForLocation` tells the plugin the scan is not used to derive
     // physical location, so on API 31+ the runtime prompt is BLUETOOTH_SCAN/
     // CONNECT only — no location permission (matches the manifest patch).
+    this.assertConnectIntentCurrent(intent);
     await client.initialize({ androidNeverForLocation: true });
+    this.assertConnectIntentCurrent(intent);
+    this.assertOperationCurrent(operation);
 
     let device: { deviceId: string; name?: string };
     try {
@@ -135,7 +228,10 @@ export class NativeBlePendantTransport implements PendantTransport {
         services: [OMI_AUDIO_SERVICE_UUID],
         optionalServices: [OMI_AUDIO_SERVICE_UUID, BATTERY_SERVICE_UUID_128],
       });
+      this.assertConnectIntentCurrent(intent);
+      this.assertOperationCurrent(operation);
     } catch (err) {
+      if (err instanceof NativeBleOperationSupersededError) throw err;
       // The plugin rejects a dismissed chooser / no-selection — normalize to the
       // shared cancelled error so the caller lands in idle, not error.
       if (isNativeCancel(err)) throw new PendantUserCancelledError();
@@ -143,9 +239,13 @@ export class NativeBlePendantTransport implements PendantTransport {
     }
 
     this.deviceId = device.deviceId;
+    this.assertConnectIntentCurrent(intent);
     await client.connect(device.deviceId, () => {
+      if (!this.isOperationCurrent(operation)) return;
       this.disconnectedHandler?.();
     });
+    this.assertConnectIntentCurrent(intent);
+    this.assertOperationCurrent(operation);
 
     return { deviceName: device.name ?? null };
   }
@@ -154,14 +254,19 @@ export class NativeBlePendantTransport implements PendantTransport {
     const client = this.client;
     const deviceId = this.deviceId;
     if (!client || !deviceId) return OMI_CODEC.OPUS_16K;
+    const operation = this.currentOperation();
+    this.assertOperationCurrent(operation);
     try {
       const value = await client.read(
         deviceId,
         OMI_AUDIO_SERVICE_UUID,
         OMI_AUDIO_CODEC_CHAR_UUID,
       );
+      this.assertOperationCurrent(operation);
       return value.getUint8(0) as OmiCodecId;
-    } catch {
+    } catch (err) {
+      if (err instanceof NativeBleOperationSupersededError) throw err;
+      this.assertOperationCurrent(operation);
       // Codec characteristic missing/unreadable → assume the DK1 Opus default.
       return OMI_CODEC.OPUS_16K;
     }
@@ -171,11 +276,14 @@ export class NativeBlePendantTransport implements PendantTransport {
     const client = this.client;
     const deviceId = this.deviceId;
     if (!client || !deviceId) throw new Error("pendant not connected");
+    const operation = this.currentOperation();
+    this.assertOperationCurrent(operation);
     await client.startNotifications(
       deviceId,
       OMI_AUDIO_SERVICE_UUID,
       OMI_AUDIO_DATA_CHAR_UUID,
       (value: DataView) => {
+        if (!this.isOperationCurrent(operation)) return;
         // Window the payload to exactly the notified bytes so the reassembler
         // sees identical input to the Web Bluetooth path.
         listener(
@@ -183,31 +291,39 @@ export class NativeBlePendantTransport implements PendantTransport {
         );
       },
     );
+    this.assertOperationCurrent(operation);
     this.audioSubscribed = true;
   }
 
-  async startBattery(
-    listener: PendantBatteryListener,
-  ): Promise<number | null> {
+  async startBattery(listener: PendantBatteryListener): Promise<number | null> {
     const client = this.client;
     const deviceId = this.deviceId;
     if (!client || !deviceId) return null;
+    const operation = this.currentOperation();
+    this.assertOperationCurrent(operation);
     try {
       const initial = await client.read(
         deviceId,
         BATTERY_SERVICE_UUID_128,
         BATTERY_LEVEL_CHAR_UUID_128,
       );
+      this.assertOperationCurrent(operation);
       const percent = initial.getUint8(0);
       await client.startNotifications(
         deviceId,
         BATTERY_SERVICE_UUID_128,
         BATTERY_LEVEL_CHAR_UUID_128,
-        (value: DataView) => listener(value.getUint8(0)),
+        (value: DataView) => {
+          if (!this.isOperationCurrent(operation)) return;
+          listener(value.getUint8(0));
+        },
       );
+      this.assertOperationCurrent(operation);
       this.batterySubscribed = true;
       return percent;
-    } catch {
+    } catch (err) {
+      if (err instanceof NativeBleOperationSupersededError) throw err;
+      this.assertOperationCurrent(operation);
       // No battery service — leave batteryPercent null.
       return null;
     }
@@ -217,41 +333,64 @@ export class NativeBlePendantTransport implements PendantTransport {
     this.disconnectedHandler = handler;
   }
 
+  canRetryAfterTimeout(): boolean {
+    return false;
+  }
+
   async disconnect(): Promise<void> {
+    this.invalidateConnectIntent();
     const client = this.client;
+    const operation = this.operation;
+    const ownsPhysicalLink = Boolean(
+      client &&
+        operation &&
+        nativeBleOwners.get(client)?.token === operation.token &&
+        nativeBleOwners.get(client)?.transport === this,
+    );
+    if (operation) operation.cancelled = true;
+    if (client && operation && ownsPhysicalLink) nativeBleOwners.delete(client);
     const deviceId = this.deviceId;
-    if (client && deviceId) {
-      if (this.audioSubscribed) {
+    const shouldStopAudio = this.audioSubscribed;
+    const shouldStopBattery = this.batterySubscribed;
+    this.audioSubscribed = false;
+    this.batterySubscribed = false;
+    this.deviceId = null;
+    this.operation = null;
+    if (client && deviceId && ownsPhysicalLink) {
+      if (shouldStopAudio) {
         try {
+          if (nativeBleOwners.get(client)) return;
           await client.stopNotifications(
             deviceId,
             OMI_AUDIO_SERVICE_UUID,
             OMI_AUDIO_DATA_CHAR_UUID,
           );
-        } catch {
+        } catch (err) {
+          void err;
           /* already gone */
         }
       }
-      if (this.batterySubscribed) {
+      if (shouldStopBattery) {
         try {
+          if (nativeBleOwners.get(client)) return;
           await client.stopNotifications(
             deviceId,
             BATTERY_SERVICE_UUID_128,
             BATTERY_LEVEL_CHAR_UUID_128,
           );
-        } catch {
+        } catch (err) {
+          void err;
           /* already gone */
         }
       }
       try {
+        if (nativeBleOwners.get(client)) return;
         await client.disconnect(deviceId);
-      } catch {
+      } catch (err) {
+        void err;
         /* already disconnected */
       }
     }
-    this.audioSubscribed = false;
-    this.batterySubscribed = false;
-    this.deviceId = null;
   }
 }
 

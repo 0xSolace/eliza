@@ -52,7 +52,7 @@ function assertInside(parent, child) {
 function createArtifactDir(output) {
   if (typeof output !== "string" || !output.trim()) {
     throw new Error(
-      `--output is required and must be a ${PREFIX}-* directory under .github/issue-evidence`,
+      `--output is required and must be a ${PREFIX}-* directory under ${ISSUE_EVIDENCE_DIR}`,
     );
   }
   const dir = path.resolve(output);
@@ -521,7 +521,8 @@ function usage() {
   node scripts/pendant-lightphone-desktop-evidence.mjs capture \\
     --url <sol-dev-url> --output <dir> [--selector <css>] [--endpoint <url>] [--executable <chromium>]
 
---output must be a ${PREFIX}-* directory under .github/issue-evidence.
+--output must be a ${PREFIX}-* directory under the scratch evidence root:
+${ISSUE_EVIDENCE_DIR}
 Use --duration <seconds> with --headed to interact with Web Bluetooth before final capture.
 The Web Bluetooth picker remains a manual checkpoint; this script records browser evidence only.`);
 }

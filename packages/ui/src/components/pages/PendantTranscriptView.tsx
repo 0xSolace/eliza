@@ -32,6 +32,7 @@ import {
   pendantTranscriptSessionReducer,
 } from "../../pendant/pendant-transcript-session";
 import { usePendant } from "../../pendant/usePendant";
+import { usePendantAmbientBridge } from "../../hooks/usePendantAmbientBridge";
 import { Button } from "../ui/button";
 import { ShellViewAgentSurface } from "../views/ShellViewAgentSurface";
 
@@ -144,10 +145,16 @@ export function PendantTranscriptView(): React.ReactElement {
       }:${session.segments.at(-1)?.text.length ?? 0}`,
     });
 
+  // Ambient always-listening engine: when the realtime flag is on AND a cloud
+  // agent resolves, the pendant streams to continuous cloud STT; otherwise the
+  // factory is null and the pendant uses the batch ASR path unchanged.
+  const { createAmbientBridge } = usePendantAmbientBridge();
+
   const { state, supported, connect, disconnect, pause, resume } = usePendant({
     onSegment: React.useCallback((detail) => {
       dispatchSession({ type: "segment", detail });
     }, []),
+    createAmbientBridge: createAmbientBridge ?? undefined,
   });
 
   React.useEffect(() => {

@@ -61,6 +61,10 @@ import {
   normalizePendantAsrWords,
   type PendantTranscriptSegmentDetail,
 } from "./transcript-segment-event";
+import {
+  type PendantAmbientBridge,
+  pendantCodecSampleRateHz,
+} from "./pendant-ambient-bridge";
 
 export interface PendantState {
   status: PendantStatus;
@@ -120,6 +124,36 @@ export interface PendantConnectionOptions {
   reconnectMaxAttempts?: number;
   /** Delay between spontaneous mid-session reconnect attempts. */
   reconnectDelayMs?: number;
+  /**
+   * Optional ambient-mode ingest engine factory. When supplied AND the returned
+   * bridge's `start()` resolves true (a `mode:"ambient"` mint succeeded + the WS
+   * opened + the server accepted the hello), decoded pendant PCM streams to the
+   * ambient WebSocket uplink and the SERVER does the segmentation (continuous
+   * Flux STT) instead of the local batch VAD→WAV→ASR path. The bridge maps the
+   * server's canonical segment events back onto {@link onSegment}/{@link onTranscript}
+   * so the transcript UI + insights are unchanged.
+   *
+   * When this is absent, the mint 404s (feature off), or the bridge fails to
+   * arm, the connection uses the batch ASR path COMPLETELY UNCHANGED — the
+   * non-regression law. The connection wires the bridge's segment/transcript
+   * callbacks to the SAME {@link commitSegment}/{@link emitSegment} sinks the
+   * batch path uses, so both engines dispatch identical events.
+   *
+   * The factory is called ONCE per successful bring-up (connect + each
+   * reconnect), so a dropped BLE link re-arms a fresh ambient session.
+   */
+  createAmbientBridge?: (hooks: PendantAmbientBridgeHooks) => PendantAmbientBridge;
+}
+
+/**
+ * The callback sinks the connection hands an ambient bridge so its server-driven
+ * segments land on the SAME UI/dispatch path as the batch engine.
+ */
+export interface PendantAmbientBridgeHooks {
+  /** Emit a transcript segment lifecycle update (interim + final). */
+  onSegment: (detail: PendantTranscriptSegmentDetail) => void;
+  /** A resolved final transcript → the spoken VOICE_DM dispatch path. */
+  onTranscript: (text: string) => void;
 }
 
 /** Custom window event the shell listens for to route a pendant turn to chat. */
@@ -171,6 +205,15 @@ export class PendantConnection {
 
   /** Ambient capture paused by the user (frames dropped before the VAD). */
   private paused = false;
+  /**
+   * The active ambient ingest bridge, when the realtime path armed. While set,
+   * decoded PCM streams to the ambient WS uplink and the batch VAD path is NOT
+   * fed (frames never go to both engines). Null = batch ASR path (the default /
+   * fallback).
+   */
+  private ambientBridge: PendantAmbientBridge | null = null;
+  /** Native decoded sample rate for the connected codec (for ambient resample). */
+  private codecSampleRateHz: number = OMI_OPUS_SAMPLE_RATE_HZ;
   private reconnectAttempts = 0;
   private intentionalDisconnect = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -512,6 +555,14 @@ export class PendantConnection {
 
     this.reassembler.reset();
     this.resetDetector();
+    this.codecSampleRateHz = pendantCodecSampleRateHz(codecId);
+
+    // Try to arm the ambient ingest engine BEFORE audio notifications start, so
+    // no decoded frame is dropped between subscribe and bridge-ready. If it does
+    // not arm (no factory / mint 404 / hello rejected), the batch VAD path runs
+    // unchanged — the non-regression law.
+    await this.armAmbientBridge();
+
     await this.step("start-notifications", () =>
       transport.startAudio(this.onAudioPayload),
     );
@@ -548,6 +599,10 @@ export class PendantConnection {
   }
 
   private releaseConnectionRefs(): void {
+    // A BLE drop / teardown ends the ambient session cleanly (the transport for
+    // THIS session is gone; the server session is resumable via a fresh mint on
+    // reconnect, which re-arms a new bridge in bringUp).
+    this.teardownAmbientBridge();
     this.decoder?.free();
     this.decoder = null;
     this.reassembler.reset();
@@ -588,7 +643,88 @@ export class PendantConnection {
         continue;
       }
       if (pcm.length === 0) continue;
-      this.feedVad(pcm);
+      // ENGINE SELECT (single-writer): when the ambient bridge is live, decoded
+      // PCM streams to the ambient WS uplink and the server does segmentation.
+      // Otherwise it feeds the local batch VAD path. A frame NEVER goes to both.
+      if (this.ambientBridge) {
+        this.ambientBridge.pushPcm(pcm, this.codecSampleRateHz);
+      } else {
+        this.feedVad(pcm);
+      }
+    }
+  }
+
+  /**
+   * Attempt to arm the ambient ingest engine for this bring-up. Resolves after
+   * the bridge either becomes live (ambient path owns ingestion) or declines
+   * (batch path stays in charge). Never throws: any ambient failure degrades to
+   * the batch path silently (the non-regression law). Best-effort — if the
+   * factory is absent this is a no-op.
+   */
+  private async armAmbientBridge(): Promise<void> {
+    const factory = this.opts.createAmbientBridge;
+    if (!factory) return;
+    // A bridge from a previous bring-up must be gone before arming a new one.
+    this.teardownAmbientBridge();
+    let bridge: PendantAmbientBridge;
+    try {
+      bridge = factory({
+        onSegment: (detail) => this.emitSegment(detail),
+        onTranscript: (text) => this.commitAmbientTranscript(text),
+      });
+    } catch (error) {
+      // error-policy:J4 A bridge factory failure degrades to batch, never fatal.
+      logger.warn(
+        { error },
+        "[PendantConnection] ambient bridge factory failed — using batch path",
+      );
+      return;
+    }
+    let armed = false;
+    try {
+      armed = await bridge.start();
+    } catch (error) {
+      // error-policy:J4 An ambient arm failure degrades to batch, never fatal.
+      logger.warn(
+        { error },
+        "[PendantConnection] ambient bridge start failed — using batch path",
+      );
+      armed = false;
+    }
+    if (armed) {
+      this.ambientBridge = bridge;
+      // The batch detector is not fed while ambient owns ingestion; reset it so
+      // no stale partial utterance survives an engine switch.
+      this.resetDetector();
+    } else {
+      // Declined (mint 404 / hello rejected / transport fail): fall back to batch.
+      // The bridge already tore its own socket down via onEnd(mint_*/hello_*).
+      this.ambientBridge = null;
+    }
+  }
+
+  /** Route an ambient final transcript through the SAME dispatch as the batch path. */
+  private commitAmbientTranscript(text: string): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    this.patch({ lastTranscript: trimmed, error: null, typedError: null });
+    dispatchPendantVoiceTranscript(trimmed);
+    this.opts.onTranscript?.(trimmed);
+  }
+
+  /** Tear down the ambient bridge (if any) so its socket + timers are released. */
+  private teardownAmbientBridge(): void {
+    const bridge = this.ambientBridge;
+    this.ambientBridge = null;
+    if (bridge) {
+      try {
+        bridge.stop();
+      } catch (error) {
+        logger.debug(
+          { error },
+          "[PendantConnection] ambient bridge teardown failed",
+        );
+      }
     }
   }
 
@@ -709,14 +845,20 @@ export class PendantConnection {
     this.paused = true;
     this.reassembler.reset();
     this.resetDetector();
+    // Ambient: map the pendant pause onto the ambient pause control frame, which
+    // SEVERS Flux server-side (no audio ingested/metered while paused). Batch:
+    // frames are simply dropped before the VAD (unchanged).
+    this.ambientBridge?.pause();
     this.patch({ paused: true, status: "paused" });
   }
 
-  /** Resume feeding decoded pendant audio into VAD. */
+  /** Resume feeding decoded pendant audio into VAD (or the ambient uplink). */
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
     this.resetDetector();
+    // Ambient: reopen Flux server-side via the resume control frame.
+    this.ambientBridge?.resume();
     if (this.transport && this.decoder) {
       this.patch({ paused: false, status: "listening" });
     } else {
@@ -729,11 +871,19 @@ export class PendantConnection {
     this.intentionalDisconnect = true;
     this.clearReconnectTimer();
     // Flush the final in-flight frame (no following packet will close it) so a
-    // trailing utterance still gets transcribed on a clean disconnect.
+    // trailing utterance still gets transcribed on a clean disconnect. In batch
+    // mode this feeds the VAD to close the last utterance; in ambient mode the
+    // server segments continuously, so the trailing frame streams to the uplink
+    // (releaseConnectionRefs then sends the clean `bye` that ends the session).
     if (this.decoder) {
       for (const frame of this.reassembler.flush()) {
         const pcm = this.decoder.decodeFrame(frame.data);
-        if (pcm.length > 0) this.feedVad(pcm);
+        if (pcm.length === 0) continue;
+        if (this.ambientBridge) {
+          this.ambientBridge.pushPcm(pcm, this.codecSampleRateHz);
+        } else {
+          this.feedVad(pcm);
+        }
       }
     }
     try {

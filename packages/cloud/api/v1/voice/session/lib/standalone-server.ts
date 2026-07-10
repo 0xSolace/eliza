@@ -81,10 +81,11 @@ import type {
   DeepgramFluxWebSocketFactory,
   DeepgramFluxTransportRequest,
 } from "../../stt/providers/deepgram-flux";
-import type {
-  CartesiaWebSocketFactory,
-  CartesiaWebSocketLike,
-  CartesiaWebSocketFactoryOptions,
+import {
+  CartesiaSonicTtsAdapter,
+  type CartesiaWebSocketFactory,
+  type CartesiaWebSocketLike,
+  type CartesiaWebSocketFactoryOptions,
 } from "@/lib/services/cartesia-sonic-tts";
 
 // =========================================================================
@@ -270,6 +271,8 @@ export interface StandaloneServerConfig {
   hooks: StandaloneHooks;
   /** Injectable only for contract tests; production uses the global fetch. */
   deepgramFetch?: typeof fetch;
+  /** Injectable only for contract tests; production uses the node ws factory. */
+  cartesiaWebSocketFactory?: CartesiaWebSocketFactory;
 }
 
 export interface RunningStandaloneServer {
@@ -283,6 +286,7 @@ const MINT_PATH = "/api/v1/voice/session";
 const WS_PATH = "/api/v1/voice/session/ws";
 const HEALTH_PATH = "/api/v1/voice/session/health";
 const ASR_CLOUD_PATH = "/api/asr/cloud";
+const TTS_CLOUD_PATH = "/api/tts/cloud";
 /** Read-only segment inspection for the standalone service's own store. */
 const SEGMENTS_PATH_PREFIX = "/api/v1/voice/session/segments";
 
@@ -488,6 +492,82 @@ function normalizePcmWav(buf: Buffer): NormalizedWav | null {
     incomingBytes: buf.length,
     rewritten: !wasCanonical,
   };
+}
+
+
+function wavFromPcm16Mono(pcm: Buffer, sampleRate: number): Buffer {
+  const dataBytes = pcm.length - (pcm.length % 2);
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + dataBytes, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(dataBytes, 40);
+  return Buffer.concat([header, pcm.subarray(0, dataBytes)]);
+}
+
+async function synthesizeCartesiaWav(
+  config: StandaloneServerConfig,
+  hooks: StandaloneHooks,
+  text: string,
+): Promise<Buffer> {
+  const sampleRate = 16_000;
+  const frames: Buffer[] = [];
+  let providerError: Error | null = null;
+  let completeResolve!: () => void;
+  const complete = new Promise<void>((resolve) => {
+    completeResolve = resolve;
+  });
+  const adapter = new CartesiaSonicTtsAdapter({
+    apiKey: config.cartesiaApiKey,
+    voiceId: config.cartesiaVoiceId,
+    websocketFactory: config.cartesiaWebSocketFactory ?? makeNodeCartesiaFactory(hooks),
+    sampleRate,
+    channels: 1,
+    encoding: "pcm_s16le",
+  });
+  const stream = adapter.createStream(
+    { traceId: crypto.randomUUID(), maxBufferDelayMs: 50 },
+    {
+      onAudioFrame: (event) => frames.push(Buffer.from(event.bytes)),
+      onComplete: () => completeResolve(),
+      onProviderError: (event) => {
+        providerError = new Error(event.message || event.title || "Cartesia provider failed");
+        hooks.log("warn", "cartesia tts provider error", {
+          code: event.code,
+          statusCode: event.statusCode,
+          title: event.title,
+        });
+        completeResolve();
+      },
+      onCancelled: () => completeResolve(),
+    },
+  );
+  try {
+    await Promise.race([
+      stream.opened,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Cartesia open timeout")), 10_000)),
+    ]);
+    stream.sendPhrase({ text, continueContext: false, flush: true, maxBufferDelayMs: 50 });
+    await Promise.race([
+      complete,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Cartesia synthesis timeout")), 30_000)),
+    ]);
+    if (providerError) throw providerError;
+    const pcm = Buffer.concat(frames);
+    if (pcm.length === 0) throw new Error("Cartesia returned no audio");
+    return wavFromPcm16Mono(pcm, sampleRate);
+  } finally {
+    await Promise.race([stream.closed, new Promise((resolve) => setTimeout(resolve, 1_000))]).catch(() => {});
+  }
 }
 
 async function readRawBody(req: IncomingMessage, limitBytes: number): Promise<Buffer> {
@@ -844,6 +924,37 @@ export async function startStandaloneVoiceServer(
         return;
       }
       json(res, 200, { text: transcript.trim() });
+      return;
+    }
+
+
+    if (path === TTS_CLOUD_PATH && req.method === "POST") {
+      let body: { text?: unknown };
+      try {
+        body = (await readJsonBody(req, 128 * 1024)) as typeof body;
+      } catch {
+        json(res, 400, { error: "invalid tts request body" });
+        return;
+      }
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) {
+        json(res, 400, { error: "text required" });
+        return;
+      }
+      try {
+        const audio = await synthesizeCartesiaWav(config, hooks, text);
+        res.writeHead(200, {
+          "content-type": "audio/wav",
+          "content-length": audio.length,
+          "cache-control": "no-store",
+        });
+        res.end(audio);
+      } catch (err) {
+        hooks.log("warn", "cartesia cloud tts failed", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+        json(res, 502, { error: "TTS provider failed" });
+      }
       return;
     }
 

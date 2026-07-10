@@ -148,6 +148,7 @@ export function usePendantAmbientBridge(
         webSocketFactory: wsFactory,
         onSegment: hooks.onSegment,
         onTranscript: hooks.onTranscript,
+        onEnd: hooks.onEnd,
       });
   }, [available, mintAmbient, wsFactory]);
 

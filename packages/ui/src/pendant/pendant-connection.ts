@@ -154,6 +154,8 @@ export interface PendantAmbientBridgeHooks {
   onSegment: (detail: PendantTranscriptSegmentDetail) => void;
   /** A resolved final transcript → the spoken VOICE_DM dispatch path. */
   onTranscript: (text: string) => void;
+  /** Ambient ended after arming: release ownership so batch VAD resumes. */
+  onEnd: () => void;
 }
 
 /** Custom window event the shell listens for to route a pendant turn to chat. */
@@ -671,6 +673,14 @@ export class PendantConnection {
       bridge = factory({
         onSegment: (detail) => this.emitSegment(detail),
         onTranscript: (text) => this.commitAmbientTranscript(text),
+        onEnd: () => {
+          // A post-ready socket/provider failure must release ambient ownership.
+          // Otherwise handleNotification keeps feeding an ended bridge and drops
+          // every frame instead of returning to the batch VAD path.
+          if (this.ambientBridge !== bridge) return;
+          this.ambientBridge = null;
+          this.resetDetector();
+        },
       });
     } catch (error) {
       // error-policy:J4 A bridge factory failure degrades to batch, never fatal.
@@ -681,8 +691,15 @@ export class PendantConnection {
       return;
     }
     let armed = false;
+    let armTimer: ReturnType<typeof setTimeout> | null = null;
     try {
-      armed = await bridge.start();
+      armed = await Promise.race([
+        bridge.start(),
+        new Promise<boolean>((resolve) => {
+          armTimer = setTimeout(() => resolve(false), this.stepTimeoutMs);
+        }),
+      ]);
+      if (!armed) bridge.stop();
     } catch (error) {
       // error-policy:J4 An ambient arm failure degrades to batch, never fatal.
       logger.warn(
@@ -690,6 +707,9 @@ export class PendantConnection {
         "[PendantConnection] ambient bridge start failed — using batch path",
       );
       armed = false;
+      bridge.stop();
+    } finally {
+      if (armTimer) clearTimeout(armTimer);
     }
     if (armed) {
       this.ambientBridge = bridge;

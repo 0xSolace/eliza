@@ -11,7 +11,7 @@
  *   2. the successor's metadata carries the typed `resumeContext` marker;
  *   3. the successor reuses the predecessor's workdir (branch + uncommitted
  *      work preserved on disk);
- *   4. a `account_failover_resumed` session event is emitted on the successor
+ *   4. a `account_failover_resumed` session event is emitted on the mapped predecessor
  *      so the UI can show "rate-limited, resumable".
  *
  * Deterministic: a minimal in-memory coding-account bridge is installed on the
@@ -235,13 +235,14 @@ describe("SubAgentRouter — rate-limit failover resume", () => {
     );
     expect(arg?.metadata?.retryOfSessionId).toBe(SESSION_ID);
 
-    // 5. The resumable failover is surfaced on the successor's event stream.
+    // 5. The resumable failover is surfaced through the mapped predecessor.
     const resumeEvt = acp.emitSessionEvent.mock.calls.find(
       (c) => c[1] === "account_failover_resumed",
     );
     expect(resumeEvt).toBeDefined();
-    expect(resumeEvt?.[0]).toBe("resume-session-id");
+    expect(resumeEvt?.[0]).toBe(SESSION_ID);
     expect(resumeEvt?.[2]).toMatchObject({
+      successorSessionId: "resume-session-id",
       resumable: true,
       resumeReason: "rate-limited",
       resumeFromSessionId: SESSION_ID,

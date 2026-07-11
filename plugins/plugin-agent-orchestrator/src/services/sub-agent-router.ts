@@ -1900,10 +1900,14 @@ export class SubAgentRouter extends Service {
       // must remain observable without undoing the recovered session.
       if (resumeContext) {
         try {
+          // Emit on the predecessor, which is already task-mapped. The
+          // successor id is carried in the payload so the bridge cannot drop
+          // this synchronous event before registering the new session.
           service.emitSessionEvent?.(
-            result.sessionId,
+            session.id,
             "account_failover_resumed",
             {
+              successorSessionId: result.sessionId,
               ...resumeEventFields(resumeContext),
               workdir: resumeContext.workdir,
               branch: resumeContext.branch,

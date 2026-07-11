@@ -2696,9 +2696,10 @@ describe("SubAgentRouter — account failover resume", () => {
       lastProgress: "Edited src/foo.ts\nRan bun test --filter foo",
     });
     expect(acp.service.emitSessionEvent).toHaveBeenCalledWith(
-      "retry-session-id",
+      SESSION_ID,
       "account_failover_resumed",
       expect.objectContaining({
+        successorSessionId: "retry-session-id",
         resumable: true,
         resumeReason: "rate-limited",
         resumeFromSessionId: SESSION_ID,

@@ -904,7 +904,7 @@ export async function startStandaloneVoiceServer(
               "Content-Type": normalized.bitsPerSample === 16 ? "application/octet-stream" : "audio/wav",
               Accept: "application/json",
             },
-            body: forwardBody,
+            body: new Uint8Array(forwardBody),
           },
         );
       } catch (err) {

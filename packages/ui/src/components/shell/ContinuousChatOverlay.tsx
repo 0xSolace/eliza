@@ -5800,10 +5800,17 @@ export function ContinuousChatOverlay({
                 }
                 aria-label="message"
                 data-testid="chat-composer-textarea"
+                // The composer is disabled during onboarding (sign-in-first).
+                // A bare disabled input leaves screen-reader users with no cue
+                // for WHY it's locked or what to do next, so point them at the
+                // "Sign in to Eliza Cloud" action in the transcript. Falls back
+                // to the booting hint post-onboarding.
                 aria-describedby={
-                  booting && !noProviderConfigured && !firstRunOpen
-                    ? "cc-booting-hint"
-                    : undefined
+                  firstRunOpen
+                    ? "cc-first-run-hint"
+                    : booting && !noProviderConfigured
+                      ? "cc-booting-hint"
+                      : undefined
                 }
                 // Combobox semantics (role + aria-*) are applied as one spread,
                 // and only when a slash catalog is wired in — a plain message
@@ -5816,7 +5823,12 @@ export function ContinuousChatOverlay({
                 // dimming the locked cue.
                 className="scrollbar-hide max-h-[8.5rem] min-h-8 min-w-0 flex-1 resize-none self-center border-none bg-transparent px-1.5 py-1 text-left text-sm leading-relaxed text-txt outline-none placeholder:text-muted-strong disabled:pointer-events-none disabled:opacity-100"
               />
-              {booting && !noProviderConfigured && !firstRunOpen ? (
+              {firstRunOpen ? (
+                <span id="cc-first-run-hint" className="sr-only">
+                  The message box is locked until you sign in. Choose "Sign in
+                  to Eliza Cloud" above to continue setting up {agentName}.
+                </span>
+              ) : booting && !noProviderConfigured ? (
                 <span id="cc-booting-hint" className="sr-only">
                   {agentName} is waking up — you can type now; your message
                   sends and the reply arrives in a moment.

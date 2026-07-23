@@ -60,6 +60,7 @@ import { aiBillingRecordsService } from "./ai-billing-records";
 import { apiKeysService } from "./api-keys";
 import { imageRequiresDigestPin, isCodingContainerImageAllowed } from "./coding-containers";
 import type { CreditReconciliationResult, CreditReservation } from "./credits";
+import { dockerNodeManager } from "./docker-node-manager";
 import type { DockerSandboxMetadata } from "./docker-sandbox-provider";
 import { shellQuote } from "./docker-sandbox-utils";
 import { DockerSSHClient } from "./docker-ssh";
@@ -6257,6 +6258,32 @@ export class ElizaSandboxService {
       // by id below only after the atomic swap succeeds.
       reclaimStaleVpnNode: false,
     };
+
+    // Pre-pull the digest-pinned target image onto the eligible blue-candidate
+    // nodes BEFORE create, so the provider's in-create `docker pull` is a warm
+    // cache hit and the create step completes fast instead of running a long
+    // cold pull that can be interrupted if the worker is stopped mid-flight
+    // (the proven 2026-07-23 workaround). Best-effort: a pre-pull failure never
+    // blocks the upgrade — the provider's own pull remains the correctness path.
+    try {
+      const prePull = await dockerNodeManager.prePullImageOnEligibleNodes(
+        config.dockerImage,
+        containersEnv.defaultAgentImagePlatform(),
+        oldNodeId,
+      );
+      const pulled = prePull.filter((r) => r.status === "pulled").length;
+      logger.info("[agent-sandbox] Upgrade pre-pull complete", {
+        agentId,
+        image: config.dockerImage,
+        pulled,
+        total: prePull.length,
+      });
+    } catch (prePullErr) {
+      logger.warn("[agent-sandbox] Upgrade pre-pull errored (non-fatal, continuing to create)", {
+        agentId,
+        error: prePullErr instanceof Error ? prePullErr.message : String(prePullErr),
+      });
+    }
 
     let blueHandle: Awaited<ReturnType<typeof provider.create>>;
     try {

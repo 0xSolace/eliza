@@ -677,6 +677,74 @@ export class DockerNodeManager {
   }
 
   /**
+   * Pre-pull a SPECIFIC (digest-pinned) image onto every eligible candidate
+   * node BEFORE a blue/green upgrade creates the blue container. This makes the
+   * provider's in-create `docker pull` a warm cache hit so the create step is
+   * fast and cannot be left half-done if the worker is stopped mid-pull — the
+   * proven manual workaround for the 2026-07-23 upgrade failures (a cold pull
+   * inside create ran long and got interrupted, churning the job).
+   *
+   * Eligible = enabled, healthy, arch-compatible, has a spare slot, and not the
+   * `excludeNodeId` (the agent's current node, which the upgrade excludes so
+   * blue lands elsewhere). Best-effort and bounded per node: a pre-pull failure
+   * is logged and does NOT block the upgrade — the provider's own pull is still
+   * the correctness path; this only warms the cache. Returns the per-node
+   * outcomes for logging.
+   */
+  async prePullImageOnEligibleNodes(
+    image: string,
+    platform: string | null | undefined,
+    excludeNodeId?: string,
+  ): Promise<Array<{ nodeId: string; status: "pulled" | "skipped" | "failed"; reason?: string }>> {
+    const nodes = await dockerNodesRepository.findEnabled();
+    return Promise.all(
+      nodes.map(async (node) => {
+        if (node.node_id === excludeNodeId) {
+          return { nodeId: node.node_id, status: "skipped" as const, reason: "excluded node" };
+        }
+        if (node.status !== "healthy") {
+          return {
+            nodeId: node.node_id,
+            status: "skipped" as const,
+            reason: `node status is ${node.status}`,
+          };
+        }
+        const allocated = await countAllocatedWorkloadsOnNode(node.node_id);
+        if (Math.max(0, node.capacity - allocated) <= 0) {
+          return { nodeId: node.node_id, status: "skipped" as const, reason: "no spare slots" };
+        }
+        if (!isNodeMetadataCompatible(node, platform)) {
+          return {
+            nodeId: node.node_id,
+            status: "skipped" as const,
+            reason: `node architecture is incompatible with ${platform}`,
+          };
+        }
+
+        const ssh = this.sshClientForNode(node);
+        const prePull = buildTrackedPrePullCommand(image, platform);
+        try {
+          await ssh.connect();
+          await ssh.exec(prePull.command, 5 * 60 * 1000);
+          prePullFailureState.delete(node.node_id);
+          return { nodeId: node.node_id, status: "pulled" as const };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.warn("[docker-node-manager] Upgrade pre-pull failed (non-fatal)", {
+            nodeId: node.node_id,
+            image,
+            error: message,
+          });
+          if (isPrePullTimeoutError(error)) {
+            await this.recoverAfterTimedOutPrePull(ssh, node, prePull.pidFile, image);
+          }
+          return { nodeId: node.node_id, status: "failed" as const, reason: message };
+        }
+      }),
+    );
+  }
+
+  /**
    * Cleanup + optional self-heal after a pre-pull times out on a node.
    *
    * (a) SIGKILL only the PID recorded by the timed-out pre-pull wrapper, after

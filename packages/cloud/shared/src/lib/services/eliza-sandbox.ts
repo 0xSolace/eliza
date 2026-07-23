@@ -73,7 +73,7 @@ import {
   elizaCodingContainerImageAdvisoryLockSql,
   elizaProvisionAdvisoryLockSql,
 } from "./eliza-provision-lock";
-import { headscaleIntegration } from "./headscale-integration";
+import { headscaleIntegration, stripContainerManagedVpnEnv } from "./headscale-integration";
 import { applyManagedAgentInferenceEnvDefaults } from "./managed-eliza-config";
 import { prepareManagedElizaEnvironment } from "./managed-eliza-env";
 import { JOB_TYPES } from "./provisioning-job-types";
@@ -6230,8 +6230,15 @@ export class ElizaSandboxService {
     }
 
     // Materialize at-rest-encrypted BYO secrets before container create (#11332).
-    const upgradeEnv = await decryptAgentEnvVars(
-      (agent.environment_vars as Record<string, string>) ?? {},
+    // Strip the container-managed VPN keys (TS_AUTHKEY et al.): the blue
+    // container's tailnet join MUST be minted fresh by prepareContainerVPN, not
+    // inherited from green's persisted env. Carrying green's already-spent
+    // single-use TS_AUTHKEY makes blue's `tailscale up` fail with
+    // `authkey already used`, so it never joins the tailnet, the CP health probe
+    // never reaches it, and the upgrade rolls back — the live-proven root cause
+    // of every fleet upgrade failing off sha-39d18c4 (2026-07-23).
+    const upgradeEnv = stripContainerManagedVpnEnv(
+      await decryptAgentEnvVars((agent.environment_vars as Record<string, string>) ?? {}),
     );
     const config = {
       agentId,
@@ -6574,8 +6581,10 @@ export class ElizaSandboxService {
 
     const rollbackImage = agent.previous_docker_image || dockerImage;
     // Materialize at-rest-encrypted BYO secrets before container create (#11332).
-    const rollbackEnv = await decryptAgentEnvVars(
-      (agent.environment_vars as Record<string, string>) ?? {},
+    // Strip the container-managed VPN keys so the rollback's blue container also
+    // mints a fresh TS_AUTHKEY instead of reusing a spent one (see executeUpgrade).
+    const rollbackEnv = stripContainerManagedVpnEnv(
+      await decryptAgentEnvVars((agent.environment_vars as Record<string, string>) ?? {}),
     );
     const config = {
       agentId,

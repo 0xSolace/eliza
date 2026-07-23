@@ -2,11 +2,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { HeadscaleClient } from "./headscale-client";
 import {
+  CONTAINER_MANAGED_VPN_ENV_KEYS,
   DEFAULT_REGISTRATION_TIMEOUT_MS,
   HeadscaleIntegration,
   inferHeadscaleUser,
   inferTailscaleHostname,
   normalizeHeadscaleSegment,
+  stripContainerManagedVpnEnv,
 } from "./headscale-integration";
 
 const savedEnv = { ...process.env };
@@ -429,5 +431,60 @@ describe("normalizeHeadscaleSegment + registration-timeout default", () => {
 
   test("DEFAULT_REGISTRATION_TIMEOUT_MS falls back to 180s when env is unset", () => {
     expect(DEFAULT_REGISTRATION_TIMEOUT_MS).toBe(180_000);
+  });
+});
+
+/**
+ * The killer bug (live-proven 2026-07-23): the blue/green upgrade reused green's
+ * already-spent single-use TS_AUTHKEY from the persisted env, so blue's
+ * `tailscale up` failed with `authkey already used` and every fleet upgrade
+ * rolled back. stripContainerManagedVpnEnv is the guarantee that only
+ * prepareContainerVPN mints the container's join credentials.
+ */
+describe("stripContainerManagedVpnEnv (blue/green fresh-authkey invariant)", () => {
+  test("removes every container-managed VPN key, keeps durable agent config", () => {
+    const stored = {
+      // container-managed VPN keys — must be stripped
+      TS_AUTHKEY: "spent-single-use-key-from-green",
+      TS_HOSTNAME: "eliza-fadb6b42",
+      TS_STATE_DIR: "/var/lib/tailscale",
+      TS_EXTRA_ARGS: "--accept-routes",
+      HEADSCALE_URL: "http://cp:8081",
+      // durable agent config — must survive verbatim
+      DATABASE_URL: "postgres://agent-db",
+      ELIZA_API_TOKEN: "agent-bearer",
+      ELIZAOS_CLOUD_API_KEY: "cloud-key",
+      ELIZA_AGENT_LOCAL_STATE: "1",
+      PGLITE_DATA_DIR: "/data/agents/x/eliza",
+    };
+
+    const cleaned = stripContainerManagedVpnEnv(stored);
+
+    for (const key of CONTAINER_MANAGED_VPN_ENV_KEYS) {
+      expect(cleaned[key]).toBeUndefined();
+    }
+    // Durable config preserved byte-for-byte.
+    expect(cleaned.DATABASE_URL).toBe("postgres://agent-db");
+    expect(cleaned.ELIZA_API_TOKEN).toBe("agent-bearer");
+    expect(cleaned.ELIZAOS_CLOUD_API_KEY).toBe("cloud-key");
+    expect(cleaned.ELIZA_AGENT_LOCAL_STATE).toBe("1");
+    expect(cleaned.PGLITE_DATA_DIR).toBe("/data/agents/x/eliza");
+  });
+
+  test("does not mutate the input object", () => {
+    const stored = { TS_AUTHKEY: "spent", DATABASE_URL: "keep" };
+    const cleaned = stripContainerManagedVpnEnv(stored);
+    expect(stored.TS_AUTHKEY).toBe("spent"); // original untouched
+    expect(cleaned.TS_AUTHKEY).toBeUndefined();
+    expect(cleaned).not.toBe(stored);
+  });
+
+  test("is a no-op on env with no VPN keys", () => {
+    const stored = { DATABASE_URL: "keep", FOO: "bar" };
+    expect(stripContainerManagedVpnEnv(stored)).toEqual(stored);
+  });
+
+  test("TS_AUTHKEY is in the managed set (regression guard for the killer)", () => {
+    expect(CONTAINER_MANAGED_VPN_ENV_KEYS).toContain("TS_AUTHKEY");
   });
 });

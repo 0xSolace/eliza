@@ -46,6 +46,56 @@ function headscalePublicUrl(): string {
   );
 }
 
+/**
+ * The env keys that `prepareContainerVPN` OWNS and re-mints per container. These
+ * are per-CONTAINER ephemeral join credentials / identity, NOT durable agent
+ * config: `TS_AUTHKEY` in particular is a SINGLE-USE Headscale pre-auth key
+ * that Headscale burns the moment the container's `tailscale up` consumes it.
+ *
+ * They must NEVER be carried forward from a prior container's stored env into a
+ * new (blue) container. On the blue/green upgrade + rollback paths the caller
+ * reuses the agent's persisted `environment_vars` verbatim so the new container
+ * keeps DATABASE_URL / ELIZA_API_TOKEN / etc. — but if a stale `TS_AUTHKEY`
+ * (already spent by the live green container) rides along, the blue container's
+ * `tailscale up --auth-key=<spent key>` fails with `authkey already used`, its
+ * tailnet join never completes, the CP health probe never reaches it, and the
+ * upgrade rolls back. That was the live-proven root cause of every fleet
+ * upgrade failing off `sha-39d18c4` (2026-07-23).
+ *
+ * The fix is to STRIP these keys from any inbound env before create, so
+ * `prepareContainerVPN` (invoked inside `provider.create`) is the SOLE source of
+ * the container's VPN join credentials — exactly the guarantee the
+ * fresh-provision path already has (fresh agents were created without a
+ * persisted `TS_AUTHKEY`, which is why fresh provisions minted correctly and
+ * only upgrades regressed). Belt-and-suspenders: the provider already spreads
+ * the freshly-minted `vpnEnvVars` AFTER `environmentVars` so a fresh key wins on
+ * the happy path, but stripping upstream makes the invariant unconditional —
+ * it holds even if `prepareContainerVPN` no-ops (headscale disabled) or throws
+ * and the provider continues without VPN.
+ */
+export const CONTAINER_MANAGED_VPN_ENV_KEYS = [
+  "TS_AUTHKEY",
+  "TS_HOSTNAME",
+  "TS_STATE_DIR",
+  "TS_EXTRA_ARGS",
+  "HEADSCALE_URL",
+] as const;
+
+/**
+ * Return a shallow copy of `env` with every {@link CONTAINER_MANAGED_VPN_ENV_KEYS}
+ * removed. Use this to sanitize any stored/persisted env before handing it to
+ * `provider.create` for a NEW container, so the container's VPN join is minted
+ * fresh by `prepareContainerVPN` and never inherits a spent single-use
+ * `TS_AUTHKEY`. Does not mutate the input.
+ */
+export function stripContainerManagedVpnEnv(env: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = { ...env };
+  for (const key of CONTAINER_MANAGED_VPN_ENV_KEYS) {
+    delete out[key];
+  }
+  return out;
+}
+
 export interface PrepareContainerVPNInput {
   agentId: string;
   agentName?: string;

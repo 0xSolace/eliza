@@ -52,7 +52,11 @@ import {
   WEBUI_PORT_MIN,
 } from "./docker-sandbox-utils";
 import { classifyDockerSshProbeError, DockerSSHClient } from "./docker-ssh";
-import { DEFAULT_REGISTRATION_TIMEOUT_MS, headscaleIntegration } from "./headscale-integration";
+import {
+  DEFAULT_REGISTRATION_TIMEOUT_MS,
+  headscaleIntegration,
+  stripContainerManagedVpnEnv,
+} from "./headscale-integration";
 import { buildKeylessOpenAIContainerEnv } from "./managed-eliza-env";
 import type {
   SandboxCreateConfig,
@@ -1105,7 +1109,15 @@ export class DockerSandboxProvider implements SandboxProvider {
 
     const baseEnv: Record<string, string> = {
       ...kmsEnv,
-      ...environmentVars,
+      // Defense-in-depth: never let a caller-supplied TS_AUTHKEY (or other
+      // container-managed VPN key) reach the container. prepareContainerVPN is
+      // the SOLE source of the join credentials via `...vpnEnvVars` below. This
+      // holds the invariant even when vpnEnvVars is empty (headscale disabled or
+      // a prepareContainerVPN failure the caller chose to continue past): in
+      // that case an inherited spent TS_AUTHKEY would otherwise burn `tailscale
+      // up` with `authkey already used`. Stripping here + spreading vpnEnvVars
+      // after means the freshly-minted key always wins and no stale key survives.
+      ...stripContainerManagedVpnEnv(environmentVars),
       ...vpnEnvVars,
       ...proxyEnv,
       AGENT_NAME: agentName,

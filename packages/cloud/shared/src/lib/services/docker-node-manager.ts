@@ -134,6 +134,76 @@ export function isPrePullTimeoutError(error: unknown): boolean {
   return message.includes("Command timed out after");
 }
 
+/**
+ * Live resource-pressure sample persisted onto `docker_nodes.metadata` at each
+ * health check, so the scheduler can gate placement on actual free memory /
+ * load rather than container-slot count alone.
+ */
+export interface NodeResourcePressure {
+  /** Free memory in MB (from /proc/meminfo MemAvailable). */
+  freeMemoryMb: number;
+  /** 1-minute load average (from /proc/loadavg), if readable. */
+  load1m: number | null;
+  /** Unix ms when this sample was taken. */
+  probedAt: number;
+}
+
+/**
+ * SSH one-liner that prints `MemAvailable` (kB) then the 1-minute loadavg, one
+ * value per line. MemAvailable is the kernel's own estimate of allocatable RAM
+ * without swapping — the right number for "can this node take another
+ * container", not MemFree (which ignores reclaimable cache).
+ */
+export const NODE_RESOURCE_PRESSURE_PROBE_CMD =
+  "awk '/^MemAvailable:/{print $2}' /proc/meminfo; awk '{print $1}' /proc/loadavg";
+
+/**
+ * Parse the two-line output of {@link NODE_RESOURCE_PRESSURE_PROBE_CMD} into a
+ * pressure sample. Line 1 = MemAvailable in kB, line 2 = 1-min loadavg. Returns
+ * null when MemAvailable is unreadable (so the caller treats the node as
+ * "unknown pressure" and does NOT gate on it — fail-open, like the disk probe).
+ */
+export function parseNodeResourcePressure(
+  raw: string,
+  now: number = Date.now(),
+): NodeResourcePressure | null {
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return null;
+  const memKb = Number.parseInt(lines[0] ?? "", 10);
+  if (!Number.isFinite(memKb) || memKb < 0) return null;
+  const loadRaw = lines[1] !== undefined ? Number.parseFloat(lines[1]) : Number.NaN;
+  return {
+    freeMemoryMb: Math.floor(memKb / 1024),
+    load1m: Number.isFinite(loadRaw) ? loadRaw : null,
+    probedAt: now,
+  };
+}
+
+/** Extract a previously-persisted pressure sample from a node's metadata. */
+export function readNodeResourcePressure(node: DockerNode): NodeResourcePressure | null {
+  const meta = node.metadata as Record<string, unknown> | null | undefined;
+  const p = meta?.resourcePressure as Partial<NodeResourcePressure> | undefined;
+  if (!p || typeof p.freeMemoryMb !== "number" || typeof p.probedAt !== "number") {
+    return null;
+  }
+  return {
+    freeMemoryMb: p.freeMemoryMb,
+    load1m: typeof p.load1m === "number" ? p.load1m : null,
+    probedAt: p.probedAt,
+  };
+}
+
+/**
+ * How long a persisted pressure sample stays authoritative for placement. Past
+ * this, the reading is stale (node may have freed/consumed memory since) and
+ * the gate treats the node as unknown-pressure = not blocked. Matches a couple
+ * of health-check intervals so a live node always has a fresh sample.
+ */
+export const NODE_PRESSURE_SAMPLE_TTL_MS = 15 * 60_000;
+
 export function buildTrackedPrePullCommand(
   image: string,
   platform: string | null | undefined,
@@ -217,6 +287,8 @@ export class DockerNodeManager {
    */
   async getAvailableNode(options: NodeSelectionOptions = {}): Promise<DockerNode | null> {
     const nodes = await dockerNodesRepository.findEnabled();
+    const minFreeMemoryMb = containersEnv.nodeMinFreeMemoryMb();
+    const now = Date.now();
     const candidates = (
       await Promise.all(
         nodes.map(async (node) => {
@@ -234,7 +306,31 @@ export class DockerNodeManager {
       .filter((candidate) => candidate.node.node_id !== options.excludeNodeId)
       .sort((a, b) => b.available - a.available);
 
-    for (const candidate of candidates) {
+    // Free-memory placement gate (advisory, fail-open). A node with free
+    // container SLOTS can still be memory-starved: on 2026-07-23 the scheduler
+    // placed a blue on a load-~57 node with ~540MB free and the boot OOM-thrashed
+    // into an upgrade timeout. Partition candidates by their LAST health-check
+    // free-memory sample: a node is "starved" only if it has a RECENT reading
+    // strictly below the floor. Nodes with no sample (never probed / probe
+    // failed) or a stale sample are treated as unknown = NOT starved, so the
+    // slot-count path still owns baseline placement. We prefer non-starved
+    // nodes but fall back to starved ones rather than fail placement entirely
+    // when the whole fleet is tight (placing beats stranding).
+    const isStarved = (node: DockerNode): boolean => {
+      const pressure = readNodeResourcePressure(node);
+      if (!pressure) return false; // unknown pressure -> don't block
+      if (now - pressure.probedAt > NODE_PRESSURE_SAMPLE_TTL_MS) return false; // stale -> don't block
+      return pressure.freeMemoryMb < minFreeMemoryMb;
+    };
+    const roomy = candidates.filter((c) => !isStarved(c.node));
+    const ordered = roomy.length > 0 ? roomy : candidates;
+    if (roomy.length === 0 && candidates.length > 0) {
+      logger.warn(
+        `[docker-node-manager] All ${candidates.length} candidate node(s) are below the ${minFreeMemoryMb}MB free-memory floor; placing on the least-constrained anyway (fleet is memory-tight — consider autoscaling).`,
+      );
+    }
+
+    for (const candidate of ordered) {
       if (!isNodeMetadataCompatible(candidate.node, options.requiredPlatform)) {
         logger.warn("[docker-node-manager] Skipping node with incompatible architecture", {
           nodeId: candidate.node.node_id,
@@ -356,6 +452,12 @@ export class DockerNodeManager {
               `[docker-node-manager] Canonical node ${node.node_id} (${node.hostname}) is reachable but disk is critically full; leaving healthy so the disk-clean cycle can reclaim space (canonical nodes are not autoscaler-replaced). Operators: free space or set enabled=false.`,
             );
           }
+          // Sample live resource pressure (free memory + load) and persist it
+          // onto metadata so getAvailableNode can gate placement on real
+          // headroom, not container-slot count alone. Best-effort: a failed
+          // probe leaves the prior sample (or none) and never affects the
+          // reachability verdict below.
+          await this.persistResourcePressure(node);
           // A reachable node clears any accumulated consecutive-failure count so
           // one recovered cycle undoes prior transient failures.
           nodeHealthFailureState.delete(node.node_id);
@@ -434,6 +536,33 @@ export class DockerNodeManager {
    * (null usage) so disk never owns reachability — the `docker info` probe does.
    * Isolated so a df hiccup can never throw out of the health check.
    */
+  /**
+   * Probe the node's free memory + 1-min load over SSH and merge the sample
+   * into `docker_nodes.metadata.resourcePressure`. Best-effort and non-fatal:
+   * any failure is logged and swallowed so it never affects the health verdict
+   * (the free-memory gate is advisory + fail-open). Runs only after
+   * `docker info` confirmed reachability, so it reuses the warmed SSH client.
+   */
+  async persistResourcePressure(node: DockerNode): Promise<void> {
+    try {
+      const ssh = this.sshClientForNode(node);
+      await ssh.connect();
+      const raw = await ssh.exec(NODE_RESOURCE_PRESSURE_PROBE_CMD, 10_000);
+      const pressure = parseNodeResourcePressure(raw);
+      if (!pressure) return;
+      const meta = (node.metadata as Record<string, unknown> | null | undefined) ?? {};
+      await dockerNodesRepository.update(node.id, {
+        metadata: { ...meta, resourcePressure: pressure },
+      });
+    } catch (error) {
+      logger.warn("[docker-node-manager] Resource-pressure probe failed; keeping prior sample", {
+        nodeId: node.node_id,
+        hostname: node.hostname,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   async diskHealthStatus(node: DockerNode): Promise<DiskHealthVerdict> {
     try {
       const usedPercent = await probeNodeDiskUsage(node);

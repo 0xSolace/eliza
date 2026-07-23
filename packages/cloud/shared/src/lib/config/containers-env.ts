@@ -767,6 +767,29 @@ export const containersEnv = {
     const parsed = raw ? Number(raw) : Number.NaN;
     return Number.isFinite(parsed) ? Math.min(90 * 24, Math.max(24, Math.floor(parsed))) : 7 * 24;
   },
+
+  /**
+   * Minimum free memory (MB) a node must report at its last health check before
+   * the scheduler will place a NEW container on it. A node with free container
+   * SLOTS (capacity - allocated > 0) can still be memory-starved: on 2026-07-23
+   * the scheduler placed a fresh blue container on a node at load ~57 with only
+   * ~540MB free, the image pull + agent boot OOM-thrashed, and the upgrade
+   * cycle timed out. Slot count alone is not a load signal.
+   *
+   * This gate is ADVISORY and fail-open: it only excludes a candidate when the
+   * node has a RECENT free-memory reading below the floor. A node with no probe
+   * data (never health-checked, or the probe failed) is NOT excluded — the
+   * slot-count path still owns baseline placement, exactly like the disk gate
+   * lets docker-info own reachability. Default 768MB — an agent container's
+   * cold boot (image decompress + PGlite + runtime) needs headroom well above a
+   * few hundred MB. Clamped to [128, 8192].
+   */
+  nodeMinFreeMemoryMb(): number {
+    const env = getCloudAwareEnv();
+    const raw = pick(env.NODE_MIN_FREE_MEMORY_MB);
+    const parsed = raw ? Number(raw) : Number.NaN;
+    return Number.isFinite(parsed) ? Math.min(8192, Math.max(128, Math.floor(parsed))) : 768;
+  },
 };
 
 /**

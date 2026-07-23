@@ -15,6 +15,8 @@
  *   input/login/verify slide-up, intro logo scale+swap, l/i/e/a letter morph,
  *   chrome filter, z-shape wipe. We touch colors only -- never timings.
  */
+
+import { EXTERNAL_URLS } from "@elizaos/shared/brand";
 import {
   DiscordIcon,
   IMessageIcon,
@@ -33,6 +35,7 @@ import type {
   ButtonHTMLAttributes,
   ComponentType,
   HTMLAttributes,
+  ReactNode,
   SVGProps,
 } from "react";
 import {
@@ -44,7 +47,6 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import BlobButton from "@/components/BlobButton";
 import { ElizaLogo } from "@/components/brand/eliza-logo";
 import ModelB, { type ModelBHandle } from "@/components/ModelViewers/ModelB";
 import { useT } from "@/providers/I18nProvider";
@@ -57,7 +59,6 @@ const ShaderBackground = lazy(
 );
 const VideoCall = lazy(() => import("@/components/VideoCall"));
 
-import { buildElizaSmsHref } from "@/lib/contact";
 import type { SpringAnimatedStyle } from "@/lib/spring-types";
 
 type AnimatedHtmlProps<T extends HTMLElement> = Omit<
@@ -126,13 +127,15 @@ const INTRO_DELAY = 1000;
 const PLATFORMS: Platform[] = ["imessage", "telegram", "discord", "try"];
 
 /**
- * ShaderBackground is the original ambient WebGL gradient. Brand pass replaces
- * it with a flat brand-color backdrop by default; pass ?shader=1 in the URL
- * to opt back in (useful for product feel comparisons).
+ * ShaderBackground is the original ambient WebGL gradient — the signature
+ * motion layer of the homepage. On by default; pass ?shader=0 to fall back to
+ * the flat brand-color backdrop (reduced-motion users get the flat backdrop
+ * automatically).
  */
 const SHADER_BACKGROUND_OPT_IN =
   typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("shader") === "1";
+  new URLSearchParams(window.location.search).get("shader") !== "0" &&
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const PLATFORM_BACKGROUND: Record<Platform, string> = {
   imessage: "var(--brand-orange)",
@@ -191,6 +194,47 @@ function AnimatedLetters({
         );
       })}
     </>
+  );
+}
+
+/**
+ * Header call-to-action pill that links straight to Eliza Cloud. Shares the
+ * frosted-glass reveal treatment used across the header controls.
+ */
+function CloudCTA({
+  children,
+  show = true,
+}: {
+  children: ReactNode;
+  show?: boolean;
+}) {
+  const appearSpring = useSpring({
+    reveal: show ? 120 : -20,
+    delay: show ? 300 : 0,
+    config: { tension: 60, friction: 30 },
+  });
+
+  return (
+    <AnimatedDiv
+      className="relative z-30 inline-flex items-center rounded-full border border-white/60 bg-white/30 backdrop-blur-md"
+      style={{
+        WebkitMaskImage: appearSpring.reveal.to(
+          (v) =>
+            `linear-gradient(to bottom left, rgba(0,0,0,1) ${v - 20}%, rgba(0,0,0,0) ${v + 20}%)`,
+        ),
+        maskImage: appearSpring.reveal.to(
+          (v) =>
+            `linear-gradient(to bottom left, rgba(0,0,0,1) ${v - 20}%, rgba(0,0,0,0) ${v + 20}%)`,
+        ),
+      }}
+    >
+      <a
+        href={EXTERNAL_URLS.cloud}
+        className="relative z-10 inline-flex items-center justify-center text-[15px] font-medium text-black rounded-full px-5 py-2"
+      >
+        {children}
+      </a>
+    </AnimatedDiv>
   );
 }
 
@@ -562,6 +606,14 @@ export default function Leaderboard() {
       : { mass: 1, tension: 120, friction: 28 },
   });
 
+  const heroCopyVisible = showUI && !switcherOpen;
+  const heroCopySpring = useSpring({
+    opacity: heroCopyVisible ? 1 : 0,
+    y: heroCopyVisible ? 0 : 14,
+    delay: heroCopyVisible ? 400 : 0,
+    config: { mass: 1, tension: 120, friction: 26 },
+  });
+
   useEffect(() => {
     const id1 = setTimeout(() => setIntroDone(true), INTRO_DELAY + 680);
     const id2 = setTimeout(() => setShowUI(true), INTRO_DELAY + 800);
@@ -810,15 +862,15 @@ export default function Leaderboard() {
             <ElizaLogo className="h-8 md:h-10 lg:h-12 w-auto" />
           </button>
           <nav className="flex items-center gap-4">
-            <BlobButton href={buildElizaSmsHref("Hi Eliza")} show={showUI}>
+            <CloudCTA show={showUI}>
               <AnimatedLetters
-                text={t("homepage_eliza.leaderboard.getStarted", {
-                  defaultValue: "Get Started",
+                text={t("homepage_eliza.leaderboard.openCloud", {
+                  defaultValue: "Open Eliza Cloud",
                 })}
                 show={showUI}
                 delay={80}
               />
-            </BlobButton>
+            </CloudCTA>
           </nav>
         </header>
         <div className="fixed top-[14%] left-1/2 -translate-x-1/2 pointer-events-auto">
@@ -930,6 +982,33 @@ export default function Leaderboard() {
             </AnimatedDiv>
           </AnimatedDiv>
         </div>
+        <AnimatedDiv
+          className="hidden lg:block fixed left-[max(2.5rem,5vw)] top-1/2 -translate-y-1/2 max-w-[24rem] xl:max-w-[28rem] select-none"
+          style={{
+            opacity: heroCopySpring.opacity,
+            transform: heroCopySpring.y.to(
+              (y) => `translateY(calc(-50% + ${y}px))`,
+            ),
+            pointerEvents: switcherOpen ? "none" : undefined,
+          }}
+        >
+          <h1 className="m-0 font-medium text-black leading-[1.08] tracking-tight text-4xl xl:text-5xl text-balance">
+            {t("homepage_eliza.leaderboard.heroAssurance", {
+              defaultValue: "There\u2019s nothing wrong with you.",
+            })}{" "}
+            <span className="text-[var(--brand-orange)]">
+              {t("homepage_eliza.leaderboard.heroReframe", {
+                defaultValue: "You\u2019re just overwhelmed.",
+              })}
+            </span>
+          </h1>
+          <p className="mt-5 mb-0 text-black/80 font-light text-lg xl:text-xl leading-snug max-w-[26rem]">
+            {t("homepage_eliza.leaderboard.heroLede", {
+              defaultValue:
+                "Eliza manages your digital life so you can live your real one.",
+            })}
+          </p>
+        </AnimatedDiv>
       </div>
       <AnimatedDiv
         className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-20 w-full  ${tryPlatform === "telegram" ? "px-2 pt-3 pb-3 bg-white" : tryPlatform === "discord" ? "px-2 pt-3 pb-3 bg-[#36393f] border-t border-[#202225]" : "px-5 pt-20 pb-6"}`}

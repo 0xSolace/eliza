@@ -34,7 +34,8 @@ export function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<MarketingPage />} />
+          <Route path="/" element={<LeaderboardPage />} />
+          <Route path="/downloads" element={<MarketingPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route element={<AuthedShell />}>
             <Route path="/login" element={<LoginPage />} />

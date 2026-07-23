@@ -66,6 +66,12 @@ export interface HeadscaleNode {
   online: boolean;
   lastSeen: string;
   createdAt: string;
+  /**
+   * Registration expiry timestamp. Absent or the Go zero time
+   * (`0001-01-01T00:00:00Z`) means "no expiry set". A node whose expiry is in
+   * the past is expired and eligible for age-aware cleanup.
+   */
+  expiry?: string;
 }
 
 export interface HeadscalePreAuthKey {

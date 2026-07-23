@@ -253,6 +253,28 @@ export class AgentSandboxesRepository {
   }
 
   /**
+   * Every Headscale IP still recorded on ANY sandbox row. Used by the stale-node
+   * cleanup sweep to protect a node that might still be live. Deliberately
+   * conservative: it does NOT filter by status, because a row in almost any
+   * state (running / provisioning / disconnected / error / deletion_pending)
+   * can still point at a container whose Headscale node is transiently offline;
+   * pruning that node would strand a real agent. Rows are hard-deleted when a
+   * sandbox is fully torn down, so a lingering headscale_ip here means the node
+   * is presumed relevant. Returns a de-duplicated list of non-null IPs.
+   */
+  async listActiveHeadscaleIps(): Promise<string[]> {
+    const rows = await dbRead
+      .select({ headscale_ip: agentSandboxes.headscale_ip })
+      .from(agentSandboxes)
+      .where(isNotNull(agentSandboxes.headscale_ip));
+    const ips = new Set<string>();
+    for (const r of rows) {
+      if (r.headscale_ip) ips.add(r.headscale_ip);
+    }
+    return [...ips];
+  }
+
+  /**
    * Always-on (paid) agents that should be reconciled back to `running`. A
    * `dedicated-always` agent is contractually meant to stay up, so a transient
    * tailnet drop that flipped it to `disconnected` must self-heal — the recovery

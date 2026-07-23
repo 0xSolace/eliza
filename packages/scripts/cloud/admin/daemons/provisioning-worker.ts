@@ -59,6 +59,8 @@ type WorkerProcessNodeDiskCleanup =
   typeof import("@elizaos/cloud-shared/lib/services/node-disk-manager").processNodeDiskCleanup;
 type WorkerRunBackupVerificationCycle =
   typeof import("@elizaos/cloud-shared/lib/services/agent-backup-verifier").runBackupVerificationCycle;
+type WorkerHeadscaleIntegration =
+  typeof import("@elizaos/cloud-shared/lib/services/headscale-integration").headscaleIntegration;
 
 interface PreflightKmsClient {
   getOrCreateKey(keyId: string): Promise<unknown>;
@@ -89,6 +91,7 @@ interface WorkerDeps {
   withTimeout: WorkerWithTimeout;
   processNodeDiskCleanup: WorkerProcessNodeDiskCleanup;
   runBackupVerificationCycle: WorkerRunBackupVerificationCycle;
+  headscaleIntegration: WorkerHeadscaleIntegration;
 }
 
 export interface ProvisioningWorkerConfig {
@@ -266,6 +269,7 @@ async function loadDeps(): Promise<WorkerDeps> {
       import("@elizaos/cloud-shared/lib/utils/with-timeout"),
       import("@elizaos/cloud-shared/lib/services/node-disk-manager"),
       import("@elizaos/cloud-shared/lib/services/agent-backup-verifier"),
+      import("@elizaos/cloud-shared/lib/services/headscale-integration"),
     ]).then(
       ([
         jobsModule,
@@ -283,6 +287,7 @@ async function loadDeps(): Promise<WorkerDeps> {
         withTimeoutModule,
         nodeDiskManagerModule,
         backupVerifierModule,
+        headscaleIntegrationModule,
       ]) => ({
         provisioningJobService: jobsModule.provisioningJobService,
         logger: loggerModule.logger,
@@ -304,6 +309,7 @@ async function loadDeps(): Promise<WorkerDeps> {
         processNodeDiskCleanup: nodeDiskManagerModule.processNodeDiskCleanup,
         runBackupVerificationCycle:
           backupVerifierModule.runBackupVerificationCycle,
+        headscaleIntegration: headscaleIntegrationModule.headscaleIntegration,
       }),
     );
   }
@@ -809,6 +815,49 @@ async function processNodeDiskCleanupCycle(): Promise<NodeDiskCleanupSummary> {
     nodesSkipped: report.nodesSkipped,
     pruned: report.pruned,
     pruneFailed: report.pruneFailed,
+  };
+}
+
+interface HeadscaleStaleNodeCleanupSummary {
+  scanned: number;
+  deletedNeverSeen: number;
+  deletedExpired: number;
+  deleteFailed: number;
+  protectedByLiveSandbox: number;
+}
+
+/**
+ * Age-aware prune of stale Headscale node registrations. Failed blue/green
+ * swaps + provision churn leave never-seen and expired node entries in the
+ * netmap (39 never-seen + 18 expired observed 2026-07-23); a bloated node table
+ * slows the netmap and lets waitForVPNRegistration adopt dead exact-name
+ * entries. This deletes nodes that are never-seen and older than 1h, or expired
+ * longer than 24h — EXCEPT any node whose IP is still owned by a non-terminal
+ * DB sandbox (protected against a transient offline blip). Disable with
+ * HEADSCALE_STALE_NODE_CLEANUP_ENABLED=0. Best-effort per node; bounded by
+ * PHASE_TIMEOUT_MS like every infra phase.
+ */
+async function processHeadscaleStaleNodeCleanupCycle(): Promise<HeadscaleStaleNodeCleanupSummary> {
+  const empty: HeadscaleStaleNodeCleanupSummary = {
+    scanned: 0,
+    deletedNeverSeen: 0,
+    deletedExpired: 0,
+    deleteFailed: 0,
+    protectedByLiveSandbox: 0,
+  };
+  if (process.env.HEADSCALE_STALE_NODE_CLEANUP_ENABLED === "0") return empty;
+
+  const { headscaleIntegration, agentSandboxesRepository } = await loadDeps();
+  const liveIps = new Set(
+    await agentSandboxesRepository.listActiveHeadscaleIps(),
+  );
+  const result = await headscaleIntegration.cleanupStaleNodes(liveIps);
+  return {
+    scanned: result.scanned,
+    deletedNeverSeen: result.deletedNeverSeen,
+    deletedExpired: result.deletedExpired,
+    deleteFailed: result.deleteFailed,
+    protectedByLiveSandbox: result.protectedByLiveSandbox,
   };
 }
 
@@ -1634,6 +1683,36 @@ async function runInfraMaintenanceCycle(
           pruned: summary.pruned,
           pruneFailed: summary.pruneFailed,
         });
+      }
+    },
+  );
+
+  // Headscale netmap hygiene: prune never-seen (>1h) + long-expired (>24h) node
+  // registrations left by failed swaps / provision churn, protecting any node
+  // still owned by a live DB sandbox. Keeps the node table small so
+  // waitForVPNRegistration cannot adopt dead exact-name entries. Bounded like
+  // every infra phase; self-gated by HEADSCALE_STALE_NODE_CLEANUP_ENABLED.
+  await runBoundedPhase(
+    logger,
+    "headscale stale-node cleanup cycle",
+    () => processHeadscaleStaleNodeCleanupCycle(),
+    (summary) => {
+      if (
+        summary.deletedNeverSeen > 0 ||
+        summary.deletedExpired > 0 ||
+        summary.deleteFailed > 0
+      ) {
+        logger.info(
+          "[provisioning-worker] headscale stale-node cleanup complete",
+          {
+            event: "headscale_stale_node_cleanup.pruned",
+            scanned: summary.scanned,
+            deletedNeverSeen: summary.deletedNeverSeen,
+            deletedExpired: summary.deletedExpired,
+            deleteFailed: summary.deleteFailed,
+            protectedByLiveSandbox: summary.protectedByLiveSandbox,
+          },
+        );
       }
     },
   );

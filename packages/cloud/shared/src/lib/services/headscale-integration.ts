@@ -13,7 +13,7 @@
  */
 
 import { logger } from "../utils/logger";
-import { HeadscaleClient, headscaleClient } from "./headscale-client";
+import { HeadscaleClient, type HeadscaleNode, headscaleClient } from "./headscale-client";
 
 /** Initial polling interval when waiting for VPN registration (ms). */
 const POLL_INTERVAL_INITIAL_MS = 1_000;
@@ -318,6 +318,79 @@ export class HeadscaleIntegration {
       return null;
     }
   }
+
+  /**
+   * Age-aware cleanup of stale Headscale nodes. On 2026-07-23 the netmap was
+   * polluted with 39 never-seen + 18 expired node registrations left behind by
+   * failed blue/green swaps and provision churn; a bloated node table slows the
+   * netmap and lets `waitForVPNRegistration` adopt dead exact-name entries.
+   *
+   * Deletes nodes classified stale by {@link classifyStaleNode} (never-seen
+   * older than 1h, or expired longer than 24h) — EXCEPT any node whose IP is
+   * still referenced by a live DB sandbox, which is protected regardless of its
+   * Headscale-reported state (defense against pruning a healthy node during a
+   * transient offline blip). Best-effort per node: a delete failure is logged
+   * and the sweep continues.
+   *
+   * @param liveSandboxIps Set of headscale IPs currently owned by running DB
+   *   sandboxes. Any node holding one of these IPs is never pruned.
+   */
+  async cleanupStaleNodes(
+    liveSandboxIps: ReadonlySet<string>,
+    thresholds: StaleNodeCleanupThresholds = DEFAULT_STALE_NODE_THRESHOLDS,
+    now: number = Date.now(),
+  ): Promise<StaleNodeCleanupResult> {
+    const result: StaleNodeCleanupResult = {
+      scanned: 0,
+      deletedNeverSeen: 0,
+      deletedExpired: 0,
+      deleteFailed: 0,
+      protectedByLiveSandbox: 0,
+    };
+
+    let nodes: HeadscaleNode[];
+    try {
+      // Strict so a transient API failure does NOT read as an empty list, which
+      // would make the sweep a silent noop instead of a logged skip.
+      nodes = await this.client.listNodesStrict();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.warn(`[headscale-integration] stale-node cleanup: listNodes failed, skipping:`, msg);
+      return result;
+    }
+
+    result.scanned = nodes.length;
+
+    for (const node of nodes) {
+      const reason = classifyStaleNode(node, now, thresholds);
+      if (!reason) continue;
+
+      // Never prune a node still owning a live sandbox's IP, even if Headscale
+      // reports it offline/never-seen (guards against a transient blip).
+      if (node.ipAddresses.some((ip) => liveSandboxIps.has(ip))) {
+        result.protectedByLiveSandbox += 1;
+        continue;
+      }
+
+      try {
+        await this.client.deleteNode(node.id);
+        if (reason === "never-seen") result.deletedNeverSeen += 1;
+        else result.deletedExpired += 1;
+        logger.info(
+          `[headscale-integration] pruned stale ${reason} node ${node.id} (${node.name})`,
+        );
+      } catch (error: unknown) {
+        result.deleteFailed += 1;
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.warn(
+          `[headscale-integration] failed to prune stale node ${node.id} (${node.name}):`,
+          msg,
+        );
+      }
+    }
+
+    return result;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +431,92 @@ export function normalizeHeadscaleSegment(value: string | undefined): string | n
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Stale-node cleanup (age-aware)
+// ---------------------------------------------------------------------------
+
+/** The Go zero time Headscale emits for an unset lastSeen/expiry. */
+const HEADSCALE_ZERO_TIME_PREFIX = "0001-01-01";
+
+/**
+ * Parse a Headscale RFC3339 timestamp to epoch ms, treating the Go zero time
+ * (`0001-01-01T00:00:00Z`), empty, or unparseable values as "absent" (null).
+ */
+export function parseHeadscaleTimestamp(value: string | undefined | null): number | null {
+  if (!value || value.startsWith(HEADSCALE_ZERO_TIME_PREFIX)) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export interface StaleNodeCleanupThresholds {
+  /** A never-seen node is deletable once it is older than this (default 1h). */
+  neverSeenMinAgeMs: number;
+  /** An expired node is deletable once expired longer than this (default 24h). */
+  expiredMinAgeMs: number;
+}
+
+export const DEFAULT_STALE_NODE_THRESHOLDS: StaleNodeCleanupThresholds = {
+  neverSeenMinAgeMs: 60 * 60_000,
+  expiredMinAgeMs: 24 * 60 * 60_000,
+};
+
+export type StaleNodeReason = "never-seen" | "expired" | null;
+
+/**
+ * Decide whether a Headscale node is stale enough to prune. Pure + deterministic
+ * so the policy is unit-testable without a live Headscale.
+ *
+ * A node is stale when EITHER:
+ *  - NEVER-SEEN: it has never come online (no valid lastSeen) AND it was created
+ *    more than `neverSeenMinAgeMs` ago. The age gate protects a freshly-created
+ *    node that simply has not finished its first `tailscale up` yet (the exact
+ *    blue/green overlap window) from being pruned out from under a live
+ *    provision.
+ *  - EXPIRED: its registration expiry is in the past by more than
+ *    `expiredMinAgeMs`. The grace window avoids racing a node that is about to
+ *    re-authenticate.
+ *
+ * A node that is currently `online`, or whose IPs are referenced by a live DB
+ * sandbox, is NEVER classified stale here — the caller enforces the
+ * live-sandbox exclusion; this function enforces the age policy.
+ */
+export function classifyStaleNode(
+  node: HeadscaleNode,
+  now: number,
+  thresholds: StaleNodeCleanupThresholds = DEFAULT_STALE_NODE_THRESHOLDS,
+): StaleNodeReason {
+  if (node.online) return null;
+
+  const lastSeenMs = parseHeadscaleTimestamp(node.lastSeen);
+  if (lastSeenMs === null) {
+    // Never seen. Only prune once it has had ample time to join.
+    const createdMs = parseHeadscaleTimestamp(node.createdAt);
+    // No createdAt is suspicious; treat as old enough to prune (it certainly
+    // has never been seen and cannot be a healthy live node).
+    if (createdMs === null || now - createdMs > thresholds.neverSeenMinAgeMs) {
+      return "never-seen";
+    }
+    return null;
+  }
+
+  const expiryMs = parseHeadscaleTimestamp(node.expiry);
+  if (expiryMs !== null && now - expiryMs > thresholds.expiredMinAgeMs) {
+    return "expired";
+  }
+
+  return null;
+}
+
+export interface StaleNodeCleanupResult {
+  scanned: number;
+  /** Deleted node ids grouped by reason. */
+  deletedNeverSeen: number;
+  deletedExpired: number;
+  deleteFailed: number;
+  /** Skipped because their IP is referenced by a live DB sandbox. */
+  protectedByLiveSandbox: number;
 }
 
 /** Default singleton instance. */

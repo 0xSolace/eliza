@@ -1,12 +1,16 @@
 // Exercises headscale integration behavior with deterministic cloud-shared lib fixtures.
 import { afterEach, describe, expect, test } from "bun:test";
+import type { HeadscaleNode } from "./headscale-client";
 import { HeadscaleClient } from "./headscale-client";
 import {
+  classifyStaleNode,
   DEFAULT_REGISTRATION_TIMEOUT_MS,
+  DEFAULT_STALE_NODE_THRESHOLDS,
   HeadscaleIntegration,
   inferHeadscaleUser,
   inferTailscaleHostname,
   normalizeHeadscaleSegment,
+  parseHeadscaleTimestamp,
 } from "./headscale-integration";
 
 const savedEnv = { ...process.env };
@@ -429,5 +433,136 @@ describe("normalizeHeadscaleSegment + registration-timeout default", () => {
 
   test("DEFAULT_REGISTRATION_TIMEOUT_MS falls back to 180s when env is unset", () => {
     expect(DEFAULT_REGISTRATION_TIMEOUT_MS).toBe(180_000);
+  });
+});
+
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+
+function node(overrides: Partial<HeadscaleNode>): HeadscaleNode {
+  return {
+    id: "1",
+    name: "eliza-x",
+    user: { name: "agent" },
+    ipAddresses: ["100.64.0.9"],
+    online: false,
+    lastSeen: "0001-01-01T00:00:00Z",
+    createdAt: "0001-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("parseHeadscaleTimestamp", () => {
+  test("treats the Go zero time / empty / garbage as absent (null)", () => {
+    expect(parseHeadscaleTimestamp("0001-01-01T00:00:00Z")).toBeNull();
+    expect(parseHeadscaleTimestamp("")).toBeNull();
+    expect(parseHeadscaleTimestamp(undefined)).toBeNull();
+    expect(parseHeadscaleTimestamp("not-a-date")).toBeNull();
+  });
+
+  test("parses a real RFC3339 timestamp", () => {
+    expect(parseHeadscaleTimestamp("2026-07-23T00:00:00Z")).toBe(
+      Date.parse("2026-07-23T00:00:00Z"),
+    );
+  });
+});
+
+describe("classifyStaleNode (age-aware netmap hygiene policy)", () => {
+  const now = Date.parse("2026-07-23T12:00:00Z");
+
+  test("never-seen + older than 1h -> never-seen (the 39 polluting entries)", () => {
+    const n = node({ createdAt: new Date(now - 2 * HOUR).toISOString() });
+    expect(classifyStaleNode(n, now)).toBe("never-seen");
+  });
+
+  test("never-seen but YOUNGER than 1h is protected (fresh provision still joining)", () => {
+    const n = node({ createdAt: new Date(now - 10 * 60_000).toISOString() });
+    expect(classifyStaleNode(n, now)).toBeNull();
+  });
+
+  test("expired longer than 24h -> expired (the 18 expired entries)", () => {
+    const n = node({
+      lastSeen: new Date(now - 3 * DAY).toISOString(),
+      createdAt: new Date(now - 5 * DAY).toISOString(),
+      expiry: new Date(now - 2 * DAY).toISOString(),
+    });
+    expect(classifyStaleNode(n, now)).toBe("expired");
+  });
+
+  test("expired only recently (<24h) is protected (may re-auth)", () => {
+    const n = node({
+      lastSeen: new Date(now - 2 * HOUR).toISOString(),
+      expiry: new Date(now - 2 * HOUR).toISOString(),
+    });
+    expect(classifyStaleNode(n, now)).toBeNull();
+  });
+
+  test("an online node is never stale", () => {
+    const n = node({ online: true, createdAt: new Date(now - 5 * DAY).toISOString() });
+    expect(classifyStaleNode(n, now)).toBeNull();
+  });
+
+  test("a recently-seen, unexpired node is never stale", () => {
+    const n = node({ lastSeen: new Date(now - 30_000).toISOString() });
+    expect(classifyStaleNode(n, now)).toBeNull();
+  });
+});
+
+describe("cleanupStaleNodes (live-sandbox protection + delete wiring)", () => {
+  const now = Date.parse("2026-07-23T12:00:00Z");
+
+  function fakeClient(nodes: HeadscaleNode[]) {
+    const deleted: string[] = [];
+    const client = {
+      listNodesStrict: async () => nodes,
+      deleteNode: async (id: string) => {
+        deleted.push(id);
+      },
+    } as unknown as HeadscaleClient;
+    return { client, deleted };
+  }
+
+  test("prunes stale nodes but protects any IP owned by a live sandbox", async () => {
+    const staleNeverSeen = node({
+      id: "n1",
+      ipAddresses: ["100.64.0.10"],
+      createdAt: new Date(now - 2 * HOUR).toISOString(),
+    });
+    const staleButLive = node({
+      id: "n2",
+      ipAddresses: ["100.64.0.11"],
+      createdAt: new Date(now - 2 * HOUR).toISOString(),
+    });
+    const freshOk = node({
+      id: "n3",
+      online: true,
+      ipAddresses: ["100.64.0.12"],
+    });
+    const { client, deleted } = fakeClient([staleNeverSeen, staleButLive, freshOk]);
+    const integ = new HeadscaleIntegration(client);
+
+    const result = await integ.cleanupStaleNodes(
+      new Set(["100.64.0.11"]),
+      DEFAULT_STALE_NODE_THRESHOLDS,
+      now,
+    );
+
+    expect(deleted).toEqual(["n1"]); // only the stale, non-live node
+    expect(result.deletedNeverSeen).toBe(1);
+    expect(result.protectedByLiveSandbox).toBe(1); // staleButLive spared
+    expect(result.scanned).toBe(3);
+  });
+
+  test("a listNodes failure is a logged noop, not a crash", async () => {
+    const client = {
+      listNodesStrict: async () => {
+        throw new Error("headscale down");
+      },
+      deleteNode: async () => {},
+    } as unknown as HeadscaleClient;
+    const integ = new HeadscaleIntegration(client);
+    const result = await integ.cleanupStaleNodes(new Set(), DEFAULT_STALE_NODE_THRESHOLDS, now);
+    expect(result.scanned).toBe(0);
+    expect(result.deletedNeverSeen).toBe(0);
   });
 });

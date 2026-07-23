@@ -186,6 +186,21 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Like `parsePositiveInt` but admits `0` as a valid value. Used for
+ * `MAX_INFLIGHT_UPGRADES`, where `0` is the intentional "pause fleet upgrades"
+ * setting (no upgrade jobs enqueued) — a distinct, first-class configuration,
+ * not an invalid input that should fall back to the default.
+ */
+export function parseNonNegativeInt(
+  value: string | undefined,
+  fallback: number,
+): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function hasFlag(argv: readonly string[], flag: string): boolean {
   return argv.includes(flag);
 }
@@ -932,7 +947,28 @@ interface FleetUpgradeSummary {
   detail?: string;
 }
 
-const MAX_INFLIGHT_UPGRADES = 3;
+/**
+ * Max concurrent in-flight `agent_upgrade` jobs the fleet reconciler will keep
+ * enqueued at once. Env-driven via `MAX_INFLIGHT_UPGRADES` (default 3).
+ *
+ * WHY ENV-DRIVEN (2026-07-23): this value was repeatedly hot-patched to `0` on
+ * the live control plane to PAUSE the fleet upgrade wave during the mesh
+ * incident — and every git deploy `git reset --hard`'d the source back to the
+ * hardcoded default, silently RESUMING a destructive upgrade wave (the `.bak`
+ * files were also wiped by `git clean -fdx`). This happened 4+ times. Reading
+ * from the environment makes the pause durable across redeploys: set
+ * `MAX_INFLIGHT_UPGRADES=0` in the CP's `.env.local` to pause, a positive
+ * integer to resume at that concurrency. `0` is a first-class value here (see
+ * `parseNonNegativeInt`), NOT treated as an invalid fallback.
+ *
+ * Read once at module load; a value change requires a worker restart, which is
+ * the desired blast-radius control (an operator flipping the pause wants it to
+ * take effect on the next clean worker start, not mid-cycle).
+ */
+const MAX_INFLIGHT_UPGRADES = parseNonNegativeInt(
+  process.env.MAX_INFLIGHT_UPGRADES,
+  3,
+);
 
 /**
  * Detect when the registry-side digest of the configured agent tag has moved

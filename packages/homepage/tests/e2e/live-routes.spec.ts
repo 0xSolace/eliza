@@ -7,6 +7,7 @@ import { captureScreenshotWithQualityRetry } from "./screenshot-quality";
 
 const ROUTES = [
   { path: "/", heading: /You’re just overwhelmed/i },
+  { path: "/downloads", heading: /Start in the cloud/i },
   { path: "/leaderboard", landmark: ".theme-app" },
   { path: "/login", url: /\/get-started$/ },
   { path: "/get-started", heading: /Anywhere you want her to be/i },

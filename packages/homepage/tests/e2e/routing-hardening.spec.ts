@@ -72,20 +72,9 @@ test("browser back and forward restore hash and query driven route views", async
   test.setTimeout(90_000);
   const errors = collectPageErrors(page);
 
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/downloads", { waitUntil: "domcontentloaded" });
   await expect(
-    page.getByRole("heading", {
-      name: /There’s nothing wrong with you\. You’re just overwhelmed\./,
-    }),
-  ).toBeVisible();
-
-  await page
-    .getByRole("link", { name: /^Downloads$/ })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/#download$/);
-  await expect(
-    page.getByRole("heading", { name: /^Install the app\.$/ }),
+    page.getByRole("heading", { name: /^Start in the cloud\.$/ }),
   ).toBeVisible();
 
   await page.goto("/get-started?method=imessage#ignored", {
@@ -96,9 +85,9 @@ test("browser back and forward restore hash and query driven route views", async
   ).toBeVisible();
 
   await page.goBack({ waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/#download$/);
+  await expect(page).toHaveURL(/\/downloads$/);
   await expect(
-    page.getByRole("heading", { name: /^Install the app\.$/ }),
+    page.getByRole("heading", { name: /^Start in the cloud\.$/ }),
   ).toBeVisible();
 
   await page.goForward({ waitUntil: "domcontentloaded" });

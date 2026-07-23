@@ -1008,6 +1008,25 @@ export default function Leaderboard() {
                 "Eliza manages your digital life so you can live your real one.",
             })}
           </p>
+          <div className="mt-8 flex flex-col items-start gap-4 pointer-events-auto">
+            <a
+              href={EXTERNAL_URLS.cloud}
+              className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-[var(--brand-orange)] hover:text-black"
+            >
+              {t("homepage_eliza.leaderboard.heroCtaCloud", {
+                defaultValue: "Open Eliza Cloud",
+              })}
+              <span aria-hidden="true">→</span>
+            </a>
+            <a
+              href={EXTERNAL_URLS.github}
+              className="text-sm font-medium text-black/60 underline underline-offset-4 transition-colors hover:text-black"
+            >
+              {t("homepage_eliza.leaderboard.heroCtaGithub", {
+                defaultValue: "Open source on GitHub",
+              })}
+            </a>
+          </div>
         </AnimatedDiv>
       </div>
       <AnimatedDiv

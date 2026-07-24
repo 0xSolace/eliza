@@ -861,7 +861,7 @@ export default function Leaderboard() {
           >
             <ElizaLogo className="h-8 md:h-10 lg:h-12 w-auto" />
           </button>
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-4 lg:hidden">
             <CloudCTA show={showUI}>
               <AnimatedLetters
                 text={t("homepage_eliza.leaderboard.openCloud", {
@@ -873,7 +873,9 @@ export default function Leaderboard() {
             </CloudCTA>
           </nav>
         </header>
-        <div className="fixed top-[14%] left-1/2 -translate-x-1/2 pointer-events-auto">
+        {/* Platform switcher + "Try Now" cut per Shadow (2026-07-23): the demo
+            chat isn't a real product surface yet. Re-enable when try-now ships. */}
+        <div className="hidden fixed top-[5.5rem] left-1/2 -translate-x-1/2 pointer-events-auto">
           <AnimatedDiv
             style={{
               opacity: tabBarHideSpring.opacity,
@@ -982,52 +984,57 @@ export default function Leaderboard() {
             </AnimatedDiv>
           </AnimatedDiv>
         </div>
-        <AnimatedDiv
-          className="hidden lg:block fixed left-[max(2.5rem,5vw)] top-1/2 -translate-y-1/2 max-w-[24rem] xl:max-w-[28rem] select-none"
-          style={{
-            opacity: heroCopySpring.opacity,
-            transform: heroCopySpring.y.to(
-              (y) => `translateY(calc(-50% + ${y}px))`,
-            ),
-            pointerEvents: switcherOpen ? "none" : undefined,
-          }}
-        >
-          <h1 className="m-0 font-medium text-black leading-[1.08] tracking-tight text-4xl xl:text-5xl text-balance">
-            {t("homepage_eliza.leaderboard.heroAssurance", {
-              defaultValue: "There\u2019s nothing wrong with you.",
-            })}{" "}
-            <span className="text-[var(--brand-orange)]">
-              {t("homepage_eliza.leaderboard.heroReframe", {
-                defaultValue: "You\u2019re just overwhelmed.",
+        {/* Fixed full-height flex column so the hero copy centers in the space
+            below the header and can never overlap the wordmark, regardless of
+            viewport height. NOTE: never combine Tailwind translate utilities
+            with react-spring inline transforms on the same node; TW v4 emits
+            the `translate` property, which stacks with `transform` and
+            double-shifts the element. */}
+        <div className="hidden lg:flex fixed left-[max(2.5rem,5vw)] top-0 bottom-0 flex-col justify-center pt-24 pb-10 max-w-[24rem] xl:max-w-[28rem] select-none pointer-events-none">
+          <AnimatedDiv
+            style={{
+              opacity: heroCopySpring.opacity,
+              transform: heroCopySpring.y.to((y) => `translateY(${y}px)`),
+              pointerEvents: switcherOpen ? "none" : undefined,
+            }}
+          >
+            <h1 className="m-0 font-medium text-black leading-[1.08] tracking-tight text-4xl xl:text-5xl text-balance">
+              {t("homepage_eliza.leaderboard.heroAssurance", {
+                defaultValue: "There\u2019s nothing wrong with you.",
+              })}{" "}
+              <span className="text-[var(--brand-orange)]">
+                {t("homepage_eliza.leaderboard.heroReframe", {
+                  defaultValue: "You\u2019re just overwhelmed.",
+                })}
+              </span>
+            </h1>
+            <p className="mt-5 mb-0 text-black/80 font-light text-lg xl:text-xl leading-snug max-w-[26rem]">
+              {t("homepage_eliza.leaderboard.heroLede", {
+                defaultValue:
+                  "Eliza manages your digital life so you can live your real one.",
               })}
-            </span>
-          </h1>
-          <p className="mt-5 mb-0 text-black/80 font-light text-lg xl:text-xl leading-snug max-w-[26rem]">
-            {t("homepage_eliza.leaderboard.heroLede", {
-              defaultValue:
-                "Eliza manages your digital life so you can live your real one.",
-            })}
-          </p>
-          <div className="mt-8 flex flex-col items-start gap-4 pointer-events-auto">
-            <a
-              href={EXTERNAL_URLS.cloud}
-              className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-[var(--brand-orange)] hover:text-black"
-            >
-              {t("homepage_eliza.leaderboard.heroCtaCloud", {
-                defaultValue: "Open Eliza Cloud",
-              })}
-              <span aria-hidden="true">→</span>
-            </a>
-            <a
-              href={EXTERNAL_URLS.github}
-              className="text-sm font-medium text-black/60 underline underline-offset-4 transition-colors hover:text-black"
-            >
-              {t("homepage_eliza.leaderboard.heroCtaGithub", {
-                defaultValue: "Open source on GitHub",
-              })}
-            </a>
-          </div>
-        </AnimatedDiv>
+            </p>
+            <div className="mt-8 flex flex-col items-start gap-4 pointer-events-auto">
+              <a
+                href={EXTERNAL_URLS.cloud}
+                className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-lg font-semibold text-white shadow-lg transition-colors hover:bg-[var(--brand-orange)] hover:text-black"
+              >
+                {t("homepage_eliza.leaderboard.heroCtaCloud", {
+                  defaultValue: "Open Eliza Cloud",
+                })}
+                <span aria-hidden="true">→</span>
+              </a>
+              <a
+                href={EXTERNAL_URLS.github}
+                className="text-sm font-medium text-black/60 underline underline-offset-4 transition-colors hover:text-black"
+              >
+                {t("homepage_eliza.leaderboard.heroCtaGithub", {
+                  defaultValue: "Open source on GitHub",
+                })}
+              </a>
+            </div>
+          </AnimatedDiv>
+        </div>
       </div>
       <AnimatedDiv
         className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-20 w-full  ${tryPlatform === "telegram" ? "px-2 pt-3 pb-3 bg-white" : tryPlatform === "discord" ? "px-2 pt-3 pb-3 bg-[#36393f] border-t border-[#202225]" : "px-5 pt-20 pb-6"}`}

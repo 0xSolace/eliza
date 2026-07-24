@@ -833,7 +833,16 @@ const ModelB = forwardRef<ModelBHandle, ModelBProps>(function ModelB(
   }));
 
   return (
-    <div className="fixed inset-0">
+    <div
+      className="fixed inset-0"
+      style={{
+        // Fade the phone out at the viewport bottom instead of a hard cut.
+        WebkitMaskImage:
+          "linear-gradient(to bottom, black 0%, black 86%, transparent 99%)",
+        maskImage:
+          "linear-gradient(to bottom, black 0%, black 86%, transparent 99%)",
+      }}
+    >
       <Canvas
         camera={{ position: [0, 8, 0.6], fov: 45 }}
         dpr={[1, 2]}

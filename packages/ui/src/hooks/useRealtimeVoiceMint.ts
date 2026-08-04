@@ -39,6 +39,20 @@ export function isRealtimeVoiceForceEnabled(): boolean {
   }
 }
 
+/**
+ * Explicit agent identity for the authenticated standalone development adapter.
+ * Unlike the force sentinel, this must be a concrete UUID configured by the
+ * deployment and still arms only after the same-origin health probe succeeds.
+ */
+export function getRealtimeVoiceStandaloneAgentId(): string | null {
+  try {
+    const raw = import.meta.env?.VITE_VOICE_REALTIME_STANDALONE_AGENT_ID as unknown;
+    return typeof raw === "string" && isUuid(raw) ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 // NOTE ON MODULE GRAPH: `../api/csrf-client` (the default consent fetch) pulls
 // the full native transport chain. We import it LAZILY (dynamic import inside
 // `defaultConsentFetch`) so a surface that renders this hook doesn't eagerly
@@ -133,11 +147,16 @@ export function useRealtimeVoiceMint(options?: {
    * health probe succeeds. Never overrides a real resolved agent id.
    */
   forceEnabled?: boolean;
+  /** Explicit authenticated standalone adapter identity (development only). */
+  standaloneAgentId?: string | null;
 }): UseRealtimeVoiceMintResult {
   const doFetch = options?.fetch ?? defaultConsentFetch;
   const consentPath = options?.consentPath ?? "/api/v1/voice/session/consent";
   const probePath = options?.probePath ?? "/api/v1/voice/session/health";
   const forceEnabled = options?.forceEnabled ?? isRealtimeVoiceForceEnabled();
+  const standaloneAgentId = isUuid(options?.standaloneAgentId)
+    ? options.standaloneAgentId.trim()
+    : getRealtimeVoiceStandaloneAgentId();
 
   const resolvedAgentId = useMemo(() => {
     // A real, resolvable cloud agent id ALWAYS wins over the sentinel.
@@ -153,31 +172,32 @@ export function useRealtimeVoiceMint(options?: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options?.resolveAgentId]);
 
-  const forceProbeEligible = forceEnabled && !resolvedAgentId;
-  const [forceProbeArmed, setForceProbeArmed] = useState(false);
+  const probedFallbackAgentId = resolvedAgentId
+    ? null
+    : standaloneAgentId ?? (forceEnabled ? REALTIME_FORCE_SENTINEL_AGENT_ID : null);
+  const [fallbackProbeArmed, setFallbackProbeArmed] = useState(false);
 
   useEffect(() => {
-    if (!forceProbeEligible) {
-      setForceProbeArmed(false);
+    if (!probedFallbackAgentId) {
+      setFallbackProbeArmed(false);
       return;
     }
 
     let cancelled = false;
-    setForceProbeArmed(false);
+    setFallbackProbeArmed(false);
     void probeRealtimeVoiceAvailability(doFetch, probePath).then(
       (available) => {
-        if (!cancelled) setForceProbeArmed(available);
+        if (!cancelled) setFallbackProbeArmed(available);
       },
     );
 
     return () => {
       cancelled = true;
     };
-  }, [doFetch, forceProbeEligible, probePath]);
+  }, [doFetch, probePath, probedFallbackAgentId]);
 
   const agentId =
-    resolvedAgentId ??
-    (forceProbeArmed ? REALTIME_FORCE_SENTINEL_AGENT_ID : null);
+    resolvedAgentId ?? (fallbackProbeArmed ? probedFallbackAgentId : null);
 
   const getConsentNonce = useCallback(async (): Promise<string | null> => {
     return fetchConsentNonce(doFetch, consentPath);

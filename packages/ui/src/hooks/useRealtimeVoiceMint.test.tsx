@@ -128,6 +128,42 @@ describe("useRealtimeVoiceMint", () => {
     expect(nonce).toBeNull();
   });
 
+  describe("authenticated standalone adapter", () => {
+    it("arms an explicit adapter UUID only after the health probe passes", async () => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValue(new Response("{}", { status: 200 }));
+      const { result } = renderHook(() =>
+        useRealtimeVoiceMint({
+          resolveAgentId: () => null,
+          forceEnabled: false,
+          standaloneAgentId: UUID,
+          fetch,
+        }),
+      );
+      expect(result.current.agentId).toBeNull();
+      await waitFor(() => expect(result.current.agentId).toBe(UUID));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/v1/voice/session/health",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+
+    it("rejects a malformed adapter id without probing", () => {
+      const fetch = vi.fn();
+      const { result } = renderHook(() =>
+        useRealtimeVoiceMint({
+          resolveAgentId: () => null,
+          forceEnabled: false,
+          standaloneAgentId: "not-a-uuid",
+          fetch,
+        }),
+      );
+      expect(result.current.agentId).toBeNull();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+  });
+
   // ── force-arm override (VITE_VOICE_REALTIME_FORCE) ──────────────────────
   describe("force-arm override", () => {
     it("flag OFF + no resolvable agent id → null (unchanged self-hosted behavior)", () => {

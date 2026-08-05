@@ -30,6 +30,11 @@ import {
   VOICE_CONTROL_EVENT,
   type VoiceControlEventDetail,
 } from "../../events";
+import { useRealtimeVoiceMint } from "../../hooks/useRealtimeVoiceMint";
+import {
+  isRealtimeVoiceFlagEnabled,
+  useRealtimeVoiceSession,
+} from "../../hooks/useRealtimeVoiceSession";
 import { useViewEvent } from "../../hooks/useViewEvent";
 import {
   PENDANT_VOICE_TRANSCRIPT_EVENT,
@@ -1369,6 +1374,25 @@ export function useShellController(): ShellController {
   stopSpeakingRef.current = voiceOutput.stopSpeaking;
   asrProviderRef.current = voiceOutput.asrProvider;
 
+  // The ambient overlay is the primary /chat surface. It must own the same
+  // realtime WebSocket path as ChatView instead of silently staying on the
+  // legacy full-WAV ASR loop.
+  const { agentId: realtimeAgentId, getConsentNonce } = useRealtimeVoiceMint();
+  const realtimeVoice = useRealtimeVoiceSession({
+    agentId: realtimeAgentId,
+    conversationId: activeConversationId,
+    flagEnabled: isRealtimeVoiceFlagEnabled() && Boolean(realtimeAgentId),
+    getConsentNonce,
+  });
+  const realtimeVoiceBusy = realtimeVoice.active || realtimeVoice.connecting;
+  const effectiveRecording = recording || realtimeVoiceBusy;
+  const effectiveSpeaking = realtimeVoice.active
+    ? realtimeVoice.agentSpeaking
+    : voiceOutput.speaking;
+  const effectiveTranscript = realtimeVoice.active
+    ? realtimeVoice.transcriptPartial || realtimeVoice.transcriptFinal
+    : transcript;
+
   // `recording` (push-to-talk press or continuous capture) wins over an
   // in-flight response so the pill shows the red "listening" pulse the instant
   // the mic opens, even while the previous turn is still streaming (barge-in).
@@ -1381,7 +1405,8 @@ export function useShellController(): ShellController {
   // spoken (speaking). Unlike `phase === "responding"`, this stays true even
   // after the mic opens (which flips phase to "listening"), so the composer-send
   // and voice-gating logic both read one honest "a reply is in flight" signal.
-  const responding = chatSending || voiceOutput.speaking;
+  const responding =
+    chatSending || effectiveSpeaking || realtimeVoice.status === "thinking";
 
   // The rich status (#8813): what the agent is *doing*, distinct from the coarse
   // `responding` boolean. Voice playback wins (the server can't see local TTS).
@@ -1390,7 +1415,10 @@ export function useShellController(): ShellController {
   // → streaming (first token seen). The server's `waking` status (cloud 202) is
   // surfaced even before chatSending settles, so it shows while the agent boots.
   const turnStatus = React.useMemo<ChatTurnStatus | null>(() => {
-    if (voiceOutput.speaking) return { kind: "speaking" };
+    if (effectiveSpeaking) return { kind: "speaking" };
+    if (realtimeVoice.active && realtimeVoice.status === "thinking") {
+      return { kind: "thinking" };
+    }
     if (
       serverTurnStatus &&
       (chatSending || serverTurnStatus.kind === "waking")
@@ -1402,7 +1430,9 @@ export function useShellController(): ShellController {
     }
     return null;
   }, [
-    voiceOutput.speaking,
+    effectiveSpeaking,
+    realtimeVoice.active,
+    realtimeVoice.status,
     serverTurnStatus,
     chatSending,
     chatFirstTokenReceived,
@@ -1410,7 +1440,7 @@ export function useShellController(): ShellController {
 
   const phase: ShellPhase = !ready
     ? "booting"
-    : recording
+    : effectiveRecording
       ? "listening"
       : responding
         ? "responding"
@@ -1499,6 +1529,23 @@ export function useShellController(): ShellController {
     voiceOutput.stopSpeaking();
   }, [chatSending, handleChatStop, voiceOutput.stopSpeaking]);
 
+  const startConverseVoice = React.useCallback(() => {
+    if (!realtimeVoice.available) {
+      startCapture("converse");
+      return;
+    }
+    void realtimeVoice.start().then((outcome) => {
+      if (outcome.kind === "fallback-to-batch") startCapture("converse");
+    });
+  }, [realtimeVoice, startCapture]);
+
+  const stopConverseVoice = React.useCallback(() => {
+    if (realtimeVoice.active || realtimeVoice.connecting) {
+      void realtimeVoice.stop();
+    }
+    if (captureRef.current) stopCapture();
+  }, [realtimeVoice, stopCapture]);
+
   // Tap-to-talk: toggle a hands-free conversation. Enabling unlocks audio (the
   // tap is the gesture) and opens the mic in "converse" mode; disabling stops
   // both the mic and any in-flight reply.
@@ -1508,7 +1555,7 @@ export function useShellController(): ShellController {
       // "vad-gated" choice survives) and stop the mic + any in-flight reply.
       saveContinuousChatMode(priorContinuousModeRef.current);
       setHandsFree(false);
-      if (captureRef.current) stopCapture();
+      stopConverseVoice();
       voiceOutput.stopSpeaking();
     } else {
       // Tap on → persist "always-on" so the loop is restored across reloads,
@@ -1544,13 +1591,13 @@ export function useShellController(): ShellController {
         // Voice is gated while a reply is in flight: open the mic now only if
         // nothing is responding; otherwise the hands-free loop opens it the
         // instant the reply finishes.
-        if (!responding) startCapture("converse");
+        if (!responding) startConverseVoice();
       });
     }
   }, [
     responding,
-    startCapture,
-    stopCapture,
+    startConverseVoice,
+    stopConverseVoice,
     voiceOutput,
     gateEngageOnMicPermission,
   ]);
@@ -1570,7 +1617,7 @@ export function useShellController(): ShellController {
           setHandsFree(true);
           handsFreeRef.current = true;
           setIsOpen(true);
-          if (!responding) startCapture("converse");
+          if (!responding) startConverseVoice();
           return;
         }
 
@@ -1578,10 +1625,10 @@ export function useShellController(): ShellController {
         if (!handsFreeRef.current) return;
         setHandsFree(false);
         handsFreeRef.current = false;
-        if (captureRef.current) stopCapture();
+        stopConverseVoice();
         voiceOutput.stopSpeaking();
       },
-      [responding, startCapture, stopCapture, voiceOutput],
+      [responding, startConverseVoice, stopConverseVoice, voiceOutput],
     ),
   );
 
@@ -1609,14 +1656,14 @@ export function useShellController(): ShellController {
       setHandsFree(true);
       handsFreeRef.current = true;
       voiceOutput.unlockAudio();
-      if (!responding && !captureRef.current) startCapture("converse");
-    }, [responding, startCapture, voiceOutput]),
+      if (!responding && !captureRef.current) startConverseVoice();
+    }, [responding, startConverseVoice, voiceOutput]),
     onClose: React.useCallback(() => {
       // Close the temporary window without disturbing a persisted mode.
       setHandsFree(false);
       handsFreeRef.current = false;
-      if (captureRef.current) stopCapture();
-    }, [stopCapture]),
+      stopConverseVoice();
+    }, [stopConverseVoice]),
   });
 
   // Toggle transcription mode (long-form, record-only — the agent never replies
@@ -1792,7 +1839,7 @@ export function useShellController(): ShellController {
   // that clears the draft re-arms it and returns to the prior voice state.
   React.useEffect(() => {
     if (!handsFree || !ready) return;
-    if (recording || captureRef.current) return;
+    if (recording || captureRef.current || realtimeVoiceBusy) return;
     if (chatSending || voiceOutput.speaking) return;
     if (composerHasDraft) return;
     const timer = window.setTimeout(() => {
@@ -1803,7 +1850,7 @@ export function useShellController(): ShellController {
         !voiceOutput.speaking &&
         !composerHasDraftRef.current
       ) {
-        startCapture("converse");
+        startConverseVoice();
       }
     }, 250);
     return () => window.clearTimeout(timer);
@@ -1811,10 +1858,11 @@ export function useShellController(): ShellController {
     handsFree,
     ready,
     recording,
+    realtimeVoiceBusy,
     chatSending,
     voiceOutput.speaking,
     composerHasDraft,
-    startCapture,
+    startConverseVoice,
   ]);
 
   // ── App suspend / resume: keep voice capture from getting stuck (#voice-V1) ──
@@ -1856,12 +1904,13 @@ export function useShellController(): ShellController {
         !ready ||
         recording ||
         captureRef.current ||
+        realtimeVoiceBusy ||
         chatSending ||
         voiceOutput.speaking
       ) {
         return;
       }
-      startCapture("converse");
+      startConverseVoice();
     };
     document.addEventListener(APP_PAUSE_EVENT, onPause);
     document.addEventListener(APP_RESUME_EVENT, onResume);
@@ -1871,15 +1920,19 @@ export function useShellController(): ShellController {
     };
   }, [
     discardCaptureForSuspend,
-    startCapture,
+    startConverseVoice,
     ready,
     recording,
+    realtimeVoiceBusy,
     chatSending,
     voiceOutput.speaking,
   ]);
 
-  const waveformMode =
-    phase === "listening"
+  const waveformMode = realtimeVoice.active
+    ? realtimeVoice.status === "thinking" || realtimeVoice.agentSpeaking
+      ? "responding"
+      : "listening"
+    : phase === "listening"
       ? "listening"
       : phase === "responding"
         ? "responding"
@@ -1920,7 +1973,7 @@ export function useShellController(): ShellController {
     messages,
     canSend,
     modelStatus,
-    recording,
+    recording: effectiveRecording,
     waveformMode,
     analyser,
     open,
@@ -1942,8 +1995,8 @@ export function useShellController(): ShellController {
     setDictationSink,
     setTranscriptSessionSink,
     setComposerHasDraft,
-    transcript,
-    speaking: voiceOutput.speaking,
+    transcript: effectiveTranscript,
+    speaking: effectiveSpeaking,
     speak: voiceOutput.speak,
     stopSpeaking: voiceOutput.stopSpeaking,
     agentVoiceMuted: voiceOutput.agentVoiceMuted,

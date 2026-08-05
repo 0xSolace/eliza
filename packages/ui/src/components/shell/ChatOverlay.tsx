@@ -5106,10 +5106,19 @@ export function ChatOverlay({
         />
       ) : null}
 
-      {/* No live interim transcript is shown above the composer while
-          listening — the spoken words land as the sent message when the turn
-          completes. The mic being hot is confirmed by the pulsing speech glow
-          on the input bar / grabber / collapsed pill instead of text. */}
+      {/* Realtime STT partials must be visible while the user is speaking. The
+          legacy batch path has no partials, so this stays absent there until a
+          recognizer actually produces interim text. */}
+      {recording && transcript.trim() ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="chat-voice-live-transcript"
+          className="pointer-events-none relative mb-2 max-w-[min(36rem,calc(100vw-2rem))] self-center rounded-full border border-white/15 bg-black/45 px-4 py-2 text-center text-sm text-white backdrop-blur-md"
+        >
+          {transcript}
+        </div>
+      ) : null}
 
       {/* Audio-unlock prompt. When autoplay policy blocks the first spoken
           reply, the ambient overlay would otherwise go silent with no recourse

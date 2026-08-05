@@ -1915,7 +1915,7 @@ describe("ChatOverlay", () => {
     expect(input.hasAttribute("readonly")).toBe(false);
   });
 
-  it("uses the pulsing composer glyph instead of rendering interim transcript text", () => {
+  it("renders live interim transcript text while keeping the pulsing mic cue", () => {
     render(
       <ChatOverlay
         controller={makeController({
@@ -1925,12 +1925,11 @@ describe("ChatOverlay", () => {
         })}
       />,
     );
-    expect(screen.queryByText(/tell me about the coast/)).toBeNull();
-    // The "capture is hot" cue is the composer voice glyph's accent pulse —
-    // NOT the drag handle: while the composer is visible the handle stays
-    // quiet during a recording (a second pulsing bar right above the already-
-    // pulsing glyph read as noise). Only the collapsed PILL pulses for a live
-    // capture (see the morph regression suite).
+    expect(
+      screen.getByTestId("chat-voice-live-transcript").textContent,
+    ).toContain("tell me about the coast");
+    // The live text complements the existing pulsing capture cue. The drag
+    // handle remains quiet while the composer is visible.
     expect(screen.getByTestId("chat-composer-mic").className).toContain(
       "animate-pulse",
     );

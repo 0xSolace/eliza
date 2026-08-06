@@ -123,7 +123,10 @@ export async function ensureConnections(
 				: ChannelType.DM;
 		const room: Room = {
 			id: c.roomId,
-			name: c.roomName || c.name || "default",
+			// No placeholder here: an absent name means "caller did not provide one",
+			// and the upsert below must then keep the persisted room name instead of
+			// stomping it. The "default" fallback applies only to genuinely new rooms.
+			...(c.roomName || c.name ? { name: c.roomName || c.name } : {}),
 			source,
 			type: roomType,
 			channelId: c.channelId ?? c.roomId,
@@ -190,10 +193,28 @@ export async function ensureConnections(
 	});
 	if (worlds.length) await adapter.upsertWorlds(worlds);
 
-	const rooms = [...roomMap.values()].map((r) => ({
-		...r,
-		agentId,
-	}));
+	const roomIds = [...roomMap.keys()] as UUID[];
+	const existingRooms =
+		roomIds.length > 0 ? await adapter.getRoomsByIds(roomIds) : [];
+	const existingRoomsById = new Map(
+		existingRooms.map((room) => [room.id, room]),
+	);
+	const rooms = [...roomMap.values()].map((r) => {
+		const existing = existingRoomsById.get(r.id);
+		return {
+			// Connection establishment reconciles membership; it does not own the
+			// room document. Merging over the existing row keeps fields this caller
+			// did not provide (name, metadata) intact for full-replace adapters —
+			// otherwise every message send that re-ensures its connection resets
+			// the room name to "default", and the boot-time conversation restore
+			// (which rebuilds conversation titles from room.name) collapses every
+			// thread title to "default" after a relaunch.
+			...existing,
+			...r,
+			name: r.name ?? existing?.name ?? "default",
+			agentId,
+		};
+	});
 	if (rooms.length) await adapter.upsertRooms(rooms);
 
 	let createdRoomParticipants = 0;

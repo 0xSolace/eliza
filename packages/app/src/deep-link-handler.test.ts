@@ -107,7 +107,7 @@ describe("createDeepLinkHandler — top-level-surface navigation intents", () =>
     expect(dispatchNavigationIntent).toHaveBeenCalledWith({
       viewId: "settings",
       viewPath: "/settings",
-      subview: "connectors",
+      subview: "connectors/discord",
     });
     expect(window.location.hash).toBe("");
   });

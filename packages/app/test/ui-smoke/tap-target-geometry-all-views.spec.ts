@@ -72,6 +72,11 @@ const DOCUMENTED_EXCEPTIONS: Record<
   ReadonlyArray<{ match: RegExp; reason: string }>
 > = {};
 
+// The pendant transcript is a deliberately read-only transcript surface. Its
+// surrounding shell/chat controls are hidden by this audit, so zero controls is
+// the correct semantic state rather than a lazy-mount failure.
+const CONTROL_FREE_VIEWS = new Set(["pendant-transcript"]);
+
 /**
  * Collect, classify, and (in-page) exception-filter every interactive control
  * in the current view. Runs entirely in the page so geometry + computed style +
@@ -452,6 +457,17 @@ test.describe("tap-target rendered-geometry + role/DOM coherence gate", () => {
     }) => {
       await openAppPath(page, view.path);
       await page.locator("body").waitFor({ state: "visible", timeout: 60_000 });
+
+      if (CONTROL_FREE_VIEWS.has(view.id)) {
+        await expect(page.getByRole("main").first()).toBeVisible({
+          timeout: 60_000,
+        });
+        expect(
+          await collectControls(page, view.id),
+          `${view.id}: documented read-only view must remain free of standalone controls`,
+        ).toHaveLength(0);
+        return;
+      }
 
       // `openAppPath` proves the shell is ready, but many view bodies are lazy
       // chunks. Poll the rendered controls so the gate measures the mounted

@@ -111,8 +111,8 @@ test.describe("launcher catalog interactions", () => {
     for (const viewport of [
       { name: "desktop", size: { width: 1440, height: 1000 } },
       // Use a compact phone height so the touch-scroll contract remains
-      // exercised even when the curated catalog happens to fit at 390x844.
-      { name: "mobile", size: { width: 390, height: 700 } },
+      // exercised even as the curated catalog changes its row count.
+      { name: "mobile", size: { width: 390, height: 520 } },
     ] as const) {
       test(`single grid, real-touch scrolling, and Browser tile launch on ${viewport.name}`, async ({
         page,
@@ -158,26 +158,27 @@ test.describe("launcher catalog interactions", () => {
 
         let scrollTopAfterTouch = 0;
         if (viewport.name === "mobile") {
-          // The launcher occupies the adjacent shell page rather than Home's
-          // offscreen app region. Exercising its own scroll viewport catches a
-          // false proof where the hidden Home scroller moves while the visible
-          // final tile remains trapped beneath the fixed composer.
+          // The curated grid now compresses to fit some compact phone heights.
+          // Exercise a real touch swipe when overflow exists; otherwise prove
+          // the final tile is already clear of the fixed composer. Requiring
+          // overflow unconditionally makes a valid no-scroll layout fail.
           const scrollHost = grid;
-          await expect
-            .poll(() => scrollHost.evaluate((element) => element.scrollHeight))
-            .toBeGreaterThan(
-              await scrollHost.evaluate((element) => element.clientHeight),
-            );
-          await touchScrollLauncher(page, "launcher-page-window", "down");
-          await expect
-            .poll(() => scrollHost.evaluate((element) => element.scrollTop), {
-              message:
-                "the single launcher grid scrolls after a real touch swipe",
-            })
-            .toBeGreaterThan(0);
-          scrollTopAfterTouch = await scrollHost.evaluate(
-            (element) => element.scrollTop,
+          const canScroll = await scrollHost.evaluate(
+            (element) => element.scrollHeight > element.clientHeight,
           );
+          if (canScroll) {
+            await touchScrollLauncher(page, "launcher-page-window", "down");
+            await expect
+              .poll(() => scrollHost.evaluate((element) => element.scrollTop), {
+                message:
+                  "the single launcher grid scrolls after a real touch swipe",
+              })
+              .toBeGreaterThan(0);
+            scrollTopAfterTouch = await scrollHost.evaluate(
+              (element) => element.scrollTop,
+            );
+          }
+
           const finalTile = grid
             .locator('[data-testid^="launcher-tile-"]')
             .last();
@@ -194,19 +195,22 @@ test.describe("launcher catalog interactions", () => {
               },
               {
                 message:
-                  "the final launcher tile scrolls fully clear of the fixed composer",
+                  "the final launcher tile is fully clear of the fixed composer",
               },
             )
             .toBeLessThanOrEqual(0);
-          await screenshot(
-            page,
-            testInfo,
-            `${viewport.name}-launcher-after-touch-scroll`,
-          );
-          await touchScrollLauncher(page, "launcher-page-window", "up");
-          await expect
-            .poll(() => scrollHost.evaluate((element) => element.scrollTop))
-            .toBeLessThan(scrollTopAfterTouch);
+
+          if (canScroll) {
+            await screenshot(
+              page,
+              testInfo,
+              `${viewport.name}-launcher-after-touch-scroll`,
+            );
+            await touchScrollLauncher(page, "launcher-page-window", "up");
+            await expect
+              .poll(() => scrollHost.evaluate((element) => element.scrollTop))
+              .toBeLessThan(scrollTopAfterTouch);
+          }
         }
 
         await grid

@@ -852,6 +852,25 @@ describe("startLifeOpsActivitySignalCapture", () => {
     );
   });
 
+  it("silently swallows the browser's raw Failed to fetch transport error", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    h.captureLifeOpsActivitySignal.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    stop = startLifeOpsActivitySignalCapture(true);
+    await settle();
+
+    expect(h.captureLifeOpsActivitySignal).toHaveBeenCalled();
+    expect(h.dispatchStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "capture_error" }),
+    );
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it("stops sending after a 503 runtime-unavailable response", async () => {
     h.isApiError.mockImplementation(
       (error) => typeof error === "object" && error !== null && "kind" in error,

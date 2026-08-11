@@ -236,8 +236,16 @@ export function startLifeOpsActivitySignalCapture(enabled = true): () => void {
     error.status === 503 &&
     error.path === "/api/lifeops/activity-signals";
 
+  const isBrowserTransportError = (error: unknown): boolean =>
+    error instanceof TypeError &&
+    /^(Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)/i.test(
+      error.message.trim(),
+    );
+
   const isExpectedTransientError = (error: unknown): boolean =>
-    isApiError(error) && (error.kind === "network" || error.kind === "timeout");
+    (isApiError(error) &&
+      (error.kind === "network" || error.kind === "timeout")) ||
+    isBrowserTransportError(error);
 
   // A 401/403 is the designed signed-out state, not a capture defect: every
   // capture endpoint sits behind session auth, so anonymous pages (pre
@@ -280,6 +288,7 @@ export function startLifeOpsActivitySignalCapture(enabled = true): () => void {
   const isExpectedProbeFailure = (error: unknown): boolean =>
     isSessionUnavailableError(error) ||
     isCloudAgentGoneError(error) ||
+    isBrowserTransportError(error) ||
     (isApiError(error) &&
       (error.kind === "network" ||
         error.kind === "timeout" ||

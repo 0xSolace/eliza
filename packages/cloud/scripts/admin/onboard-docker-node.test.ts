@@ -7,10 +7,14 @@ import { describe, expect, it } from "bun:test";
 import {
   buildOnboardSshConfig,
   capacityForOnboardUpsert,
+  deriveCapacityFromMemory,
   hostKeyFingerprintForOnboardUpsert,
   parseArgs,
   parseDockerPs,
+  parseMemTotalMb,
+  parseTier,
   selectZombieAgentContainers,
+  tierForOnboardUpsert,
 } from "./onboard-docker-node";
 
 describe("parseDockerPs", () => {
@@ -81,7 +85,14 @@ describe("parseArgs", () => {
       keyPath: "/k/id",
       sshPort: 22,
       sshUser: "root",
-      capacity: 8,
+      // Unset capacity is now null so the onboard flow derives it from the
+      // box's measured RAM instead of the cpx32-era 8-slot default.
+      capacity: null,
+      // Unset tier is null so the upsert defaults a new row to robot-shared /
+      // preserves an existing class, rather than eagerly stamping a value here.
+      tier: null,
+      // Unset per-node ceiling is null = use the global default.
+      agentMemoryLimitMb: null,
       dryRun: false,
     });
   });
@@ -109,6 +120,33 @@ describe("parseArgs", () => {
       capacity: 4,
       dryRun: true,
     });
+  });
+
+  it("parses an explicit --tier and rejects an unknown one", () => {
+    expect(
+      parseArgs(
+        ["--host", "h", "--node-id", "n", "--tier", "robot-dedicated"],
+        emptyEnv,
+      ).tier,
+    ).toBe("robot-dedicated");
+    expect(() =>
+      parseArgs(["--host", "h", "--node-id", "n", "--tier", "gpu"], emptyEnv),
+    ).toThrow("Invalid tier");
+  });
+
+  it("parses --agent-memory-limit-mb and rejects out-of-range values", () => {
+    expect(
+      parseArgs(
+        ["--host", "h", "--node-id", "n", "--agent-memory-limit-mb", "1536"],
+        emptyEnv,
+      ).agentMemoryLimitMb,
+    ).toBe(1536);
+    expect(() =>
+      parseArgs(
+        ["--host", "h", "--node-id", "n", "--agent-memory-limit-mb", "128"],
+        emptyEnv,
+      ),
+    ).toThrow("agent-memory-limit-mb");
   });
 
   it("falls back to env vars when flags are absent", () => {
@@ -157,6 +195,8 @@ describe("host-key pinning helpers", () => {
     sshPort: 2222,
     sshUser: "root",
     capacity: 8,
+    tier: null,
+    agentMemoryLimitMb: null,
     dryRun: false,
   };
 
@@ -231,5 +271,100 @@ describe("capacityForOnboardUpsert", () => {
   it("seeds a brand-new row from the --capacity flag", () => {
     expect(capacityForOnboardUpsert(null, 8)).toBe(8);
     expect(capacityForOnboardUpsert(null, 4)).toBe(4);
+  });
+});
+
+describe("parseTier", () => {
+  it("returns null when unset (upsert defaults new=robot-shared, preserves re-onboard)", () => {
+    expect(parseTier(undefined)).toBeNull();
+  });
+
+  it("accepts and lowercases the four known classes", () => {
+    expect(parseTier("robot-dedicated")).toBe("robot-dedicated");
+    expect(parseTier("Robot-Shared")).toBe("robot-shared");
+    expect(parseTier("CLOUD")).toBe("cloud");
+    expect(parseTier(" Autoscale ")).toBe("autoscale");
+  });
+
+  it("rejects an unknown class (incl. the old bare 'robot')", () => {
+    expect(() => parseTier("gpu")).toThrow(/Invalid tier/);
+    expect(() => parseTier("robot")).toThrow(/Invalid tier/);
+  });
+});
+
+describe("tierForOnboardUpsert", () => {
+  it("defaults a brand-new row to robot-shared (safe default, never the paid pool)", () => {
+    expect(tierForOnboardUpsert(null, null)).toBe("robot-shared");
+  });
+
+  it("an explicit --tier wins over both new default and existing class", () => {
+    expect(tierForOnboardUpsert(null, "robot-dedicated")).toBe(
+      "robot-dedicated",
+    );
+    expect(
+      tierForOnboardUpsert(
+        { host_key_fingerprint: null, capacity: 8, tier: "robot-shared" },
+        "autoscale",
+      ),
+    ).toBe("autoscale");
+  });
+
+  it("preserves an existing tier across a re-onboard with no --tier", () => {
+    // A dedicated robot box re-onboarded without --tier must NOT be reset to
+    // robot-shared — that would silently open the paid pool to shared traffic.
+    expect(
+      tierForOnboardUpsert(
+        { host_key_fingerprint: "pin", capacity: 4, tier: "robot-dedicated" },
+        null,
+      ),
+    ).toBe("robot-dedicated");
+  });
+});
+
+describe("parseMemTotalMb", () => {
+  it("extracts MemTotal from /proc/meminfo and converts kB to MiB", () => {
+    const meminfo = [
+      "MemTotal:       263808512 kB",
+      "MemFree:        210763776 kB",
+      "MemAvailable:   211812352 kB",
+    ].join("\n");
+    // 263808512 / 1024 = 257625 MiB (the eliza-staging-robot-1 251 GiB box).
+    expect(parseMemTotalMb(meminfo)).toBe(257625);
+  });
+
+  it("returns null when MemTotal is absent or unparseable", () => {
+    expect(parseMemTotalMb("")).toBeNull();
+    expect(parseMemTotalMb("MemFree: 100 kB")).toBeNull();
+    expect(parseMemTotalMb("MemTotal: notanumber kB")).toBeNull();
+  });
+});
+
+describe("deriveCapacityFromMemory", () => {
+  it("sizes a 251 GiB robot box far above the 8-slot default", () => {
+    // 257625 - 1024 reserve = 256601 / 3072 ceiling = 83 slots, clamped to 64.
+    expect(deriveCapacityFromMemory(257625, 3072)).toBe(64);
+  });
+
+  it("sizes the small ccx33-class cloud box to its real RAM", () => {
+    // 32 GiB ≈ 32768 MiB: (32768 - 1024) / 3072 = 10 slots.
+    expect(deriveCapacityFromMemory(32768, 3072)).toBe(10);
+  });
+
+  it("refuses to license more ceilings than a 7.6 GiB box can hold", () => {
+    // The staging node that OOM-killed the fleet: (7745 - 1024) / 3072 = 2.
+    // Fleet-blind slot arithmetic gave it 4; RAM-derived capacity gives 2.
+    expect(deriveCapacityFromMemory(7745, 3072)).toBe(2);
+  });
+
+  it("never returns 0 (a registered-but-unschedulable node is a capacity leak)", () => {
+    expect(deriveCapacityFromMemory(1000, 3072)).toBe(1);
+    expect(deriveCapacityFromMemory(3072, 3072, 4096)).toBe(1);
+    expect(deriveCapacityFromMemory(0, 3072)).toBe(1);
+    expect(deriveCapacityFromMemory(8192, 0)).toBe(1);
+  });
+
+  it("honours a custom host reserve", () => {
+    // (16384 - 4096) / 3072 = 4.
+    expect(deriveCapacityFromMemory(16384, 3072, 4096)).toBe(4);
   });
 });

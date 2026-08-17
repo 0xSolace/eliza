@@ -5,7 +5,7 @@
  * SQL) and the relationships service exposes identity-cluster membership.
  */
 import type { ActionResult, IAgentRuntime, Memory, UUID } from "@elizaos/core";
-import { normalizeActionIdentifier } from "@elizaos/core";
+import { normalizeActionIdentifier, stringToUuid } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import { memoryAction } from "./memories";
 
@@ -569,6 +569,102 @@ describe("MEMORY op:search windowed-read disclosure", () => {
       25,
     );
     expect(result.values).toMatchObject({ rendered: 25, matchedInWindow: 30 });
+  });
+});
+
+describe("MEMORY op:search durable hash-memory corpus", () => {
+  const HASH_ROOM_ID = stringToUuid("Eliza-hash-memory-room") as UUID;
+
+  function seedHashMemory(rows: StoredRow[], text: string): UUID {
+    const id = crypto.randomUUID() as UUID;
+    rows.push({
+      memory: {
+        id,
+        entityId: AGENT_ID,
+        agentId: AGENT_ID,
+        roomId: HASH_ROOM_ID,
+        content: { text, source: "hash_memory" },
+        createdAt: Date.now() - 1_000_000,
+      } as Memory,
+      tableName: "messages",
+    });
+    return id;
+  }
+
+  // The /api/memory/remember corpus lives in one fixed room; its rows are
+  // usually OLDER than the newest-max(limit*2,200) window the table scan
+  // reads. Live sol-dev 2026-08-17: "who is Royce" answered "no royce
+  // anywhere in memory" from the windowed scan while GET /api/memory/search
+  // returned 5 rows about him. The durable branch closes that gap.
+  it("finds a hash-memory note pushed out of the scan window by newer rows", async () => {
+    const { runtime, rows } = makeRuntime();
+    seedHashMemory(
+      rows,
+      "Royce is Shadow's adventure friend: snowboarding, camping, taught him guitar",
+    );
+    // 250 newer message rows saturate the windowed read.
+    for (let i = 0; i < 250; i++) {
+      rows.push({
+        memory: {
+          id: crypto.randomUUID() as UUID,
+          entityId: AGENT_ID,
+          agentId: AGENT_ID,
+          roomId: HASH_ROOM_ID,
+          content: { text: `sync chatter ${i}`, source: "hash_memory" },
+          createdAt: Date.now() - 500_000 + i,
+        } as Memory,
+        tableName: "messages",
+      });
+    }
+
+    const result = await runAction(runtime, makeMessage(), {
+      action: "search",
+      query: "Royce snowboarding",
+    });
+
+    const text = String(result.text ?? "");
+    // The bug verbatim: the windowed scan alone reports zero matches…
+    expect(result.values).toMatchObject({ matchedInWindow: 0 });
+    // …but the durable corpus surfaces the note.
+    expect(text).toContain("Durable memory corpus");
+    expect(text).toContain("Royce is Shadow's adventure friend");
+    const durable = (
+      result.data as { durableMemories?: Array<{ text: string }> }
+    ).durableMemories;
+    expect(durable?.some((m) => m.text.includes("Royce"))).toBe(true);
+  });
+
+  it("does not surface hash-memory rows for an entity-filtered search", async () => {
+    const { runtime, rows } = makeRuntime();
+    seedHashMemory(rows, "Royce taught Shadow guitar");
+
+    const result = await runAction(runtime, makeMessage(), {
+      action: "search",
+      query: "Royce guitar",
+      entityId: USER_ID,
+    });
+
+    const text = String(result.text ?? "");
+    // Hash rows carry the agent's own entityId; an entity-scoped search for a
+    // user's facts must not leak them in.
+    expect(text).not.toContain("Durable memory corpus");
+  });
+
+  it("does not duplicate a row found by both the window and the corpus", async () => {
+    const { runtime, rows } = makeRuntime();
+    const id = seedHashMemory(rows, "Royce taught Shadow guitar chords");
+
+    const result = await runAction(runtime, makeMessage(), {
+      action: "search",
+      query: "Royce guitar",
+    });
+
+    const text = String(result.text ?? "");
+    const occurrences = text.split(id).length - 1;
+    // The row is inside the scan window (few rows total), so the windowed
+    // list shows it and the durable section must not repeat it.
+    expect(occurrences).toBe(1);
+    expect(text).not.toContain("Durable memory corpus");
   });
 });
 

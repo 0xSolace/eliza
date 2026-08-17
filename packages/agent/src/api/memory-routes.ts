@@ -73,7 +73,7 @@ export interface MemoryRouteContext extends RouteRequestContext {
   agentName: string;
 }
 
-type MemorySearchHit = {
+export type MemorySearchHit = {
   id: string;
   text: string;
   createdAt: number;
@@ -370,6 +370,24 @@ async function getMemorySearchCorpus(
   const inFlight = memorySearchRefreshInFlight.get(key);
   if (inFlight) return inFlight;
   return buildMemorySearchCorpus(runtime, roomId, key);
+}
+
+/**
+ * BM25 search over the agent's durable hash-memory corpus (the
+ * /api/memory/remember store) without needing the caller to know the fixed
+ * room id. Used by the MEMORY action so op:search covers the same corpus the
+ * REST /api/memory/search endpoint serves: those rows live in one room and
+ * are frequently OLDER than the newest-N window a table scan reads, so a
+ * windowed read alone reports "0 stored items" for notes the corpus holds.
+ */
+export async function searchAgentHashMemory(
+  runtime: AgentRuntime,
+  query: string,
+  limit: number,
+): Promise<MemorySearchHit[]> {
+  const agentName = resolveAgentName(runtime, "");
+  const roomId = stringToUuid(`${agentName}-hash-memory-room`) as UUID;
+  return searchMemoryNotes(runtime, roomId, query, limit);
 }
 
 async function searchMemoryNotes(

@@ -9,6 +9,7 @@
 import type {
   Action,
   ActionResult,
+  AgentRuntime,
   HandlerOptions,
   IAgentRuntime,
   Memory,
@@ -21,6 +22,10 @@ import {
   ModelType,
   validateUuid,
 } from "@elizaos/core";
+import {
+  type MemorySearchHit,
+  searchAgentHashMemory,
+} from "../api/memory-routes.ts";
 
 const MEMORY_OPS = ["create", "search", "update", "delete"] as const;
 type MemoryOp = (typeof MEMORY_OPS)[number];
@@ -361,13 +366,48 @@ async function doSearch(
   };
   const scan = await collectCandidates(runtime, { ...scope, limit });
 
+  // Durable hash-memory corpus (the /api/memory/remember store): those rows
+  // live in one fixed room and are usually OLDER than the newest-N window the
+  // table scan reads, so without this branch op:search answers "0 stored
+  // items" for notes the corpus provably holds (live sol-dev 2026-08-17:
+  // "who is Royce" → zero hits from the windowed scan while
+  // /api/memory/search returned 5 rows). Only unfiltered-or-messages queries
+  // are in scope — hash rows carry the agent's own entityId, so an
+  // entity-filtered search for a user's facts must not surface them.
+  let durableHits: MemorySearchHit[] = [];
+  if (
+    query &&
+    scope.entityId === undefined &&
+    (type === undefined || type === "messages")
+  ) {
+    try {
+      durableHits = await searchAgentHashMemory(
+        runtime as AgentRuntime,
+        query,
+        Math.min(limit, 10),
+      );
+    } catch (err) {
+      // Recall must degrade to the windowed scan, never fail the search.
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[memory:search] durable-corpus search failed: ${msg}`);
+    }
+  }
+
   const matchedInWindow = scan.matches.length;
   const items = scan.matches
     .slice(0, limit)
     .map((c) => toListItem(c.memory, c.type));
+  const windowedIds = new Set(items.map((m) => m.id));
+  const durableItems = durableHits.filter((hit) => !windowedIds.has(hit.id));
   const lines = items
     .slice(0, 25)
     .map((m) => `- [${m.type}] ${m.id}: ${m.text.slice(0, 120)}`);
+  const durableLines = durableItems
+    .slice(0, 10)
+    .map(
+      (hit) =>
+        `- [messages] ${hit.id} (score ${hit.score.toFixed(2)}): ${hit.text.slice(0, 300)}`,
+    );
 
   // Report what was actually rendered, not what was collected: the previous
   // header claimed up to 50 items while printing 25 lines, and printed the
@@ -386,11 +426,18 @@ async function doSearch(
         : []),
       describeScanWindow(scan),
       ...lines,
+      ...(durableLines.length > 0
+        ? [
+            `Durable memory corpus: ${durableLines.length} additional relevance-ranked match(es) (full stored history, not windowed):`,
+            ...durableLines,
+          ]
+        : []),
     ].join("\n"),
     values: {
-      count: items.length,
-      rendered: lines.length,
+      count: items.length + durableItems.length,
+      rendered: lines.length + durableLines.length,
       matchedInWindow,
+      durableCorpusMatches: durableItems.length,
       scanWindowPerTable: scan.perTable,
       scanWindowSaturated: scan.saturatedTables.length > 0,
     },
@@ -398,6 +445,7 @@ async function doSearch(
       actionName: "MEMORY",
       op: "search" as const,
       memories: items,
+      durableMemories: durableItems,
       matchedInWindow,
       scanWindowPerTable: scan.perTable,
       scanWindowSaturatedTables: scan.saturatedTables,

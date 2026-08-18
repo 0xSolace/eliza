@@ -36,6 +36,7 @@ import {
 	buildFactQueryText,
 	scoreFactKeywordRelevance,
 } from "../fact-keywords.ts";
+import { isSupersededFact } from "../fact-supersession.ts";
 
 // Get text content from centralized specs
 const spec = requireProviderSpec("FACTS");
@@ -398,8 +399,14 @@ const factsProvider: Provider = {
 			const entityFacts = entityFactPools.flat();
 
 			const minimizePrivateFacts = shouldMinimizePrivateFactsForTurn(message);
+			// Superseded facts (slot conflict resolved by a newer claim, or
+			// user-contradicted) are excluded before ranking: a stale "lives in
+			// Denver" must never outrank the "lives in Brooklyn" that replaced
+			// it, regardless of confidence accrued while it was true.
 			let dedupedPool = dedupeById([...roomFacts, ...entityFacts]).filter(
-				(memory) => !minimizePrivateFacts || !isMarkedPrivateFact(memory),
+				(memory) =>
+					!isSupersededFact(memory) &&
+					(!minimizePrivateFacts || !isMarkedPrivateFact(memory)),
 			);
 			// Bounded-pool blindness guard: both pools are RECENCY-fetched, so a
 			// fact older than the last CANDIDATE_POOL_PER_SEARCH extractions per
@@ -446,7 +453,9 @@ const factsProvider: Provider = {
 							...searchedRoom,
 							...searchedEntities.flat(),
 						]).filter(
-							(memory) => !minimizePrivateFacts || !isMarkedPrivateFact(memory),
+							(memory) =>
+								!isSupersededFact(memory) &&
+								(!minimizePrivateFacts || !isMarkedPrivateFact(memory)),
 						);
 					}
 				} catch (error) {

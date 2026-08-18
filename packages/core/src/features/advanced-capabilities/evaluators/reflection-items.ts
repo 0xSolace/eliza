@@ -54,6 +54,10 @@ import {
 	factLexicalSimilarity,
 	readStoredFactKeywords,
 } from "../fact-keywords.ts";
+import {
+	findFactSlotConflicts,
+	isSupersededFact,
+} from "../fact-supersession.ts";
 import { recordFactCandidate } from "./_factCandidates.ts";
 import {
 	type AddCurrentOp,
@@ -590,6 +594,9 @@ async function prepareFacts(
 	for (const fact of [...roomFacts, ...entityFacts]) {
 		if (!fact.id || seen.has(fact.id)) continue;
 		seen.add(fact.id);
+		// Superseded rows are dead: showing them to the extractor invites
+		// re-strengthening a claim that a newer fact already replaced.
+		if (isSupersededFact(fact)) continue;
 		knownFacts.push(fact);
 	}
 	return { ...base, knownFacts };
@@ -698,6 +705,37 @@ export function preserveFactMetadata(fact: Memory): CustomMetadata {
 	return next;
 }
 
+/**
+ * Mark an existing fact as superseded by a newer claim about the same slot.
+ * The row is kept (audit trail + review UI); `isSupersededFact` excludes it
+ * from every read pool from this point on. Also queues a fact-candidate
+ * record so the contradiction stays reviewable.
+ */
+async function supersedeFactMemory(
+	ctx: ApplyContext,
+	fact: Memory,
+	args: { supersededBy: UUID | null; reason: string },
+): Promise<void> {
+	if (!fact.id) return;
+	const nextMeta: CustomMetadata = {
+		...preserveFactMetadata(fact),
+		verificationStatus: "contradicted",
+		supersededAt: nowIso(),
+		...(args.supersededBy ? { supersededBy: args.supersededBy } : {}),
+	};
+	await ctx.runtime.updateMemory({ id: fact.id, metadata: nextMeta });
+	if (ctx.message.entityId) {
+		await recordFactCandidate(ctx.runtime, {
+			entityId: ctx.message.entityId,
+			kind: "contradict",
+			existingFactId: asUuidOrNull(fact.id) ?? undefined,
+			proposedText: fact.content.text ?? "",
+			reason: args.reason,
+			evidenceMessageId: asUuidOrNull(ctx.message.id) ?? undefined,
+		});
+	}
+}
+
 async function applyStrengthenForMemory(
 	ctx: ApplyContext,
 	fact: Memory,
@@ -722,16 +760,29 @@ async function applyAddDurable(
 		op.category,
 		op.structured_fields,
 	);
-	const targetValues = [op.claim, op.category, op.structured_fields, keywords];
-	const dedupTarget = findDedupTarget(
-		[...ctx.candidatePool, ...ctx.insertedThisRun],
-		targetValues,
+	// Slot-conflict check BEFORE lexical dedupe. "lives in Brooklyn" is a
+	// near-lexical-duplicate of "lives in Denver" (shared: lives, identity,
+	// location), so the dedupe path would otherwise STRENGTHEN the stale fact
+	// — telling the agent you moved made it more confident about your old
+	// city. A structural slot conflict means supersede-then-insert instead.
+	const slotConflicts = findFactSlotConflicts(
+		[...ctx.candidatePool.map((c) => c.memory)],
 		"durable",
 		op.category,
+		op.structured_fields,
 	);
-	if (dedupTarget) {
-		await applyStrengthenForMemory(ctx, dedupTarget.memory);
-		return { added: false, strengthened: true };
+	const targetValues = [op.claim, op.category, op.structured_fields, keywords];
+	if (slotConflicts.length === 0) {
+		const dedupTarget = findDedupTarget(
+			[...ctx.candidatePool, ...ctx.insertedThisRun],
+			targetValues,
+			"durable",
+			op.category,
+		);
+		if (dedupTarget) {
+			await applyStrengthenForMemory(ctx, dedupTarget.memory);
+			return { added: false, strengthened: true };
+		}
 	}
 	const factId = await insertFact(ctx, {
 		claim: op.claim,
@@ -751,6 +802,12 @@ async function applyAddDurable(
 			});
 			ctx.candidatesById.set(factId, inserted);
 		}
+		for (const conflict of slotConflicts) {
+			await supersedeFactMemory(ctx, conflict.memory, {
+				supersededBy: factId,
+				reason: `slot ${conflict.slot}: "${conflict.existingValue}" superseded by "${conflict.incomingValue}" (${op.reason ?? op.claim})`,
+			});
+		}
 	}
 	return { added: factId != null, strengthened: false };
 }
@@ -765,16 +822,26 @@ async function applyAddCurrent(
 		op.category,
 		op.structured_fields,
 	);
-	const targetValues = [op.claim, op.category, op.structured_fields, keywords];
-	const dedupTarget = findDedupTarget(
-		[...ctx.candidatePool, ...ctx.insertedThisRun],
-		targetValues,
+	// Same supersession discipline as durable: a new `working_on`/`schedule_
+	// context` value for an occupied slot replaces, never reinforces.
+	const slotConflicts = findFactSlotConflicts(
+		[...ctx.candidatePool.map((c) => c.memory)],
 		"current",
 		op.category,
+		op.structured_fields,
 	);
-	if (dedupTarget) {
-		await applyStrengthenForMemory(ctx, dedupTarget.memory);
-		return { added: false, strengthened: true };
+	const targetValues = [op.claim, op.category, op.structured_fields, keywords];
+	if (slotConflicts.length === 0) {
+		const dedupTarget = findDedupTarget(
+			[...ctx.candidatePool, ...ctx.insertedThisRun],
+			targetValues,
+			"current",
+			op.category,
+		);
+		if (dedupTarget) {
+			await applyStrengthenForMemory(ctx, dedupTarget.memory);
+			return { added: false, strengthened: true };
+		}
 	}
 	const validAt =
 		typeof op.valid_at === "string" && op.valid_at.length > 0
@@ -797,6 +864,12 @@ async function applyAddCurrent(
 				searchText: buildFactSearchText(inserted),
 			});
 			ctx.candidatesById.set(factId, inserted);
+		}
+		for (const conflict of slotConflicts) {
+			await supersedeFactMemory(ctx, conflict.memory, {
+				supersededBy: factId,
+				reason: `slot ${conflict.slot}: "${conflict.existingValue}" superseded by "${conflict.incomingValue}" (${op.reason ?? op.claim})`,
+			});
 		}
 	}
 	return { added: factId != null, strengthened: false };
@@ -842,6 +915,19 @@ async function applyContradict(
 		reason: op.reason,
 		evidenceMessageId: asUuidOrNull(ctx.message.id) ?? undefined,
 	});
+	// Review-queue-only handling left the stale fact LIVE in the provider
+	// until a human adjudicated it — the agent kept asserting a claim the
+	// user just corrected. The user's own correction is the strongest signal
+	// we get; mark the row superseded now, keep the review record above as
+	// the audit trail.
+	if (fact.id) {
+		const nextMeta: CustomMetadata = {
+			...preserveFactMetadata(fact),
+			verificationStatus: "contradicted",
+			supersededAt: nowIso(),
+		};
+		await ctx.runtime.updateMemory({ id: fact.id, metadata: nextMeta });
+	}
 	return true;
 }
 

@@ -409,6 +409,15 @@ const SCHEMA_SPECIFIC_REJECTION_TOKENS = [
 	"responseschema",
 	"json_schema",
 	"structured output",
+	// Anthropic grammar-compilation limits: "Schemas contains too many optional
+	// parameters (N) ... (limit: 24)". Structural — the merged evaluator schema
+	// will be rejected identically every turn, so it must arm the fallback the
+	// same way an explicit schema rejection does. Before this token was added,
+	// the error matched NOTHING (no "bad request", no schema token), no
+	// json_object fallback fired, and every post-turn evaluation (factMemory
+	// included) silently died on providers with grammar limits.
+	"optional parameters",
+	"grammar compilation",
 ] as const;
 
 function errorMessageText(error: unknown): string {

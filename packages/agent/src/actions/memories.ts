@@ -334,6 +334,12 @@ async function doSearch(
   runtime: IAgentRuntime,
   params: MemoryParams,
 ): Promise<ActionResult> {
+  // Scope observability: the live "who is jade" miss (2026-08-17) was only
+  // diagnosable by guessing which filters the planner emitted. Log the raw
+  // scope up front so the next scope hole is a grep, not a reproduction.
+  logger.debug(
+    `[memory:search] params: query=${JSON.stringify(params.query ?? null)} type=${params.type ?? "-"} entityId=${params.entityId ?? "-"} roomId=${params.roomId ?? "-"} limit=${params.limit ?? "-"}`,
+  );
   const type =
     params.type && MEMORY_TYPES.includes(params.type) ? params.type : undefined;
   // Read-only salvage (matrix F16): a mangled planner-copied UUID is an
@@ -371,15 +377,31 @@ async function doSearch(
   // table scan reads, so without this branch op:search answers "0 stored
   // items" for notes the corpus provably holds (live sol-dev 2026-08-17:
   // "who is Royce" → zero hits from the windowed scan while
-  // /api/memory/search returned 5 rows). Only unfiltered-or-messages queries
-  // are in scope — hash rows carry the agent's own entityId, so an
-  // entity-filtered search for a user's facts must not surface them.
+  // /api/memory/search returned 5 rows).
+  //
+  // Scope: EVERY queried search without an entity filter, regardless of the
+  // `type` filter. The first cut of this branch ran only for
+  // unfiltered-or-messages searches, and the planner promptly re-missed the
+  // corpus by guessing type:"facts" for a "who is X" recall (live sol-dev
+  // 2026-08-17 later the same day: "who is jade" → "not in my memory" while
+  // /api/memory/search scored the Jade rows 1.0). The `type` param picks
+  // which SQL tables the windowed scan reads; the durable corpus is a
+  // relevance-ranked recall surface, not a table, so a table filter must not
+  // silence it. Durable lines stay visibly labeled as corpus rows.
+  //
+  // Entity-filtered searches: hash rows carry the agent's own entityId, so an
+  // entity-scoped fact lookup that FOUND rows must not mix agent notes into
+  // the entity's facts. But when the entity filter matched NOTHING, honoring
+  // the filter absolutely turns a recoverable recall into "no memory" — so
+  // degrade to the unfiltered corpus with an explicit note naming the
+  // degradation, never silently.
+  const entityFilterMatchedNothing =
+    scope.entityId !== undefined && scan.matches.length === 0;
+  const durableEligible =
+    Boolean(query) &&
+    (scope.entityId === undefined || entityFilterMatchedNothing);
   let durableHits: MemorySearchHit[] = [];
-  if (
-    query &&
-    scope.entityId === undefined &&
-    (type === undefined || type === "messages")
-  ) {
+  if (query && durableEligible) {
     try {
       durableHits = await searchAgentHashMemory(
         runtime as AgentRuntime,
@@ -394,6 +416,9 @@ async function doSearch(
   }
 
   const matchedInWindow = scan.matches.length;
+  logger.debug(
+    `[memory:search] results: windowed=${matchedInWindow} durable=${durableHits.length} (scope: ${describeSearchScope(scope)})`,
+  );
   const items = scan.matches
     .slice(0, limit)
     .map((c) => toListItem(c.memory, c.type));
@@ -428,7 +453,9 @@ async function doSearch(
       ...lines,
       ...(durableLines.length > 0
         ? [
-            `Durable memory corpus: ${durableLines.length} additional relevance-ranked match(es) (full stored history, not windowed):`,
+            entityFilterMatchedNothing
+              ? `The entityId filter matched nothing, so the durable memory corpus (agent-scoped, NOT filtered by that entity) was searched as a fallback: ${durableLines.length} relevance-ranked match(es):`
+              : `Durable memory corpus: ${durableLines.length} additional relevance-ranked match(es) (full stored history, not windowed):`,
             ...durableLines,
           ]
         : []),

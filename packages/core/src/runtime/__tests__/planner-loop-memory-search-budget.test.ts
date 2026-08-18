@@ -170,6 +170,74 @@ describe("partitionMemorySearchBudget", () => {
 		expect(out.skippedNearDuplicate).toEqual([dup]);
 	});
 
+	// Retry dead-end regression (live sol-dev 2026-08-17): a scoped
+	// MEMORY_SEARCH found 0 hits; the query key ignores scope filters, so the
+	// wider-scope retry with the same query text was near-duplicate-skipped on
+	// iterations 2 and 3 and the turn answered "not in my memory" while the
+	// corpus held the fact. A zero-hit search seeds no dedup entry.
+	it("does not dedup-skip a same-query retry after a ZERO-HIT search (scope may differ)", () => {
+		const trajectory = {
+			...emptyTrajectory(),
+			steps: [
+				{
+					toolCall: {
+						name: "MEMORY_SEARCH",
+						params: { query: "who is jade", type: "facts" },
+					},
+					result: {
+						success: true,
+						text: "Showing all 0 match(es)",
+						data: { values: { count: 0 } },
+					},
+				},
+			],
+		};
+		const widerRetry = {
+			name: "MEMORY_SEARCH",
+			params: { query: "jade who is" },
+		};
+		const out = partitionMemorySearchBudget([widerRetry], trajectory, 2);
+		// Without the zero-hit carve-out this lands in skippedNearDuplicate and
+		// the turn dead-ends (bidirectional proof: fails on the pre-fix code).
+		expect(out.skippedNearDuplicate).toEqual([]);
+		expect(out.allowed).toEqual([widerRetry]);
+	});
+
+	it("still dedup-skips a same-query retry after a search WITH hits (or unknown count)", () => {
+		const withHits = {
+			...emptyTrajectory(),
+			steps: [
+				{
+					toolCall: { name: "MEMORY_SEARCH", params: { query: "who is jade" } },
+					result: {
+						success: true,
+						text: "Showing all 9 match(es)",
+						data: { values: { count: 9 } },
+					},
+				},
+			],
+		};
+		const retry = { name: "MEMORY_SEARCH", params: { query: "jade who is" } };
+		expect(
+			partitionMemorySearchBudget([retry], withHits, 5).skippedNearDuplicate,
+		).toEqual([retry]);
+
+		// Unknown result shape (no data.values.count) must stay dedup-protected:
+		// only a PROVEN zero-hit earns the retry pass.
+		const unknownShape = {
+			...emptyTrajectory(),
+			steps: [
+				{
+					toolCall: { name: "MEMORY_SEARCH", params: { query: "who is jade" } },
+					result: { success: true, text: "some results" },
+				},
+			],
+		};
+		expect(
+			partitionMemorySearchBudget([retry], unknownShape, 5).skippedNearDuplicate,
+		).toEqual([retry]);
+	});
+
 	it("failed searches still consume budget (each cost a full planner round)", () => {
 		const trajectory = {
 			...emptyTrajectory(),

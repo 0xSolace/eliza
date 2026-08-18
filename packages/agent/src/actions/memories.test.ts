@@ -634,8 +634,9 @@ describe("MEMORY op:search durable hash-memory corpus", () => {
     expect(durable?.some((m) => m.text.includes("Royce"))).toBe(true);
   });
 
-  it("does not surface hash-memory rows for an entity-filtered search", async () => {
+  it("does not mix hash-memory rows into an entity-filtered search that found the entity's rows", async () => {
     const { runtime, rows } = makeRuntime();
+    seedFact(rows, { text: "User plays guitar with Royce", entityId: USER_ID });
     seedHashMemory(rows, "Royce taught Shadow guitar");
 
     const result = await runAction(runtime, makeMessage(), {
@@ -645,9 +646,61 @@ describe("MEMORY op:search durable hash-memory corpus", () => {
     });
 
     const text = String(result.text ?? "");
-    // Hash rows carry the agent's own entityId; an entity-scoped search for a
-    // user's facts must not leak them in.
+    // Hash rows carry the agent's own entityId; when the entity filter DID
+    // match rows, the agent's own notes must not leak into the entity's facts.
+    expect(text).toContain("User plays guitar with Royce");
     expect(text).not.toContain("Durable memory corpus");
+    expect(text).not.toContain("Royce taught Shadow guitar");
+  });
+
+  // Scope-hole regression (live sol-dev 2026-08-17, second miss): the planner
+  // guessed an entity filter for a "who is X" recall; the filter matched
+  // nothing and the old branch honored it absolutely, so the turn answered
+  // "not in my memory" while the corpus held the fact. Zero matches under an
+  // entity filter must degrade to the unfiltered durable corpus with an
+  // explicit note naming the degradation.
+  it("degrades to the durable corpus when the entity filter matched nothing, with an explicit note", async () => {
+    const { runtime, rows } = makeRuntime();
+    seedHashMemory(
+      rows,
+      "Jade is Jessica renamed; Plant Magic roommate in Denver",
+    );
+
+    const result = await runAction(runtime, makeMessage(), {
+      action: "search",
+      query: "Jade",
+      entityId: USER_ID,
+    });
+
+    const text = String(result.text ?? "");
+    expect(result.values).toMatchObject({ matchedInWindow: 0 });
+    expect(text).toContain("entityId filter matched nothing");
+    expect(text).toContain("Jade is Jessica renamed");
+  });
+
+  // Scope-hole regression (live sol-dev 2026-08-17, first re-miss after the
+  // durable branch landed): the planner passed type:"facts" for a "who is X"
+  // recall and the messages-only gate silently bypassed the corpus. The type
+  // param selects windowed-scan tables; it must not silence the corpus.
+  it("searches the durable corpus for a type-filtered query (type is a table filter, not a corpus gate)", async () => {
+    const { runtime, rows } = makeRuntime();
+    seedHashMemory(
+      rows,
+      "Jade is Jessica renamed; Plant Magic roommate in Denver",
+    );
+
+    const result = await runAction(runtime, makeMessage(), {
+      action: "search",
+      query: "Jade",
+      type: "facts",
+    });
+
+    const text = String(result.text ?? "");
+    // Bidirectional proof: the windowed facts-table scan alone finds nothing…
+    expect(result.values).toMatchObject({ matchedInWindow: 0 });
+    // …and the answer comes only from the durable corpus.
+    expect(text).toContain("Durable memory corpus");
+    expect(text).toContain("Jade is Jessica renamed");
   });
 
   it("does not duplicate a row found by both the window and the corpus", async () => {

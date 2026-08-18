@@ -3961,6 +3961,21 @@ export function normalizedRecallQueryKey(
 }
 
 /**
+ * Hit count of an executed recall search, or null when the result shape does
+ * not carry one. Reads the count the MEMORY action reports under
+ * `data.values.count` (windowed + durable-corpus hits combined). Null — an
+ * unknown shape — must be treated as "had results": dedup exists to stop
+ * reformulation churn, and only a PROVEN zero-hit search earns a retry pass.
+ */
+export function recallSearchResultCount(
+	result: PlannerToolResult,
+): number | null {
+	const values = plannerResultValues(result);
+	const count = values?.count;
+	return typeof count === "number" && Number.isFinite(count) ? count : null;
+}
+
+/**
  * Per-turn budget for memory/knowledge-recall searches. Two failure modes
  * escaped the byte-identical redundant-call breaker (live sol-dev 2026-08-17,
  * 3-5 MEMORY_SEARCH rounds per turn = 30-117s tails):
@@ -3997,6 +4012,15 @@ export function partitionMemorySearchBudget(
 		// same-query retry with corrected arguments is legitimate — it competes
 		// only against the round budget, never the dedup gate.
 		if (step.result.success !== true) continue;
+		// ZERO-HIT executions do not seed it either: the query key ignores scope
+		// filters (type/entityId/roomId), so a search that found nothing under one
+		// scope dedup-blocked the same query under a WIDER scope, and the turn
+		// dead-ended on "not in my memory" with the wider retry silently skipped
+		// (live sol-dev 2026-08-17: "who is jade" → scoped MEMORY_SEARCH → 0 hits
+		// → iterations 2 and 3 near-duplicate-skipped → wrong answer while the
+		// corpus held the fact). A zero-hit search put nothing in context worth
+		// protecting; the round budget alone bounds its retries.
+		if (recallSearchResultCount(step.result) === 0) continue;
 		const key = normalizedRecallQueryKey(step.toolCall);
 		if (key)
 			executedQueryKeys.add(`${step.toolCall.name.toUpperCase()} ${key}`);

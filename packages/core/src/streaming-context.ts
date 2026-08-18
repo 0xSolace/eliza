@@ -11,6 +11,7 @@ import type {
 	StreamingToolCallPayload,
 	StreamingToolResultPayload,
 } from "./types/streaming";
+import { loadAsyncLocalStorage } from "./utils/async-hooks";
 import { StackContextManager } from "./utils/stack-context-manager";
 
 /**
@@ -91,36 +92,23 @@ export interface IStreamingContextManager {
 // Global singleton - auto-configured on first access
 let globalContextManager: IStreamingContextManager | null = null;
 
-function isNodeEnvironment(): boolean {
-	return (
-		typeof process !== "undefined" &&
-		typeof process.versions !== "undefined" &&
-		typeof process.versions.node !== "undefined"
-	);
-}
-
 // Initialize synchronously to avoid the race where early calls use the
 // StackContextManager fallback (which doesn't propagate through async/await).
 function initContextManagerSync(): IStreamingContextManager {
-	if (isNodeEnvironment()) {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { AsyncLocalStorage } =
-				require("node:async_hooks") as typeof import("node:async_hooks");
-			const storage = new AsyncLocalStorage<StreamingContext | undefined>();
-			return {
-				run<T>(context: StreamingContext | undefined, fn: () => T): T {
-					return storage.run(context, fn);
-				},
-				active(): StreamingContext | undefined {
-					return storage.getStore();
-				},
-			} as IStreamingContextManager;
-		} catch {
-			// error-policy:J4 AsyncLocalStorage is optional in constrained
-			// runtimes; the stack manager is the explicit degraded implementation.
-			// AsyncLocalStorage unavailable — fall back to stack
-		}
+	// ESM/CJS-safe builtin resolution: a bare `require()` here threw
+	// ReferenceError under ESM execution and silently degraded streaming
+	// context to the stack manager (no propagation across `await`).
+	const AsyncLocalStorage = loadAsyncLocalStorage();
+	if (AsyncLocalStorage) {
+		const storage = new AsyncLocalStorage<StreamingContext | undefined>();
+		return {
+			run<T>(context: StreamingContext | undefined, fn: () => T): T {
+				return storage.run(context, fn);
+			},
+			active(): StreamingContext | undefined {
+				return storage.getStore();
+			},
+		} as IStreamingContextManager;
 	}
 	return new StackContextManager<StreamingContext | undefined>();
 }
@@ -244,18 +232,12 @@ function getModelStreamChunkDeliveryStorage():
 	| null {
 	if (!modelStreamChunkDeliveryStorageInitialized) {
 		modelStreamChunkDeliveryStorageInitialized = true;
-		if (isNodeEnvironment()) {
-			try {
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
-				const { AsyncLocalStorage } =
-					require("node:async_hooks") as typeof import("node:async_hooks");
-				modelStreamChunkDeliveryDepthStorage = new AsyncLocalStorage();
-			} catch {
-				// error-policy:J4 Stream-deduplication storage is optional outside
-				// Node; null explicitly disables nested-delivery tracking.
-				modelStreamChunkDeliveryDepthStorage = null;
-			}
-		}
+		// error-policy:J4 Stream-deduplication storage is optional outside Node;
+		// null explicitly disables nested-delivery tracking.
+		const AsyncLocalStorage = loadAsyncLocalStorage();
+		modelStreamChunkDeliveryDepthStorage = AsyncLocalStorage
+			? new AsyncLocalStorage()
+			: null;
 	}
 	return modelStreamChunkDeliveryDepthStorage;
 }

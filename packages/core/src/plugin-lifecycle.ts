@@ -40,6 +40,7 @@ import type {
 import type { IAgentRuntime } from "./types/runtime";
 import type { Service, ServiceTypeName } from "./types/service";
 import type { ShortcutDefinition } from "./types/shortcut";
+import { loadAsyncLocalStorage } from "./utils/async-hooks";
 import {
 	lookupProviderCatalogContexts,
 	resolveActionContexts,
@@ -168,29 +169,20 @@ class StackAsyncContextStorage<T> implements AsyncContextStorage<T> {
 }
 
 function createAsyncContextStorage<T>(): AsyncContextStorage<T> {
-	if (
-		typeof process !== "undefined" &&
-		typeof process.versions !== "undefined" &&
-		typeof process.versions.node !== "undefined"
-	) {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { AsyncLocalStorage } =
-				require("node:async_hooks") as typeof import("node:async_hooks");
-			const storage = new AsyncLocalStorage<T>();
-			return {
-				run<R>(store: T, callback: () => R): R {
-					return storage.run(store, callback);
-				},
-				getStore(): T | undefined {
-					return storage.getStore();
-				},
-			};
-		} catch {
-			// error-policy:J4 AsyncLocalStorage is optional in constrained
-			// runtimes; the scoped stack is the explicit degraded implementation.
-			// AsyncLocalStorage unavailable — fall back to stack storage.
-		}
+	// ESM/CJS-safe builtin resolution: a bare `require()` here threw
+	// ReferenceError under ESM execution and silently degraded to the scoped
+	// stack, which does not propagate across `await`.
+	const AsyncLocalStorage = loadAsyncLocalStorage();
+	if (AsyncLocalStorage) {
+		const storage = new AsyncLocalStorage<T>();
+		return {
+			run<R>(store: T, callback: () => R): R {
+				return storage.run(store, callback);
+			},
+			getStore(): T | undefined {
+				return storage.getStore();
+			},
+		};
 	}
 
 	return new StackAsyncContextStorage<T>();

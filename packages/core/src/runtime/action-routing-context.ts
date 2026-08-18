@@ -20,6 +20,7 @@
 
 import { getAmbientSingleton, setAmbientSingleton } from "../ambient-context";
 import type { ActionModelClass } from "../types/components";
+import { loadAsyncLocalStorage } from "../utils/async-hooks";
 import { StackContextManager } from "../utils/stack-context-manager";
 
 export interface ActionRoutingContext {
@@ -39,36 +40,24 @@ interface IActionRoutingContextManager {
 
 const MANAGER_KEY = Symbol.for("elizaos.actionRoutingContextManager");
 
-function isNodeEnvironment(): boolean {
-	return (
-		typeof process !== "undefined" &&
-		typeof process.versions !== "undefined" &&
-		typeof process.versions.node !== "undefined"
-	);
-}
-
 function initManagerSync(): IActionRoutingContextManager {
-	if (isNodeEnvironment()) {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { AsyncLocalStorage } =
-				require("node:async_hooks") as typeof import("node:async_hooks");
-			const storage = new AsyncLocalStorage<ActionRoutingContext | undefined>();
-			return {
-				run<T>(
-					ctx: ActionRoutingContext | undefined,
-					fn: () => T | Promise<T>,
-				): T | Promise<T> {
-					return storage.run(ctx, fn);
-				},
-				active(): ActionRoutingContext | undefined {
-					return storage.getStore();
-				},
-			};
-		} catch {
-			// error-policy:J4 AsyncLocalStorage is an optional Node optimization;
-			// other runtimes use the explicit stack manager below.
-		}
+	// ESM/CJS-safe builtin resolution: a bare `require()` here threw
+	// ReferenceError under ESM execution and silently fell back to the stack
+	// manager, which does not propagate per-action model routing across await.
+	const AsyncLocalStorage = loadAsyncLocalStorage();
+	if (AsyncLocalStorage) {
+		const storage = new AsyncLocalStorage<ActionRoutingContext | undefined>();
+		return {
+			run<T>(
+				ctx: ActionRoutingContext | undefined,
+				fn: () => T | Promise<T>,
+			): T | Promise<T> {
+				return storage.run(ctx, fn);
+			},
+			active(): ActionRoutingContext | undefined {
+				return storage.getStore();
+			},
+		};
 	}
 	return new StackContextManager<ActionRoutingContext | undefined>();
 }

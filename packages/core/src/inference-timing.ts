@@ -24,6 +24,10 @@
  */
 
 import { logger } from "./logger";
+import {
+	isNodeLikeEnvironment,
+	loadAsyncLocalStorage,
+} from "./utils/async-hooks";
 
 // ---------------------------------------------------------------------------
 // Span / mark shapes
@@ -460,33 +464,23 @@ interface IInferenceTimingContextManager {
 	active(): InferenceTurnTimer | undefined;
 }
 
-function isNodeEnvironment(): boolean {
-	return (
-		typeof process !== "undefined" &&
-		typeof process.versions !== "undefined" &&
-		typeof process.versions.node !== "undefined"
-	);
-}
-
 function initContextManager(): IInferenceTimingContextManager {
-	if (isNodeEnvironment()) {
-		try {
-			const { AsyncLocalStorage } =
-				require("node:async_hooks") as typeof import("node:async_hooks");
-			const storage = new AsyncLocalStorage<InferenceTurnTimer | undefined>();
-			return {
-				run<T>(timer: InferenceTurnTimer | undefined, fn: () => T): T {
-					return storage.run(timer, fn);
-				},
-				active(): InferenceTurnTimer | undefined {
-					return storage.getStore();
-				},
-			};
-		} catch {
-			// error-policy:J4 browser and edge runtimes intentionally use the
-			// single-slot timing store when AsyncLocalStorage is unavailable.
-			// AsyncLocalStorage unavailable — fall back to a single-slot store.
-		}
+	// `loadAsyncLocalStorage` resolves the builtin in both ESM and CJS module
+	// systems (process.getBuiltinModule first). The previous bare `require()`
+	// threw ReferenceError under ESM execution and silently degraded every
+	// turn to the single-slot store, which loses all spans recorded after the
+	// first `await` (the model calls — the entire point of the timer).
+	const AsyncLocalStorage = loadAsyncLocalStorage();
+	if (AsyncLocalStorage) {
+		const storage = new AsyncLocalStorage<InferenceTurnTimer | undefined>();
+		return {
+			run<T>(timer: InferenceTurnTimer | undefined, fn: () => T): T {
+				return storage.run(timer, fn);
+			},
+			active(): InferenceTurnTimer | undefined {
+				return storage.getStore();
+			},
+		};
 	}
 	// Browser/edge fallback: a single mutable slot. Does not propagate across
 	// independent async tasks, but a turn is processed sequentially per request

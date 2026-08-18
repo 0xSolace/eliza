@@ -12,6 +12,7 @@ import type { PseudonymSession } from "./security/pii-pseudonymizer";
 import type { SecretSwapSession } from "./security/secret-swap";
 import type { RoleGateRole } from "./types/contexts";
 import type { State } from "./types/state";
+import { loadAsyncLocalStorage } from "./utils/async-hooks";
 import { StackContextManager } from "./utils/stack-context-manager";
 
 export interface TrajectoryContext {
@@ -95,36 +96,24 @@ const TRAJECTORY_CONTEXT_MANAGER_KEY = Symbol.for(
 	"elizaos.trajectoryContextManager",
 );
 
-function isNodeEnvironment(): boolean {
-	return (
-		typeof process !== "undefined" &&
-		typeof process.versions !== "undefined" &&
-		typeof process.versions.node !== "undefined"
-	);
-}
-
 function initContextManagerSync(): ITrajectoryContextManager {
-	if (isNodeEnvironment()) {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { AsyncLocalStorage } =
-				require("node:async_hooks") as typeof import("node:async_hooks");
-			const storage = new AsyncLocalStorage<TrajectoryContext | undefined>();
-			return {
-				run<T>(
-					context: TrajectoryContext | undefined,
-					fn: () => T | Promise<T>,
-				): T | Promise<T> {
-					return storage.run(context, fn);
-				},
-				active(): TrajectoryContext | undefined {
-					return storage.getStore();
-				},
-			} as ITrajectoryContextManager;
-		} catch {
-			// error-policy:J4 AsyncLocalStorage is an optional Node optimization;
-			// non-Node runtimes use the explicit stack implementation below.
-		}
+	// ESM/CJS-safe builtin resolution: a bare `require()` here threw
+	// ReferenceError under ESM execution and silently fell back to the stack
+	// manager, so logLlmCall never saw the trajectory step ID (llmCalls: []).
+	const AsyncLocalStorage = loadAsyncLocalStorage();
+	if (AsyncLocalStorage) {
+		const storage = new AsyncLocalStorage<TrajectoryContext | undefined>();
+		return {
+			run<T>(
+				context: TrajectoryContext | undefined,
+				fn: () => T | Promise<T>,
+			): T | Promise<T> {
+				return storage.run(context, fn);
+			},
+			active(): TrajectoryContext | undefined {
+				return storage.getStore();
+			},
+		} as ITrajectoryContextManager;
 	}
 	return new StackContextManager<TrajectoryContext | undefined>();
 }

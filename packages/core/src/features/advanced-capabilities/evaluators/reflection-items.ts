@@ -1130,7 +1130,7 @@ Fact stores:
 
 Rules:
 - No meaningful new/changed fact -> {"ops":[]}.
-- Quoted/performed content is not a speaker claim: song lyrics, poetry, quoted or forwarded messages, memes, and roleplay lines describe what is being shared, not the speaker's life. Never convert first-person lines inside quoted, sung, or forwarded content into facts about the speaker; if the sharing itself matters, extract the sharing event as current.going_through, else emit no op.
+- Extract only sincere assertions the speaker makes in their own voice. Non-assertive speech is never a fact, whatever its grammatical person: quoted/performed content (lyrics, poetry, memes, fiction, roleplay), jokes/sarcasm, hypotheticals ("imagine if I..."), rhetorical questions, forwarded text, and reported views of others ("my mom thinks I..." is about mom's view). If the sharing itself matters, extract the sharing event as current.going_through, else emit no op. When sincerity is ambiguous, emit no op or a low-confidence current fact naming the ambiguity — never a durable fact.
 - Existing meaning -> strengthen with factId.
 - Contradiction -> contradict with factId + reason; the runtime retires the superseded fact, so do not soften the new claim to avoid the conflict.
 - Use only fact IDs shown below for strengthen, decay, and contradict.

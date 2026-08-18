@@ -350,7 +350,8 @@ Rules:
 - Empty output is right for small talk or claim-free questions.
 - Before add_durable/add_current, scan known facts. If meaning exists, emit strengthen with that factId.
 - Paraphrases count as duplicates. Match meaning, not surface form.
-- Quoted or performed content is not a speaker claim. Song lyrics, poetry, quoted or forwarded messages, memes, movie/roleplay lines, and text the speaker attributes to someone or something else describe what is being SHARED, not the speaker's life. Never turn first-person lines inside quoted, sung, or forwarded content into facts about the speaker. If the act of sharing itself matters, extract the sharing event ("shared lyrics from X") as current.going_through; otherwise return no ops.
+- Extract only sincere assertions: facts come from what the speaker asserts about themselves or the world in their own voice, intending it as true. Non-assertive speech is not a claim, whatever its grammatical person: quoted or performed content (lyrics, poetry, memes, fiction, roleplay), jokes/sarcasm/irony, hypotheticals and thought experiments ("imagine if I...", "what if I..."), rhetorical questions, forwarded or pasted text from others, and reports of someone else's view ("my mom thinks I..." asserts what mom thinks, never the embedded claim about the speaker). If the act of sharing itself matters, extract the sharing event ("shared lyrics from X") as current.going_through; otherwise return no ops.
+- When you cannot tell whether the speaker is sincerely asserting (ambiguous irony, possible quotation, unclear hypothetical), do not guess: return no op, or at most a low-confidence current fact that names the ambiguity. Never mint a high-confidence durable fact from speech whose sincerity is uncertain.
 - When a new claim conflicts with a known fact's slot (location, employer, relationship status), emit contradict for the stale fact plus the new add op; the runtime retires the superseded fact. Do not soften or skip the new claim to avoid the conflict.
 
 Ops:
@@ -413,7 +414,28 @@ Message: "I'm anxious this morning"
 
 Message: "i'm leaving on a jet plane, don't know when i'll be back again (kaffekluben is such a good track)"
 {"ops":[]}
-(The first-person line is a lyric the speaker is quoting, not a life update. No travel fact.)
+(First-person lyric the speaker is quoting, not a life update. No travel fact.)
+
+Message: "imagine if i quit my job and moved to bali lol"
+{"ops":[]}
+(Hypothetical, not a decision or plan. No job or relocation fact.)
+
+Message: "my mom thinks i work too much"
+{
+  "ops": [
+    {
+      "op": "add_current",
+      "claim": "mom thinks they work too much",
+      "category": "going_through",
+      "structured_fields": {
+        "person": "mom",
+        "relationshipType": "mother"
+      },
+      "keywords": ["mom", "work", "overwork"]
+    }
+  ]
+}
+(The sincere assertion is about mom's view. "Works too much" is not extracted as the speaker's own fact.)
 
 Known durable facts include: [fact_abc] (durable.identity) lives in Berlin
 Message: "Berlin's been treating me well"
@@ -636,7 +658,7 @@ Skills, workflows, methodologies, how-to.
 - Situational info (working on feature X today)
 - Single-instance opinions
 - General knowledge (not user-specific)
-- Content the user quoted, sang, forwarded, or performed (lyrics, poems, quoted messages, memes, roleplay) — sharing words is not asserting them
+- Non-assertive speech: anything the user relays without asserting it as their own truth — quoted/performed content (lyrics, poetry, memes, fiction, roleplay), jokes, sarcasm, hypotheticals, rhetorical questions, forwarded text, and reported views of others. Extract only sincere first-person assertions
 
 # Quality Gates (ALL Must Pass)
 
@@ -785,7 +807,7 @@ thought is internal rationale, not shown to user.
 extract OPTIONAL. Populate ONLY durable fact about user/person/relationship.
 - worth extracting: "my birthday is March 5", "Alice is my manager", "I live in Brooklyn"
 - skip: questions, requests, ephemeral state, agent self-talk, anything obvious from agent persona
-- skip: quoted text, song lyrics, poetry, forwarded/relayed content, memes, roleplay, jokes, hypotheticals — a speaker sharing someone else's words (or performing lines) is not asserting them about their own life
+- skip: non-assertive speech of any kind — quoted or performed content (lyrics, poetry, memes, fiction, roleplay), jokes/sarcasm, hypotheticals ("imagine if I..."), rhetorical questions, forwarded/pasted text, and reported views of others ("my mom thinks I..." is about mom's view, not a fact about the user). Extract only what the speaker sincerely asserts in their own voice; when sincerity is ambiguous, skip
 - extract.facts: self-contained facts, user voice, ~120 chars max
 - extract.relationships: subject-predicate-object; short entities; snake_case predicate
 - extract.addressedTo: UUIDs preferred or participant names addressed. Agent id/name when user talks to agent; other participant by name/@mention. Empty/omit if broadcast/unclear. Do not guess.
@@ -813,7 +835,7 @@ Categories to look for:
 Return a JSON array of short observation strings (max 150 chars each).
 If nothing meaningful is found, return an empty array [].
 Do NOT include observations about the conversation itself, only about the user.
-Do NOT derive observations from quoted, sung, forwarded, or performed content (song lyrics, poems, quoted messages, memes, roleplay lines) — the user sharing words is not the user asserting them about their own life.
+Do NOT derive observations from non-assertive speech — quoted or performed content (lyrics, poetry, memes, fiction, roleplay), jokes/sarcasm, hypotheticals, rhetorical questions, forwarded text, or reported views of others. Only what the user sincerely asserts in their own voice counts; when sincerity is ambiguous, skip it.
 
 Recent exchanges:
 {{exchanges}}

@@ -271,11 +271,12 @@ describe("reflection evaluator schemas are strict-structured-output safe", () =>
 		expect(prompt).toContain("travelBookingPreferences");
 	});
 
-	it("fact extraction prompt rules out quoted and performed content on the production evaluator path", () => {
-		// Lyric misgrounding regression (2026-08-18): a user quoting song lyrics
-		// in first person was extracted as a life-state fact. The production
-		// evaluator prompt must carry the quoted-content rule, not just the
-		// template in @elizaos/prompts.
+	it("fact extraction prompt gates on sincere assertion on the production evaluator path", () => {
+		// Misgrounding regression (2026-08-18, first caught via a quoted song
+		// lyric extracted as a life-state fact): the production evaluator
+		// prompt must gate extraction on speech-act sincerity as a principle
+		// covering the general non-assertive class (quotes, hypotheticals,
+		// jokes, reported views), not just the template in @elizaos/prompts.
 		const prompt = factMemoryEvaluator.prompt?.({
 			runtime: makeRuntime(),
 			message: message(
@@ -291,11 +292,17 @@ describe("reflection evaluator schemas are strict-structured-output safe", () =>
 				knownFacts: [],
 			},
 		});
-		expect(prompt).toContain("Quoted/performed content is not a speaker claim");
-		expect(prompt).toContain("song lyrics");
-		expect(prompt).toContain(
-			"Never convert first-person lines inside quoted, sung, or forwarded content",
-		);
+		// The principle, not a content-type blocklist:
+		expect(prompt).toContain("Extract only sincere assertions");
+		expect(prompt).toContain("Non-assertive speech is never a fact");
+		// Distinct non-assertive categories are all covered:
+		expect(prompt).toContain("lyrics");
+		expect(prompt).toContain("hypotheticals");
+		expect(prompt).toContain("jokes/sarcasm");
+		expect(prompt).toContain("reported views of others");
+		// Ambiguity handling: never a durable fact from uncertain sincerity.
+		expect(prompt).toContain("When sincerity is ambiguous");
+		expect(prompt).toContain("never a durable fact");
 	});
 });
 

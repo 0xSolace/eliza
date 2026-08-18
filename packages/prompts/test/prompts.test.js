@@ -92,12 +92,13 @@ describe("prompt template exports", () => {
     }
   });
 
-  it("treats quoted/performed content as shared content, not speaker claims, on every extraction surface", () => {
-    // Lyric misgrounding regression (2026-08-18): a user quoting song lyrics
-    // ("decided to give her space, it's a long travel") was extracted as a
-    // first-person life update on the stage-1 extract path. Every extraction
-    // template must carry the quoted-content rule; a rule in
-    // factExtractionTemplate alone leaves the other lanes leaking.
+  it("restricts every extraction surface to sincere assertions, excluding non-assertive speech generally", () => {
+    // Misgrounding regression (2026-08-18, first caught via a quoted song
+    // lyric extracted as a life update): extraction must be gated on
+    // speech-act sincerity as a PRINCIPLE, not an enumerated blocklist of
+    // content types. Every extraction template must carry the sincere-
+    // assertion rule and cover the major non-assertive classes; a rule on
+    // one surface alone leaves the other lanes leaking.
     const surfaces = [
       ["factExtractionTemplate", prompts.factExtractionTemplate],
       ["messageHandlerTemplate", prompts.messageHandlerTemplate],
@@ -105,20 +106,47 @@ describe("prompt template exports", () => {
       ["observationExtractionTemplate", prompts.observationExtractionTemplate],
     ];
     for (const [name, template] of surfaces) {
+      // The principle: only sincere own-voice assertions become facts.
       assert.match(
         template,
-        /lyrics/i,
-        `${name} must call out song lyrics as non-claims`,
+        /sincere/i,
+        `${name} must gate extraction on sincere assertion`,
+      );
+      // Coverage across distinct non-assertive classes, not just quotes:
+      assert.match(
+        template,
+        /quoted|lyrics/i,
+        `${name} must cover quoted/performed content`,
       );
       assert.match(
         template,
-        /quoted|forwarded/i,
-        `${name} must cover quoted/forwarded content`,
+        /hypothetical/i,
+        `${name} must cover hypotheticals`,
+      );
+      assert.match(
+        template,
+        /jokes|sarcasm|irony/i,
+        `${name} must cover jokes/sarcasm/irony`,
+      );
+      assert.match(
+        template,
+        /forwarded/i,
+        `${name} must cover forwarded/pasted content`,
+      );
+      assert.match(
+        template,
+        /thinks I|reported views|someone else's view/i,
+        `${name} must cover reports of others' views`,
       );
     }
-    // The dedicated fact extractor also ships a worked lyric example that
-    // resolves to no ops, so small models see the shape, not just the rule.
-    assert.match(prompts.factExtractionTemplate, /jet plane/);
+    // The dedicated fact extractor also carries the ambiguity rule (no
+    // high-confidence durable facts from speech of uncertain sincerity)
+    // and worked examples across three distinct categories, so small
+    // models see the shape, not just the rule.
+    assert.match(prompts.factExtractionTemplate, /sincerity is uncertain|sincerity is ambiguous/i);
+    assert.match(prompts.factExtractionTemplate, /jet plane/); // lyric -> no ops
+    assert.match(prompts.factExtractionTemplate, /imagine if i quit/); // hypothetical -> no ops
+    assert.match(prompts.factExtractionTemplate, /my mom thinks i work too much/); // third-party report -> mom's view only
     assert.match(prompts.factExtractionTemplate, /\{"ops":\[\]\}/);
   });
 

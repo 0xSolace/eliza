@@ -1130,8 +1130,9 @@ Fact stores:
 
 Rules:
 - No meaningful new/changed fact -> {"ops":[]}.
+- Quoted/performed content is not a speaker claim: song lyrics, poetry, quoted or forwarded messages, memes, and roleplay lines describe what is being shared, not the speaker's life. Never convert first-person lines inside quoted, sung, or forwarded content into facts about the speaker; if the sharing itself matters, extract the sharing event as current.going_through, else emit no op.
 - Existing meaning -> strengthen with factId.
-- Contradiction -> contradict with factId + reason.
+- Contradiction -> contradict with factId + reason; the runtime retires the superseded fact, so do not soften the new claim to avoid the conflict.
 - Use only fact IDs shown below for strengthen, decay, and contradict.
 - add_durable/add_current keywords: 3-8 lowercase retrieval terms from claim/category/nouns/places/dates/projects/symptoms/preferences. Omit stopwords/generic.
 - add_durable/add_current structured_fields: flat string values from the claim. Use English key names even when the message is in another language.

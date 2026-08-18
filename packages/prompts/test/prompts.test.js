@@ -92,6 +92,72 @@ describe("prompt template exports", () => {
     }
   });
 
+  it("treats quoted/performed content as shared content, not speaker claims, on every extraction surface", () => {
+    // Lyric misgrounding regression (2026-08-18): a user quoting song lyrics
+    // ("decided to give her space, it's a long travel") was extracted as a
+    // first-person life update on the stage-1 extract path. Every extraction
+    // template must carry the quoted-content rule; a rule in
+    // factExtractionTemplate alone leaves the other lanes leaking.
+    const surfaces = [
+      ["factExtractionTemplate", prompts.factExtractionTemplate],
+      ["messageHandlerTemplate", prompts.messageHandlerTemplate],
+      ["longTermExtractionTemplate", prompts.longTermExtractionTemplate],
+      ["observationExtractionTemplate", prompts.observationExtractionTemplate],
+    ];
+    for (const [name, template] of surfaces) {
+      assert.match(
+        template,
+        /lyrics/i,
+        `${name} must call out song lyrics as non-claims`,
+      );
+      assert.match(
+        template,
+        /quoted|forwarded/i,
+        `${name} must cover quoted/forwarded content`,
+      );
+    }
+    // The dedicated fact extractor also ships a worked lyric example that
+    // resolves to no ops, so small models see the shape, not just the rule.
+    assert.match(prompts.factExtractionTemplate, /jet plane/);
+    assert.match(prompts.factExtractionTemplate, /\{"ops":\[\]\}/);
+  });
+
+  it("keeps memory bookkeeping silent on user-facing reply surfaces", () => {
+    // Ledger-narration regression (2026-08-18): replies exposed fact-store
+    // mechanics ("retracted and logged as a correction so X never resurfaces
+    // as fact"). Reply-composition templates must instruct natural
+    // acknowledgement instead of bookkeeping narration.
+    for (const template of [
+      prompts.messageHandlerTemplate,
+      prompts.replyTemplate,
+    ]) {
+      assert.match(template, /Memory maintenance is silent by default/);
+      assert.match(template, /logged as a correction/);
+    }
+    assert.match(
+      prompts.plannerTemplate,
+      /memory maintenance is silent by default/,
+    );
+    assert.match(prompts.plannerTemplate, /logged as a correction/);
+  });
+
+  it("anchors all four autonomy templates to the most recent human instruction", () => {
+    // Stale-directive resurrection guard: an old thought or directive in
+    // targetRoomContext must not read as a live task.
+    for (const template of [
+      prompts.autonomyContinuousFirstTemplate,
+      prompts.autonomyContinuousContinueTemplate,
+      prompts.autonomyTaskFirstTemplate,
+      prompts.autonomyTaskContinueTemplate,
+    ]) {
+      assert.match(
+        template,
+        /Treat only the most recent human instruction as current/,
+      );
+      assert.match(template, /do not restart completed or superseded work/);
+    }
+  });
+
   it("plannerTemplate requires owner life-management tools for side effects and fail-closed questions", () => {
     assert.match(
       prompts.plannerTemplate,

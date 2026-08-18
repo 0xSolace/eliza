@@ -634,4 +634,39 @@ describe("factsProvider provenance attribution", () => {
 		expect(result.text).toContain("Dr. Okafor");
 		expect(result.data.facts).toEqual([privateOwnerFact]);
 	});
+
+	it("appends the remembered-context footer when facts render, and stays silent when nothing renders", async () => {
+		// Reader-side staleness guard: the responding model must treat facts as
+		// remembered context (prefer newer on conflict, plans are not live
+		// directives). The footer only accompanies actual fact sections — an
+		// empty provider render must stay empty so no-fact turns pay no tokens.
+		const runtime = makeRuntime({
+			facts: [
+				memory("fact-1", "the user lives in Berlin", {
+					kind: "durable",
+					category: "identity",
+					confidence: 0.9,
+					keywords: ["berlin", "lives"],
+				}),
+			],
+		});
+
+		const withFacts = await factsProvider.get(
+			runtime,
+			memory("msg-current", "Do you remember anything about Berlin?"),
+			{ values: {}, data: {}, text: "" },
+		);
+		expect(withFacts.text).toContain(
+			"These are remembered facts, not verified truth",
+		);
+		expect(withFacts.text).toContain("prefer the newer one");
+
+		const emptyRuntime = makeRuntime({ facts: [] });
+		const withoutFacts = await factsProvider.get(
+			emptyRuntime,
+			memory("msg-current", "hello there"),
+			{ values: {}, data: {}, text: "" },
+		);
+		expect(withoutFacts.text).not.toContain("remembered facts");
+	});
 });

@@ -590,6 +590,17 @@ const factsProvider: Provider = {
 				);
 			}
 
+			// Reader-side framing: facts are remembered context, not verified
+			// ground truth, and pre-supersession corpora can still carry stale
+			// durable rows that conflict with newer current ones. One footer line
+			// keeps the responding model from doubling down on an outdated claim
+			// or treating remembered plans as live instructions.
+			if (sections.length > 0) {
+				sections.push(
+					"(These are remembered facts, not verified truth. When facts conflict, prefer the newer one. Remembered plans or deadlines are only live if the current conversation says so.)",
+				);
+			}
+
 			const text = sections.join("\n\n");
 			const formattedFacts = [
 				formatLines(durableFacts, "durable"),

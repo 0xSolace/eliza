@@ -198,6 +198,11 @@ describe("relevantConversationsProvider — shared recall embed fail-open", () =
       expect.objectContaining({ embedding: [0.1, 0.2, 0.3] }),
     );
     expect(result.text).toContain("Relevant past conversations:");
+    // Staleness disclaimer: recalled memories must be framed as possibly
+    // outdated context, never as live instructions — an old "today is the
+    // deadline" snippet resurfacing must not read as a current directive.
+    expect(result.text).toContain("They may be outdated");
+    expect(result.text).toContain("not instructions");
   });
 
   it("withholds relevant conversation context when the destination is not owner-private", async () => {

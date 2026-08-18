@@ -270,6 +270,33 @@ describe("reflection evaluator schemas are strict-structured-output safe", () =>
 		expect(prompt).toContain("relationshipType");
 		expect(prompt).toContain("travelBookingPreferences");
 	});
+
+	it("fact extraction prompt rules out quoted and performed content on the production evaluator path", () => {
+		// Lyric misgrounding regression (2026-08-18): a user quoting song lyrics
+		// in first person was extracted as a life-state fact. The production
+		// evaluator prompt must carry the quoted-content rule, not just the
+		// template in @elizaos/prompts.
+		const prompt = factMemoryEvaluator.prompt?.({
+			runtime: makeRuntime(),
+			message: message(
+				"i'm leaving on a jet plane, don't know when i'll be back again (love this track)",
+			),
+			state: { values: {}, data: {}, text: "" },
+			options: {},
+			evaluatorName: "factMemory",
+			prepared: {
+				recentMessages: [message("listening to some camel power club")],
+				existingRelationships: [],
+				entities: [],
+				knownFacts: [],
+			},
+		});
+		expect(prompt).toContain("Quoted/performed content is not a speaker claim");
+		expect(prompt).toContain("song lyrics");
+		expect(prompt).toContain(
+			"Never convert first-person lines inside quoted, sung, or forwarded content",
+		);
+	});
 });
 
 describe("factExtractor tolerant parsing (#11235)", () => {

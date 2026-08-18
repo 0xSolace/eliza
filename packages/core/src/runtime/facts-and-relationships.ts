@@ -106,6 +106,7 @@ export const factsAndRelationshipsInstructions = `task: Validate candidate facts
 rules:
 - drop any candidate that is a paraphrase or trivial restatement of an existing fact or relationship
 - drop candidates that are speculative, agent-generated, or not stated by the user
+- drop candidates whose source text is quoted, sung, forwarded, or performed content rather than the speaker's own assertion — song lyrics, poetry, quoted or relayed messages, memes, and roleplay lines are not claims about the speaker's life
 - drop credentials, API keys, passwords, raw tokens, and other secrets; never persist their values
 - drop synthetic summaries, compaction artifacts, generic chat filler, and one-off task requests
 - each kept fact is an object { subject, fact }: subject names WHO the fact is about

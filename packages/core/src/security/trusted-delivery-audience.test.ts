@@ -128,10 +128,13 @@ describe("trusted delivery audience", () => {
 
 	it.each([
 		{
-			name: "group destination",
+			// A group with any non-owner participant stays denied. (A group whose
+			// ENTIRE census is {owner, agent} is now owner-audience — see the
+			// owner's-private-guild tests below.)
+			name: "group destination with a guest",
 			type: ChannelType.GROUP,
-			participants: [OWNER, AGENT],
-			reason: "destination_not_private",
+			participants: [OWNER, AGENT, GUEST],
+			reason: "participant_mismatch",
 		},
 		{
 			name: "extra participant",
@@ -243,7 +246,10 @@ describe("trusted delivery audience", () => {
 	});
 
 	it("ignores private-looking voice labels when the canonical room is shared", async () => {
-		const { runtime } = harness(ChannelType.GROUP);
+		const { runtime, setParticipants } = harness(ChannelType.GROUP);
+		// A genuinely shared room: a guest is present, so neither the voice-DM
+		// label nor the owner-audience group rule can make this owner-only.
+		setParticipants([OWNER, AGENT, GUEST]);
 		const turn = message({
 			content: {
 				text: "private voice",
@@ -254,7 +260,62 @@ describe("trusted delivery audience", () => {
 		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
 		expect(evaluateOwnerExclusiveDisclosure(turn)).toMatchObject({
 			allowed: false,
-			reason: "destination_not_private",
+			reason: "participant_mismatch",
+		});
+	});
+
+	it("allows the owner's private guild: GROUP room whose census is exactly {owner, agent}", async () => {
+		// Live sol-dev 2026-08-19: the owner's 2-person Discord server drew 43
+		// participant_mismatch denials and an "ask me in a DM" refusal. A group
+		// whose ENTIRE census is the owner and the agent is the same audience as
+		// an owner DM.
+		const { runtime } = harness(ChannelType.GROUP);
+		const turn = message();
+		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
+		expect(evaluateOwnerExclusiveDisclosure(turn)).toMatchObject({
+			allowed: true,
+			basis: "owner_private_destination",
+		});
+		expect(
+			await revalidateOwnerExclusiveDisclosure(runtime, turn),
+		).toMatchObject({ allowed: true, basis: "owner_private_destination" });
+	});
+
+	it("denies the same guild the moment any third participant exists", async () => {
+		const { runtime, setParticipants } = harness(ChannelType.GROUP);
+		setParticipants([OWNER, AGENT, GUEST]);
+		const turn = message();
+		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
+		expect(evaluateOwnerExclusiveDisclosure(turn)).toMatchObject({
+			allowed: false,
+			reason: "participant_mismatch",
+		});
+	});
+
+	it("revokes an owner-only group allow when a member joins mid-turn", async () => {
+		const { runtime, setParticipants } = harness(ChannelType.GROUP);
+		const turn = message();
+		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
+		expect(evaluateOwnerExclusiveDisclosure(turn)).toMatchObject({
+			allowed: true,
+		});
+		setParticipants([OWNER, AGENT, GUEST]);
+		expect(
+			await revalidateOwnerExclusiveDisclosure(runtime, turn),
+		).toMatchObject({
+			allowed: false,
+			reason: "audience_changed",
+		});
+	});
+
+	it("does not extend the group rule to a non-owner actor in a 2-person guild", async () => {
+		const { runtime, setParticipants } = harness(ChannelType.GROUP);
+		setParticipants([GUEST, AGENT]);
+		const turn = message({ entityId: GUEST });
+		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
+		expect(evaluateOwnerExclusiveDisclosure(turn)).toMatchObject({
+			allowed: false,
+			reason: "owner_mismatch",
 		});
 	});
 
@@ -355,7 +416,10 @@ describe("trusted delivery audience", () => {
 	});
 
 	it("records gate suppressions and surfaces one model-visible note", async () => {
-		const { runtime } = harness(ChannelType.GROUP);
+		const { runtime, setParticipants } = harness(ChannelType.GROUP);
+		// A guest keeps the group genuinely shared (an owner-only group would
+		// now be allowed by the owner-audience rule).
+		setParticipants([OWNER, AGENT, GUEST]);
 		const turn = message();
 		expect(ownerExclusiveSuppressionNote(turn)).toBeUndefined();
 
@@ -363,15 +427,15 @@ describe("trusted delivery audience", () => {
 		expect(
 			disclosureGateFailure(OWNER_EXCLUSIVE_DISCLOSURE_GATE, turn),
 		).toContain("missing_attestation");
-		// Attested group turn: still denied, second reason accumulates.
+		// Attested shared-group turn: still denied, second reason accumulates.
 		await attestDeliveryAudienceFromCanonicalRoom(runtime, turn);
 		expect(
 			disclosureGateFailure(OWNER_EXCLUSIVE_DISCLOSURE_GATE, turn),
-		).toContain("destination_not_private");
+		).toContain("participant_mismatch");
 
 		const note = ownerExclusiveSuppressionNote(turn);
 		expect(note).toContain("Owner-private");
-		expect(note).toContain("destination_not_private");
+		expect(note).toContain("participant_mismatch");
 		expect(note).toContain("missing_attestation");
 		// The note rides ordinary in-process spreads, like the binding itself.
 		expect(ownerExclusiveSuppressionNote({ ...turn })).toBe(note);

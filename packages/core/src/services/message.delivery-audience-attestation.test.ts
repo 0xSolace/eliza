@@ -129,9 +129,10 @@ describe("DefaultMessageService — central delivery-audience attestation", () =
 		expect(canActionRun(OWNER_GATED_ACTION, { message })).toBe(true);
 	});
 
-	it("still denies a group-room turn and records a model-visible note", async () => {
-		// Two-party GROUP room: membership alone looks owner-only, so the denial
-		// must come from the canonical room type, not the participant set.
+	it("allows a two-party owner GROUP room (owner-audience group rule)", async () => {
+		// A GROUP room whose entire census is {owner, agent} is the same
+		// audience as an owner DM (the owner's private guild; live sol-dev
+		// 2026-08-19). The gate now allows it with the owner-private basis.
 		const { runtime } = makeRuntime({
 			room: room(ChannelType.GROUP),
 			participants: [OWNER_ID, AGENT_ID],
@@ -141,12 +142,31 @@ describe("DefaultMessageService — central delivery-audience attestation", () =
 		await handle(runtime, message);
 
 		expect(evaluateOwnerExclusiveDisclosure(message)).toMatchObject({
+			allowed: true,
+			basis: "owner_private_destination",
+		});
+		expect(canActionRun(OWNER_GATED_ACTION, { message })).toBe(true);
+	});
+
+	it("still denies a shared group-room turn and records a model-visible note", async () => {
+		// A third participant makes the group genuinely shared; the denial is
+		// census-based (participant_mismatch), not room-type-based.
+		const GUEST_ID = "00000000-0000-0000-0000-0000000000d4" as UUID;
+		const { runtime } = makeRuntime({
+			room: room(ChannelType.GROUP),
+			participants: [OWNER_ID, AGENT_ID, GUEST_ID],
+		});
+		const message = inbound();
+
+		await handle(runtime, message);
+
+		expect(evaluateOwnerExclusiveDisclosure(message)).toMatchObject({
 			allowed: false,
-			reason: "destination_not_private",
+			reason: "participant_mismatch",
 		});
 		expect(canActionRun(OWNER_GATED_ACTION, { message })).toBe(false);
 		expect(ownerExclusiveSuppressionNote(message)).toContain(
-			"destination_not_private",
+			"participant_mismatch",
 		);
 	});
 

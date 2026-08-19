@@ -408,10 +408,18 @@ export async function attestDeliveryAudienceFromCanonicalRoom(
 		resolveCanonicalOwnerIdForMessage(runtime, message),
 	]);
 	const kind = classifyCanonicalRoom(room?.type);
+	// group/channel are candidates too: the owner-audience group rule (see
+	// decisionFromAudience) can allow a guild whose census is exactly
+	// {owner, agent}, so persisted trigger-entity markers must be verified for
+	// those rooms as well — otherwise one past reminder fire in the owner's
+	// private guild would permanently poison its census.
 	const ownerPrivateCandidate =
 		canonicalOwnerEntityId !== null &&
 		message.entityId === canonicalOwnerEntityId &&
-		(kind === "direct" || kind === "voice_private");
+		(kind === "direct" ||
+			kind === "voice_private" ||
+			kind === "group" ||
+			kind === "channel");
 	const participants = await filterRuntimeInternalParticipants(
 		runtime,
 		rawParticipants,
@@ -543,18 +551,38 @@ function decisionFromAudience(
 	) {
 		return { allowed: false, reason: "owner_mismatch", audience };
 	}
-	if (
-		audience.actorEntityId === audience.agentEntityId ||
-		audience.participantEntityIds.length !== 2 ||
-		!audience.participantEntityIds.includes(audience.actorEntityId) ||
-		!audience.participantEntityIds.includes(audience.agentEntityId)
-	) {
+	// Owner-audience group rule: a canonical GROUP/channel room whose entire
+	// participant census is {canonical owner, agent} IS an owner-only audience.
+	// A guild the owner runs alone with the agent (live sol-dev 2026-08-19: the
+	// owner's private 2-person server drew 43 participant_mismatch denials and
+	// an "ask me in a DM" refusal) discloses to exactly the same audience as an
+	// owner DM. The rule is strict subset-based, not size-based: EVERY census
+	// entry must be the owner or the agent, so one guest, webhook, or second
+	// human immediately fails it — genuinely mixed-audience rooms are untouched.
+	// Only canonical_room provenance qualifies (an API principal cannot label
+	// its own turn a private guild), and revalidateOwnerExclusiveDisclosure
+	// re-reads the census before execution and at egress, so a member joining
+	// mid-turn flips the decision to audience_changed.
+	const ownerOnlyAudience =
+		audience.actorEntityId !== audience.agentEntityId &&
+		audience.participantEntityIds.includes(audience.actorEntityId) &&
+		audience.participantEntityIds.includes(audience.agentEntityId) &&
+		audience.participantEntityIds.every(
+			(id) =>
+				id === audience.agentEntityId ||
+				id === audience.canonicalOwnerEntityId,
+		);
+	if (!ownerOnlyAudience) {
 		return { allowed: false, reason: "participant_mismatch", audience };
 	}
+	const ownerOnlyGroup =
+		(audience.kind === "group" || audience.kind === "channel") &&
+		audience.provenance === "canonical_room";
 	if (
 		audience.kind !== "direct" &&
 		audience.kind !== "voice_private" &&
-		audience.kind !== "api_private"
+		audience.kind !== "api_private" &&
+		!ownerOnlyGroup
 	) {
 		return { allowed: false, reason: "destination_not_private", audience };
 	}

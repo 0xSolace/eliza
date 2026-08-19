@@ -131,6 +131,8 @@ type DocumentUploadBody = {
   scope?: string;
   scopedToEntityId?: string;
   addedFrom?: string;
+  /** Always inject this document whole through the DOCUMENTS provider (#22184). */
+  pinned?: boolean;
 };
 
 type ValidatedDocumentContentType = {
@@ -1254,6 +1256,7 @@ export async function handleDocumentsRoutes(
       contentType,
       originalFilename: document.filename,
       content,
+      pinned: document.pinned === true,
       scope: uploadFilters.scope,
       scopedToEntityId,
       addedBy: actor.entityId,

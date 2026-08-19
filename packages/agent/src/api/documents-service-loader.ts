@@ -55,6 +55,8 @@ export interface DocumentsServiceLike {
     contentType: string;
     originalFilename: string;
     content: string;
+    /** Always inject this document whole through the DOCUMENTS provider (#22184). */
+    pinned?: boolean;
     metadata?: Record<string, unknown>;
     scope?: DocumentVisibilityScope;
     scopedToEntityId?: UUID;

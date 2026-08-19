@@ -1038,10 +1038,28 @@ export async function handleMemoryRoutes(
       embedding = await runtime.useModel(ModelType.TEXT_EMBEDDING, {
         text,
       });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      error(res, `Failed to regenerate embedding: ${detail}`, 500);
-      return true;
+    } catch (firstErr) {
+      // Local embedding sidecars enforce a hard input-token cap (gte-small
+      // via TEI: 512 tokens -> HTTP 413). A long PATCH body would otherwise
+      // be unpatchable. Retry once with a truncated head: the vector indexes
+      // the text's opening, which is what BM25/vector recall keys on, while
+      // the FULL text still persists below.
+      const truncated = text.slice(0, 1500);
+      if (truncated.length === text.length) {
+        const detail =
+          firstErr instanceof Error ? firstErr.message : String(firstErr);
+        error(res, `Failed to regenerate embedding: ${detail}`, 500);
+        return true;
+      }
+      try {
+        embedding = await runtime.useModel(ModelType.TEXT_EMBEDDING, {
+          text: truncated,
+        });
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        error(res, `Failed to regenerate embedding: ${detail}`, 500);
+        return true;
+      }
     }
     if (!Array.isArray(embedding) || embedding.length === 0) {
       error(res, "Embedding model returned no vector.", 500);

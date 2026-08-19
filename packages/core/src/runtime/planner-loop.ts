@@ -5166,11 +5166,43 @@ function combinedVerifiedToolTextAndProse(
 	// Prose that adds nothing over the verified output (a restatement or
 	// fragment of it) keeps the verbatim-echo behavior unchanged.
 	if (normalize(verified).includes(normalize(prose))) return undefined;
+	// An action that stamped `turnComplete: true` declared its userFacingText a
+	// COMPLETE standalone answer (the sole-delivery contract used by the
+	// evaluator gate, see `tryGateEvaluator`). When the evaluator still ran —
+	// e.g. the planner vetoed the gate with `more_work_pending` — and authored
+	// its own full reply, concatenating two complete answers is a double reply,
+	// not a combination (observed live 2026-08-19 covenant: an ATTACHMENT read's
+	// LLM-authored answer shipped code-fenced, followed by the evaluator's
+	// second full answer — two bubbles answering the same question). The
+	// evaluator saw the tool's answer inside the trajectory and chose to write
+	// its own; its reply is the turn's single voice. Structured verified outputs
+	// (df -h tables, paths, ids) never stamp `turnComplete`, so the verbatim +
+	// prose pairing below is unchanged for them.
+	if (soleVerifiedResultDeclaredTurnComplete(trajectory)) return prose;
 	const fenced =
 		verified.includes("\n") && !verified.includes("```")
 			? `\`\`\`\n${verified}\n\`\`\``
 			: verified;
 	return `${fenced}\n\n${prose}`;
+}
+
+/**
+ * True when the trajectory's single successful verified-user-facing tool
+ * result also stamped `turnComplete: true` — the action-owned "my text is the
+ * complete answer" contract. Mirrors the selection rule in
+ * `singleVerifiedUserFacingToolResultText` (exactly one successful tool step).
+ */
+function soleVerifiedResultDeclaredTurnComplete(
+	trajectory: PlannerTrajectory,
+): boolean {
+	const successfulToolSteps = allTrajectorySteps(trajectory).filter(
+		(step) => step.toolCall && step.result?.success === true,
+	);
+	if (successfulToolSteps.length !== 1) return false;
+	const result = successfulToolSteps[0]?.result;
+	return (
+		result?.verifiedUserFacing === true && result?.turnComplete === true
+	);
 }
 
 function latestToolResultIsGenericNoop(trajectory: PlannerTrajectory): boolean {

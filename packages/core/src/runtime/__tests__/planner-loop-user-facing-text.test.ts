@@ -812,6 +812,95 @@ describe("planner-loop — verified tool text + evaluator prose combine", () => 
 		expect(result.finalMessage).toBe(dfStdout);
 	});
 
+	it("delivers ONLY the evaluator's reply when the sole verified tool declared turnComplete (no double reply)", async () => {
+		// Live regression (covenant 2026-08-19): ATTACHMENT read returned a
+		// complete LLM-authored answer with turnComplete:true, the planner
+		// vetoed the gate via more_work_pending so the evaluator ran and wrote
+		// its own full answer — the old combine path shipped BOTH as one
+		// fenced-verbatim + prose message, i.e. two complete answers / two
+		// Discord bubbles for one question.
+		const attachmentAnswer =
+			"The whole log is you talking yourself out of it.\nHere's what I actually think, since you asked.\nSleep first, ask plainly tomorrow.";
+		const evaluatorAnswer =
+			"read it all. the sharpest thing in the log isn't the frame, it's the pattern it exposes. the theory is done, only the rep is left.";
+		// The planner declares more_work_pending on the call — the veto that
+		// bypasses the action-terminal gate and hands the turn to the evaluator
+		// (exactly the live trajectory: ATTACHMENT called with
+		// eliza_turn_scope=more_work_pending, evaluator FINISHed with its own
+		// messageToUser).
+		const runtime = {
+			useModel: vi
+				.fn()
+				.mockResolvedValueOnce({
+					text: "",
+					toolCalls: [
+						{
+							id: "call-1",
+							name: "ATTACHMENT",
+							arguments: { eliza_turn_scope: "more_work_pending" },
+						},
+					],
+					usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
+				})
+				.mockResolvedValueOnce({
+					text: JSON.stringify({
+						success: true,
+						decision: "FINISH",
+						thought: "Read done; answering in my own voice.",
+						messageToUser: evaluatorAnswer,
+					}),
+					usage: { promptTokens: 50, completionTokens: 20, totalTokens: 70 },
+				}),
+		};
+		const executeToolCall = vi.fn(async () => ({
+			success: true,
+			text: "diag",
+			userFacingText: attachmentAnswer,
+			verifiedUserFacing: true,
+			turnComplete: true,
+		}));
+		const evaluate = vi.fn(async () => ({
+			success: true,
+			decision: "FINISH" as const,
+			thought: "Read done; answering in my own voice.",
+			messageToUser: evaluatorAnswer,
+		}));
+		const result = await runPlannerLoop({
+			runtime,
+			context: { id: "ctx" },
+			executeToolCall,
+			evaluate,
+		});
+		expect(result.status).toBe("finished");
+		// The evaluator's reply is the turn's single voice…
+		expect(result.finalMessage).toBe(evaluatorAnswer);
+		// …and the tool's standalone answer is NOT concatenated in front of it.
+		expect(result.finalMessage).not.toContain("```");
+		expect(result.finalMessage).not.toContain("talking yourself out");
+	});
+
+	it("still combines verified structured output with prose when turnComplete is unset", async () => {
+		const { runtime, executeToolCall, evaluate } = makeHarness({
+			toolResult: {
+				success: true,
+				text: "diag",
+				userFacingText: dfStdout,
+				verifiedUserFacing: true,
+				// No turnComplete — the df-style structured-output contract.
+			},
+			messageToUser: dfProse,
+		});
+		const result = await runPlannerLoop({
+			runtime,
+			context: { id: "ctx" },
+			executeToolCall,
+			evaluate,
+		});
+		const finalMessage = result.finalMessage ?? "";
+		expect(finalMessage).toContain(dfStdout);
+		expect(finalMessage).toContain("hasn't budged");
+	});
+
 	it("never decorates a verified confirmation preview with evaluator prose", async () => {
 		const preview =
 			"About to delete 3 reminders. Reply yes to confirm or no to cancel.";

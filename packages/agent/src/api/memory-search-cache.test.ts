@@ -136,18 +136,21 @@ describe("GET /api/memory/search corpus cache", () => {
     };
     const { runtime, getMemories } = makeRuntime(store);
 
+    // Delta-based assertions: the first request may also run the one-time
+    // legacy-room migration probe (an extra getMemories against the
+    // display-name-derived room), so absolute call counts are not stable.
     const cold = await search(runtime, "alexis gym");
-    expect(getMemories).toHaveBeenCalledTimes(1);
+    const callsAfterCold = getMemories.mock.calls.length;
 
     const warm = await search(runtime, "alexis gym");
-    expect(getMemories).toHaveBeenCalledTimes(1); // corpus reused
+    expect(getMemories).toHaveBeenCalledTimes(callsAfterCold); // corpus reused
     expect(warm).toEqual(cold);
 
     // Cold path after explicit invalidation must produce the exact same
     // ranking (cache is a pure perf optimization, not a semantic change).
     invalidateMemorySearchCache();
     const rebuilt = await search(runtime, "alexis gym");
-    expect(getMemories).toHaveBeenCalledTimes(2);
+    expect(getMemories).toHaveBeenCalledTimes(callsAfterCold + 1);
     expect(rebuilt).toEqual(cold);
   });
 

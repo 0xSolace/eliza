@@ -100,15 +100,109 @@ function resolveAgentName(runtime: AgentRuntime, fallbackName: string): string {
   return runtime.character.name?.trim() || fallbackName || "Eliza";
 }
 
+/**
+ * The durable hash-memory room is keyed on the STABLE `runtime.agentId`, never
+ * the display name. The room id used to be `stringToUuid(agentName + "-hash-
+ * memory-room")`, so renaming the agent silently orphaned the entire corpus:
+ * every search endpoint resolved a fresh empty room while the rows stayed in
+ * the old name's room (live sol-dev 2026-08-19: a Sol→Eliza rename left 2,212
+ * synced rows invisible — /api/memory/search returned count:0 for every
+ * query). Worse, the idempotent remember path keyed replay detection on
+ * memory id alone, so a re-run sync reported every row "skipped" without ever
+ * moving it — the orphaning could never self-heal.
+ */
+export function agentHashMemoryRoomId(runtime: AgentRuntime): UUID {
+  return stringToUuid(`${runtime.agentId}-hash-memory-room`) as UUID;
+}
+
+/**
+ * Legacy display-name-derived room for the CURRENT name. Rows written by
+ * pre-fix builds under the current name live here; `ensureMemoryConnection`
+ * rehomes them once per process. Rooms named after PREVIOUS display names are
+ * unknowable at runtime — those rows self-heal through the remember replay
+ * path instead (any idempotent re-POST rehomes the existing row).
+ */
+function legacyHashMemoryRoomId(agentName: string): UUID {
+  return stringToUuid(`${agentName}-hash-memory-room`) as UUID;
+}
+
+/** One legacy-room migration attempt per (agentId, legacy room) per process. */
+const legacyHashMemoryMigrationsDone = new Set<string>();
+
+/**
+ * Move a hash-memory row into the stable room, preserving id, content,
+ * embedding, and createdAt. The adapter's updateMemory cannot change roomId,
+ * so rehoming is delete + recreate under the same id.
+ */
+async function rehomeHashMemoryRow(
+  runtime: AgentRuntime,
+  memory: Memory,
+  roomId: UUID,
+): Promise<void> {
+  if (!memory.id) return;
+  await runtime.deleteMemory(memory.id);
+  await runtime.createMemory(
+    {
+      ...memory,
+      roomId,
+      agentId: runtime.agentId,
+    },
+    "messages",
+  );
+}
+
+async function migrateLegacyHashMemoryRoom(
+  runtime: AgentRuntime,
+  agentName: string,
+  roomId: UUID,
+): Promise<void> {
+  const legacyRoomId = legacyHashMemoryRoomId(agentName);
+  if (legacyRoomId === roomId) return;
+  const migrationKey = `${runtime.agentId}:${legacyRoomId}`;
+  if (legacyHashMemoryMigrationsDone.has(migrationKey)) return;
+  legacyHashMemoryMigrationsDone.add(migrationKey);
+  try {
+    // Drain in batches: the corpus can exceed any single-scan window (the
+    // live orphaned room held 2,247 rows against a 2,000-row scan limit).
+    // Each pass re-reads newest-first; rehomed rows leave the legacy room, so
+    // the loop terminates when a pass finds no hash rows.
+    let migrated = 0;
+    for (;;) {
+      const legacyRows = await runtime.getMemories({
+        roomId: legacyRoomId,
+        tableName: "messages",
+        limit: MEMORY_SEARCH_SCAN_LIMIT,
+      });
+      const hashRows = legacyRows.filter(
+        (memory) =>
+          (memory.content as { source?: string } | undefined)?.source ===
+          HASH_MEMORY_SOURCE,
+      );
+      if (hashRows.length === 0) break;
+      for (const memory of hashRows) {
+        await rehomeHashMemoryRow(runtime, memory, roomId);
+        migrated += 1;
+      }
+      if (legacyRows.length < MEMORY_SEARCH_SCAN_LIMIT) break;
+    }
+    if (migrated > 0) invalidateMemorySearchCache();
+  } catch {
+    // A failed migration must not take down the endpoint; allow a retry on
+    // the next process start. Un-migrated rows keep the pre-fix behavior
+    // (invisible to search) rather than breaking writes.
+    legacyHashMemoryMigrationsDone.delete(migrationKey);
+  }
+}
+
 async function ensureMemoryConnection(
   runtime: AgentRuntime,
   agentName: string,
 ): Promise<{ roomId: UUID; entityId: UUID }> {
   const entityId = runtime.agentId as UUID;
-  const roomId = stringToUuid(`${agentName}-hash-memory-room`) as UUID;
-  const worldId = stringToUuid(`${agentName}-hash-memory-world`) as UUID;
+  const roomId = agentHashMemoryRoomId(runtime);
+  const worldId = stringToUuid(`${runtime.agentId}-hash-memory-world`) as UUID;
   const messageServerId = stringToUuid(
-    `${agentName}-hash-memory-server`,
+    `${runtime.agentId}-hash-memory-server`,
   ) as UUID;
 
   await runtime.ensureConnection({
@@ -117,11 +211,13 @@ async function ensureMemoryConnection(
     worldId,
     userName: "User",
     source: MESSAGE_SOURCE_CLIENT_CHAT,
-    channelId: `${agentName}-hash-memory`,
+    channelId: `${runtime.agentId}-hash-memory`,
     type: ChannelType.DM,
     messageServerId,
     metadata: { ownership: { ownerId: entityId } },
   });
+
+  await migrateLegacyHashMemoryRoom(runtime, agentName, roomId);
 
   return { roomId, entityId };
 }
@@ -385,9 +481,7 @@ export async function searchAgentHashMemory(
   query: string,
   limit: number,
 ): Promise<MemorySearchHit[]> {
-  const agentName = resolveAgentName(runtime, "");
-  const roomId = stringToUuid(`${agentName}-hash-memory-room`) as UUID;
-  return searchMemoryNotes(runtime, roomId, query, limit);
+  return searchMemoryNotes(runtime, agentHashMemoryRoomId(runtime), query, limit);
 }
 
 async function searchMemoryNotes(
@@ -657,6 +751,15 @@ export async function handleMemoryRoutes(
       ? await runtime.getMemoryById(memoryId)
       : null;
     if (existing) {
+      // Room-aware replay: an idempotent re-POST that finds its row in a
+      // different room (a display-name-derived room from before the stable
+      // agentId keying, under ANY previous name) rehomes it instead of just
+      // reporting "skipped". This is what lets an orphaned corpus self-heal
+      // from a plain sync re-run.
+      if (existing.roomId !== roomId) {
+        await rehomeHashMemoryRow(runtime, existing, roomId);
+        invalidateMemorySearchCache();
+      }
       json(res, {
         ok: true,
         id: existing.id,

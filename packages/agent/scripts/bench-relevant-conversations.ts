@@ -217,7 +217,7 @@ async function run(runtime: AgentRuntime, args: BenchArgs): Promise<void> {
   const worldId = stringToUuid("bench-world") as UUID;
   const userEntityId = stringToUuid("bench-user") as UUID;
   const currentRoomId = stringToUuid("bench-current-room") as UUID;
-  const hashRoomId = stringToUuid("Eliza-hash-memory-room") as UUID;
+  const hashRoomId = stringToUuid(`${agentId}-hash-memory-room`) as UUID;
 
   await runtime.createWorld({
     id: worldId,

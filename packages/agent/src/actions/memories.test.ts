@@ -573,7 +573,9 @@ describe("MEMORY op:search windowed-read disclosure", () => {
 });
 
 describe("MEMORY op:search durable hash-memory corpus", () => {
-  const HASH_ROOM_ID = stringToUuid("Eliza-hash-memory-room") as UUID;
+  // Stable agentId-derived room (display-name keying orphaned the corpus on
+  // rename; see agentHashMemoryRoomId).
+  const HASH_ROOM_ID = stringToUuid(`${AGENT_ID}-hash-memory-room`) as UUID;
 
   function seedHashMemory(rows: StoredRow[], text: string): UUID {
     const id = crypto.randomUUID() as UUID;

@@ -75,8 +75,10 @@ async function loadHashMemories(
   query: string,
   accessContext: AccessContext,
 ): Promise<Memory[]> {
-  const agentName = runtime.character.name?.trim() || "Eliza";
-  const roomId = stringToUuid(`${agentName}-hash-memory-room`) as UUID;
+  // Stable agentId-derived room (see agentHashMemoryRoomId in
+  // api/memory-routes.ts): the display-name-derived key orphaned the whole
+  // corpus on an agent rename (live sol-dev 2026-08-19, Sol→Eliza).
+  const roomId = stringToUuid(`${runtime.agentId}-hash-memory-room`) as UUID;
   const memories = await runtime.getMemories({
     roomId,
     tableName: "messages",

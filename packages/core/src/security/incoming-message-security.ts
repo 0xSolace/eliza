@@ -270,6 +270,31 @@ export function unwrapUserMessageTextForDetection(message: Memory): string {
 	return resolveRetainedCandidate(message);
 }
 
+/**
+ * Content as it should be PERSISTED: the security envelope exists for this
+ * turn's PROMPT, not for storage. Persisting the wrapped text polluted every
+ * stored owner message with the ~250-token shield — hurting BM25/embedding
+ * retrieval over message memories and re-echoing armor through any consumer
+ * that read the raw row (live sol-dev 2026-08-19: every covenant-guild owner
+ * message stored wrapped). The retained `metadata.userPayloadText` is the
+ * already-scrubbed clean payload, so storage uses it while the in-memory turn
+ * keeps the envelope for prompt composition. The metadata stamps persist with
+ * the row, so `unwrapUserMessageText` semantics on stored rows are unchanged.
+ */
+export function persistableUserContent(
+	message: Memory,
+): Memory["content"] {
+	const metadata = readMessageMetadata(message);
+	if (
+		metadata.externalContentWrapped === true &&
+		typeof metadata.userPayloadText === "string" &&
+		metadata.userPayloadText.trim().length > 0
+	) {
+		return { ...message.content, text: metadata.userPayloadText };
+	}
+	return message.content;
+}
+
 export function messageHasPromptInjectionFlag(message: Memory): boolean {
 	const metadata = readMessageMetadata(message);
 	return metadata.promptInjectionSuspected === true;

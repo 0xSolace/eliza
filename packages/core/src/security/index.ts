@@ -45,6 +45,7 @@ export {
 	hardenIncomingUserMessage,
 	type IncomingMessageSecurityMetadata,
 	messageHasPromptInjectionFlag,
+	persistableUserContent,
 	registerCoreIncomingMessageSecurityHook,
 	scrubIncomingMessageTextForStorage,
 	unwrapUserMessageText,

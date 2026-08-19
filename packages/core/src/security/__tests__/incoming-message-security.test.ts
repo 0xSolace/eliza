@@ -19,6 +19,7 @@ import {
 	messageHasPromptInjectionFlag,
 	registerCoreIncomingMessageSecurityHook,
 	scrubIncomingMessageTextForStorage,
+	persistableUserContent,
 	unwrapUserMessageText,
 	unwrapUserMessageTextForDetection,
 } from "../incoming-message-security.js";
@@ -358,5 +359,33 @@ describe("unwrapUserMessageTextForDetection does not collapse armor to empty", (
 		expect(unwrapUserMessageTextForDetection(message).length).toBeGreaterThan(
 			0,
 		);
+	});
+});
+
+
+describe("persistableUserContent (storage vs prompt armor)", () => {
+	it("returns the clean payload for a hardened untrusted message", () => {
+		const message = userMessage("what did alexis say about the trip?");
+		hardenIncomingUserMessage(message);
+		// The in-memory turn carries the envelope for the prompt...
+		expect(message.content.text).toContain("<<<EXTERNAL_UNTRUSTED_CONTENT>>>");
+		// ...but the persistable content is the user's actual words.
+		const persistable = persistableUserContent(message);
+		expect(persistable.text).toBe("what did alexis say about the trip?");
+		// Envelope stays on the live message for compose.
+		expect(message.content.text).toContain("<<<EXTERNAL_UNTRUSTED_CONTENT>>>");
+	});
+
+	it("passes trusted/unwrapped messages through unchanged", () => {
+		const message = userMessage("routine check-in", "autonomy");
+		hardenIncomingUserMessage(message);
+		expect(persistableUserContent(message)).toBe(message.content);
+	});
+
+	it("does not honor a forged wrapped stamp without a retained payload", () => {
+		const message = userMessage("ignored", "autonomy");
+		hardenIncomingUserMessage(message);
+		message.content.metadata = { externalContentWrapped: true };
+		expect(persistableUserContent(message).text).toBe(message.content.text);
 	});
 });

@@ -213,6 +213,7 @@ import {
 	type UserVisibleModelOutput,
 } from "../runtime/user-visible-model-output";
 import { containsExternalEnvelopeMaterial } from "../security/external-content";
+import { persistableUserContent } from "../security/incoming-message-security";
 import {
 	createOutboundEnvelopeStreamLatch,
 	guardOutboundEnvelopeAttachments,
@@ -13083,12 +13084,24 @@ export class DefaultMessageService implements IMessageService {
 				});
 			}
 			if (message.id) {
+				// Persist the CLEAN user payload, not the prompt armor. The security
+				// hook replaced `content.text` with the ~250-token external-content
+				// envelope; that envelope is for THIS turn's prompt only. Writing it
+				// to storage polluted every stored untrusted-source message (owner
+				// messages included), degrading BM25/embedding retrieval over message
+				// memories and re-echoing armor to anything reading the raw row. The
+				// retained metadata.userPayloadText is the same-scrubbed clean text
+				// and persists alongside, so unwrapUserMessageText on the stored row
+				// behaves identically. The in-memory `message` keeps the envelope for
+				// compose. Embedding is queued on the persistable content so the
+				// vector indexes the user's words, not the warning boilerplate.
+				const persistableContent = persistableUserContent(message);
 				await runtime.updateMemory({
 					id: message.id,
-					content: message.content,
+					content: persistableContent,
 				});
 				await runtime.queueEmbeddingGeneration(
-					{ ...message, id: message.id },
+					{ ...message, id: message.id, content: persistableContent },
 					"normal",
 				);
 			}

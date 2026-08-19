@@ -13822,6 +13822,30 @@ export class DefaultMessageService implements IMessageService {
 						// strictly after both operations settle.
 						const deliveredClaimMemories: Memory[] = [];
 						const persistTask = (async () => {
+							// Connector send handlers (e.g. the Discord callback) persist
+							// their own memory row keyed on the provider message id. When
+							// the callback resolves with those persisted memories, writing
+							// the planner-shaped responseMemory here again double-persists
+							// every reply (observed live: 34/37 covenant replies stored as
+							// a bare row + a platformMessageId row ~200ms apart, doubling
+							// retrieval-corpus noise). Wait for the delivery boundary
+							// first; if it already produced persisted memories for this
+							// turn, skip the redundant local write. Delivery failure or an
+							// empty receipt falls through to the local persist unchanged.
+							let connectorPersistedCount = 0;
+							try {
+								const deliveryValue = await deliveryTask;
+								if (Array.isArray(deliveryValue)) {
+									connectorPersistedCount = deliveryValue.filter(
+										(m): m is Memory =>
+											typeof m === "object" && m !== null && "id" in m,
+									).length;
+								}
+							} catch {
+								// Delivery failed; deliveryOutcome below still observes and
+								// rethrows the original rejection. Persist locally so the
+								// reply text is never lost with the delivery.
+							}
 							for (const responseMemory of responseMessages) {
 								if (
 									responseMemory.id &&
@@ -13839,6 +13863,11 @@ export class DefaultMessageService implements IMessageService {
 									runtime.logger.debug(
 										{ src: "service:message", memoryId: responseMemory.id },
 										"Skipping transient response memory persistence",
+									);
+								} else if (connectorPersistedCount > 0) {
+									runtime.logger.debug(
+										{ src: "service:message", memoryId: responseMemory.id },
+										"Skipping local response persistence; connector callback already persisted the delivered reply",
 									);
 								} else {
 									runtime.logger.debug(

@@ -11,6 +11,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from atlas_provider import DEFAULT_MODEL as ATLAS_DEFAULT_MODEL
+from atlas_provider import request_image as request_atlas_image
+
 
 def slugify(text: str) -> str:
     text = text.lower().strip()
@@ -161,30 +164,34 @@ def write_gallery(out_dir: Path, items: list[dict]) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Generate images via OpenAI Images API.")
+    ap = argparse.ArgumentParser(description="Generate images via OpenAI or Atlas Cloud.")
     ap.add_argument("--prompt", help="Single prompt. If omitted, random prompts are generated.")
     ap.add_argument("--count", type=int, default=8, help="How many images to generate.")
-    ap.add_argument("--model", default="gpt-image-1", help="Image model id.")
+    ap.add_argument("--provider", choices=("openai", "atlas"), default="openai", help="Image API provider (default: openai).")
+    ap.add_argument("--model", default="", help="Image model id (defaults based on provider).")
     ap.add_argument("--size", default="", help="Image size (e.g. 1024x1024, 1536x1024). Defaults based on model if not specified.")
     ap.add_argument("--quality", default="", help="Image quality (e.g. high, standard). Defaults based on model if not specified.")
     ap.add_argument("--background", default="", help="Background transparency (GPT models only): transparent, opaque, or auto.")
-    ap.add_argument("--output-format", default="", help="Output format (GPT models only): png, jpeg, or webp.")
+    ap.add_argument("--output-format", default="", help="Output format (provider/model dependent): png, jpeg, or webp.")
     ap.add_argument("--style", default="", help="Image style (dall-e-3 only): vivid or natural.")
     ap.add_argument("--out-dir", default="", help="Output directory (default: ./tmp/openai-image-gen-<ts>).")
     args = ap.parse_args()
 
-    api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    key_env = "ATLASCLOUD_API_KEY" if args.provider == "atlas" else "OPENAI_API_KEY"
+    api_key = (os.environ.get(key_env) or "").strip()
     if not api_key:
-        print("Missing OPENAI_API_KEY", file=sys.stderr)
+        print(f"Missing {key_env}", file=sys.stderr)
         return 2
 
-    # Apply model-specific defaults if not specified
-    default_size, default_quality = get_model_defaults(args.model)
+    model = args.model or (ATLAS_DEFAULT_MODEL if args.provider == "atlas" else "gpt-image-1")
+
+    # Apply model-specific defaults if not specified.
+    default_size, default_quality = get_model_defaults(model)
     size = args.size or default_size
-    quality = args.quality or default_quality
+    quality = args.quality or ("" if args.provider == "atlas" else default_quality)
 
     count = args.count
-    if args.model == "dall-e-3" and count > 1:
+    if args.provider == "openai" and model == "dall-e-3" and count > 1:
         print(f"Warning: dall-e-3 only supports generating 1 image at a time. Reducing count from {count} to 1.", file=sys.stderr)
         count = 1
 
@@ -194,7 +201,9 @@ def main() -> int:
     prompts = [args.prompt] * count if args.prompt else pick_prompts(count)
 
     # Determine file extension based on output format
-    if args.model.startswith("gpt-image") and args.output_format:
+    if args.provider == "atlas":
+        file_ext = args.output_format or "png"
+    elif model.startswith("gpt-image") and args.output_format:
         file_ext = args.output_format
     else:
         file_ext = "png"
@@ -202,21 +211,32 @@ def main() -> int:
     items: list[dict] = []
     for idx, prompt in enumerate(prompts, start=1):
         print(f"[{idx}/{len(prompts)}] {prompt}")
-        res = request_images(
-            api_key,
-            prompt,
-            args.model,
-            size,
-            quality,
-            args.background,
-            args.output_format,
-            args.style,
-        )
-        data = res.get("data", [{}])[0]
-        image_b64 = data.get("b64_json")
-        image_url = data.get("url")
+        if args.provider == "atlas":
+            image_b64 = None
+            image_url = request_atlas_image(
+                api_key,
+                prompt,
+                model,
+                size,
+                args.output_format or "png",
+            )
+        else:
+            res = request_images(
+                api_key,
+                prompt,
+                model,
+                size,
+                quality,
+                args.background,
+                args.output_format,
+                args.style,
+            )
+            data = res.get("data", [{}])[0]
+            image_b64 = data.get("b64_json")
+            image_url = data.get("url")
         if not image_b64 and not image_url:
-            raise RuntimeError(f"Unexpected response: {json.dumps(res)[:400]}")
+            detail = "empty Atlas output" if args.provider == "atlas" else json.dumps(res)[:400]
+            raise RuntimeError(f"Unexpected response: {detail}")
 
         filename = f"{idx:03d}-{slugify(prompt)[:40]}.{file_ext}"
         filepath = out_dir / filename

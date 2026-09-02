@@ -1,6 +1,6 @@
 ---
 name: openai-image-gen
-description: Batch-generate images via the OpenAI Images API using DALL-E 2, DALL-E 3, or GPT image models. Produces random-but-structured prompts, renders them, and outputs a browsable `index.html` gallery. Use when the user asks to generate AI images, create pictures with DALL-E, batch-produce image assets, render AI art, or build an image gallery from text prompts.
+description: Batch-generate images via the OpenAI Images API or optional Atlas Cloud provider. Produces random-but-structured prompts, renders them, and outputs a browsable `index.html` gallery. Use when the user asks to generate AI images, create pictures with DALL-E, batch-produce image assets, render AI art, or build an image gallery from text prompts.
 homepage: https://platform.openai.com/docs/api-reference/images
 metadata:
   {
@@ -27,6 +27,9 @@ metadata:
 
 Generate a handful of “random but structured” prompts and render them via the OpenAI Images API.
 
+OpenAI remains the default provider. Atlas Cloud is an explicit opt-in and uses
+`ATLASCLOUD_API_KEY` instead of `OPENAI_API_KEY`.
+
 ## Run
 
 ```bash
@@ -42,6 +45,10 @@ python3 {baseDir}/scripts/gen.py --count 16 --model gpt-image-1
 python3 {baseDir}/scripts/gen.py --prompt "ultra-detailed studio photo of a futuristic cityscape" --count 4
 python3 {baseDir}/scripts/gen.py --size 1536x1024 --quality high --out-dir ./out/images
 python3 {baseDir}/scripts/gen.py --model gpt-image-1.5 --background transparent --output-format webp
+
+# Atlas Cloud (discovers the live model schema before submitting)
+ATLASCLOUD_API_KEY=... python3 {baseDir}/scripts/gen.py --provider atlas --count 4
+python3 {baseDir}/scripts/gen.py --provider atlas --model black-forest-labs/flux-2-pro/text-to-image --size 1536x1024 --output-format jpeg
 
 # DALL-E 3 (note: count is automatically limited to 1)
 python3 {baseDir}/scripts/gen.py --model dall-e-3 --quality hd --size 1792x1024 --style vivid
